@@ -27,3 +27,6 @@ dist/
 
 # Docs
 *.docx.bak
+
+# Word lock files
+~$*.docx
