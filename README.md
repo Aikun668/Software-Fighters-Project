@@ -38,42 +38,38 @@ Python FastAPI (:8001, 仅内网)
 
 ## 项目结构
 
-`
+```
 Software-Fighters-Project/
-|
-+-- ai-service/                  # Python AI 微服务 [队长]
-|   +-- app/agents/              #   5 个 Agent 定义
-|   +-- app/workflows/           #   LangGraph 编排
-|   +-- app/services/            #   LLM 封装 + 知识库检索
-|   +-- prompts/                 #   Prompt YAML 模板
-|   +-- internal_api.py          #   对 Java 暴露的 4 个内部接口
-|   +-- knowledge_data/          #   知识库原始文档
-|   +-- requirements.txt
-|
-+-- backend/                     # Java SpringBoot [后端同学]
-|   +-- src/main/java/.../
-|   |   +-- controller/          #   REST 控制器
-|   |   +-- service/             #   业务逻辑
-|   |   +-- mapper/              #   MyBatisPlus 数据访问
-|   |   +-- entity/              #   实体类
-|   |   +-- config/              #   配置
-|   +-- src/main/resources/
-|   |   +-- application.yml
-|   +-- pom.xml
-|
-+-- frontend/                    # Vue 3 [前端同学]
-|   +-- src/views/
-|   +-- src/components/
-|   +-- src/stores/
-|   +-- src/api/
-|   +-- src/router/
-|
-+-- docs/                        # 项目文档
-`
+    ai-service/                  Python AI [队长]
+        app/agents/              5 个 Agent 定义
+        app/workflows/           LangGraph 编排
+        app/services/            LLM 封装 + 知识库
+        prompts/                 Prompt YAML 模板
+        internal_api.py          对 Java 的内部 HTTP 接口
+        knowledge_data/          知识库文档
+        requirements.txt
+    backend/                     Java SpringBoot [后端]
+        src/main/java/.../
+            controller/          REST 控制器
+            service/             业务逻辑
+            mapper/              MyBatisPlus
+            entity/              实体类
+            config/              配置
+        src/main/resources/
+            application.yml
+        pom.xml
+    frontend/                    Vue 3 [前端]
+        src/views/
+        src/components/
+        src/stores/
+        src/api/
+        src/router/
+    docs/                        项目文档
+```
 
 ## 快速开始
 
-`ash
+`bash
 git clone https://github.com/Aikun668/Software-Fighters-Project.git
 cd Software-Fighters-Project
 
