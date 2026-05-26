@@ -109,8 +109,8 @@ pnpm dev                       # 启动 -> localhost:5173
 | 分支 | 负责人 | 说明 |
 |------|--------|------|
 | main | 队长 | 主分支，最终合并 |
-| gent-dev | 队长 | Python AI Agent 开发 |
-| ackend-dev | 后端 | Java SpringBoot 开发 |
+| agent-dev | 队长 | Python AI Agent 开发 |
+| backend-dev | 后端 | Java SpringBoot 开发 |
 | rontend-dev | 前端 | Vue 3 开发 |
 
 ## 团队
