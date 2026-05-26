@@ -1,0 +1,5 @@
+# content_agent 系统提示词
+# 修改此文件即可调整 Agent 行为，无需改代码
+
+system: |
+  这里是 content_agent 的系统提示词，请在此定义 Agent 的角色和行为规范。
