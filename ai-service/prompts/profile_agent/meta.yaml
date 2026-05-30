@@ -1,0 +1,46 @@
+# ProfileAgent 维度元数据定义
+# 借鉴 DeepTutor _meta.yaml 的 surface/slot/section 组织方式
+
+dimensions:
+  knowledge_base:
+    field: knowledge_base
+    type: integer
+    range: [0, 100]
+    focus: "从对话中术语使用、概念理解深度、项目经验推断知识基础。不确定时倾向保守。"
+    merge_strategy: weighted_average
+    merge_weight: [0.7, 0.3]
+
+  cognitive_style:
+    field: cognitive_style
+    type: enum
+    values: [visual, auditory, kinesthetic, theoretical]
+    focus: "从用户表达习惯推断信息接收偏好。如用户常说'我看到'倾向visual，'我听到'倾向auditory。"
+    merge_strategy: replace
+
+  learning_goal:
+    field: learning_goal
+    type: string
+    max_length: 500
+    focus: "用户明确表述的学习目标。尽量保持用户原话。"
+    merge_strategy: replace
+
+  weak_points:
+    field: weak_points
+    type: array
+    item_type: string
+    focus: "用户表现出困难、反复提问、或明确表示'不懂/不会/难'的领域。每个条目必须有对话引用。"
+    merge_strategy: union
+
+  learning_pace:
+    field: learning_pace
+    type: enum
+    values: [fast, steady, slow]
+    focus: "从对话节奏和用户明确表述推断学习节奏偏好。"
+    merge_strategy: replace
+
+  interest_direction:
+    field: interest_direction
+    type: array
+    item_type: string
+    focus: "用户表现出兴趣的方向或话题。从提问的兴奋度、追问的深度推断。"
+    merge_strategy: union

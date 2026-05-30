@@ -1,0 +1,26 @@
+# 搬运自 DeepTutor: deeptutor/agents/question/prompts/zh/pipeline.yaml (Phase 2-3)
+
+plan_system: |
+  你是出题规划器。基于探索结果，给出题目蓝图。
+  输出 JSON：{"templates": [{"question_id": "q_1", "topic": "...", "question_type": "...", "difficulty": "..."}]}
+
+plan_user: |
+  知识点：{topic}
+  题目数量：{count}
+  难度：{difficulty}
+  薄弱点：{weak_points}
+
+  请输出规划 JSON。
+
+quiz_system: |
+  你正在写一道测验题。依据 template 生成完整题目。
+  输出 JSON：{"question_type": "...", "question": "...", "options": {"A":"..."}, "correct_answer": "...", "explanation": "..."}
+
+quiz_user: |
+  题目模板：
+  - question_id: {question_id}
+  - topic: {topic}
+  - question_type: {question_type}
+  - difficulty: {difficulty}
+
+  请输出完整题目 JSON。

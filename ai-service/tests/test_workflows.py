@@ -1,0 +1,161 @@
+"""Workflow orchestration tests — use mock LLM to avoid API calls."""
+import pytest
+from unittest.mock import AsyncMock, patch, MagicMock
+
+from app.workflows.profile_workflow import ProfileWorkflow, DIMENSIONS, MIN_FILLED_DIMENSIONS
+
+
+class TestProfileWorkflowStatus:
+    """ProfileWorkflow.check_profile_status static method tests"""
+
+    def test_empty_profile_not_complete(self):
+        result = ProfileWorkflow.check_profile_status({})
+        assert result["complete"] is False
+        assert result["filled_dimensions"] == 0
+        assert result["total_dimensions"] == 6
+
+    def test_partial_profile_not_complete(self):
+        profile = {
+            "knowledge_base": 50,
+            "cognitive_style": "visual",
+            "learning_goal": "learn AI",
+        }
+        result = ProfileWorkflow.check_profile_status(profile)
+        assert result["complete"] is False
+        assert result["filled_dimensions"] == 3
+
+    def test_full_profile_complete(self):
+        profile = {
+            "knowledge_base": 70,
+            "cognitive_style": "visual",
+            "learning_goal": "master ML",
+            "weak_points": ["math"],
+            "learning_pace": "fast",
+            "interest_direction": ["NLP"],
+        }
+        result = ProfileWorkflow.check_profile_status(profile)
+        assert result["complete"] is True
+        assert result["filled_dimensions"] == 6
+
+    def test_boundary_4_dimensions_is_complete(self):
+        profile = {
+            "knowledge_base": 50,
+            "cognitive_style": "visual",
+            "learning_goal": "learn AI",
+            "weak_points": ["math"],
+            "learning_pace": None,
+            "interest_direction": [],
+        }
+        result = ProfileWorkflow.check_profile_status(profile)
+        assert result["complete"] is True
+        assert result["filled_dimensions"] == 4
+
+    def test_empty_arrays_not_counted(self):
+        profile = {
+            "knowledge_base": 50,
+            "cognitive_style": "visual",
+            "weak_points": [],
+            "interest_direction": [],
+        }
+        result = ProfileWorkflow.check_profile_status(profile)
+        assert result["filled_dimensions"] == 2
+
+    def test_invalid_keys_ignored(self):
+        profile = {
+            "knowledge_base": 50,
+            "cognitive_style": "visual",
+            "learning_goal": "learn AI",
+            "weak_points": ["math"],
+            "extra_field": "should be ignored",
+        }
+        result = ProfileWorkflow.check_profile_status(profile)
+        assert result["filled_dimensions"] == 4
+        assert "extra_field" not in result["dimensions"]
+
+
+class TestProfileWorkflowDirectorRouting:
+    """Director node routing logic tests"""
+
+    def test_route_incomplete(self):
+        state = {"profile_complete": False, "filled_dimensions": 2}
+        route = ProfileWorkflow._route_after_director(state)
+        assert route == "response"
+
+    def test_route_complete(self):
+        state = {"profile_complete": True, "filled_dimensions": 5}
+        route = ProfileWorkflow._route_after_director(state)
+        assert route == "complete"
+
+    def test_route_falsy_complete(self):
+        state = {"profile_complete": False, "filled_dimensions": 0}
+        route = ProfileWorkflow._route_after_director(state)
+        assert route == "response"
+
+
+class TestResourceGenWorkflowInit:
+    """ResourceGenWorkflow initialization tests"""
+
+    def test_workflow_creates_agents(self):
+        from app.workflows.resource_gen import ResourceGenWorkflow
+        wf = ResourceGenWorkflow(use_mock=True)
+        assert wf.content_agent is not None
+        assert wf.exercise_agent is not None
+        assert wf.use_mock is True
+
+    def test_graph_builds_with_mock(self):
+        from app.workflows.resource_gen import ResourceGenWorkflow
+        wf = ResourceGenWorkflow(use_mock=True)
+        graph = wf._build_graph()
+        assert graph is not None
+
+
+class TestLearningPathWorkflowInit:
+    """LearningPathWorkflow initialization tests"""
+
+    def test_workflow_creates_agents(self):
+        from app.workflows.learning_path import LearningPathWorkflow
+        wf = LearningPathWorkflow(use_mock=True)
+        assert wf.path_agent is not None
+        assert wf.content_agent is not None
+        assert wf.use_mock is True
+
+    def test_graph_builds_with_mock(self):
+        from app.workflows.learning_path import LearningPathWorkflow
+        wf = LearningPathWorkflow(use_mock=True)
+        graph = wf._build_graph()
+        assert graph is not None
+
+
+class TestBaseWorkflow:
+    """BaseWorkflow shared utilities"""
+
+    def test_load_profile_calls_service(self):
+        import asyncio
+        from app.workflows.base_workflow import BaseWorkflow
+
+        class DummyWorkflow(BaseWorkflow):
+            def _build_graph(self):
+                return None
+
+        wf = DummyWorkflow(use_mock=True)
+
+        with patch.object(wf.profile_service, "get_profile", new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = {"knowledge_base": 50}
+            result = asyncio.run(wf._load_profile(1))
+            assert result == {"knowledge_base": 50}
+            mock_get.assert_called_once_with(1)
+
+    def test_load_profile_returns_empty_on_none(self):
+        import asyncio
+        from app.workflows.base_workflow import BaseWorkflow
+
+        class DummyWorkflow(BaseWorkflow):
+            def _build_graph(self):
+                return None
+
+        wf = DummyWorkflow(use_mock=True)
+
+        with patch.object(wf.profile_service, "get_profile", new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = None
+            result = asyncio.run(wf._load_profile(1))
+            assert result == {}
