@@ -85,14 +85,17 @@ class TestStreamingEndpoints:
 
     @pytest.mark.asyncio
     async def test_resources_stream(self, async_client):
-        with patch("internal_api._get_content_agent") as mock_get:
-            mock_agent = AsyncMock()
-            mock_agent.run = AsyncMock(return_value={
+        with patch("internal_api._get_resource_workflow") as mock_get:
+            mock_workflow = AsyncMock()
+            mock_workflow.run = AsyncMock(return_value={
                 "content_blocks": [{"type": "section", "heading": "Test", "content": "Content"}],
+                "questions": [],
+                "resource_ids": [],
                 "response": "Done",
+                "error": "",
             })
-            mock_get.return_value = mock_agent
-            
+            mock_get.return_value = mock_workflow
+
             response = await async_client.post(
                 "/internal/resources/generate",
                 json={"student_id": "1", "topic": "Python"},
@@ -130,7 +133,7 @@ class TestStreamingEndpoints:
 class TestPathEndpoint:
     @pytest.mark.asyncio
     async def test_path_response(self, async_client):
-        with patch("internal_api._get_path_agent") as mock_get:
+        with patch("internal_api._get_path_workflow") as mock_get:
             mock_agent = AsyncMock()
             mock_agent.run = AsyncMock(return_value={
                 "steps": [{"order": 1, "topic": "Test", "status": "pending"}],
@@ -138,27 +141,29 @@ class TestPathEndpoint:
             })
             mock_get.return_value = mock_agent
             
-            response = await async_client.get("/internal/path/test_1")
+            response = await async_client.get("/internal/path/1")
             assert response.status_code == 200
             data = response.json()
-            assert "steps" in data
-            assert "concept_graph" in data
-            assert isinstance(data["steps"], list)
-            assert isinstance(data["concept_graph"], dict)
+            assert data["success"] is True
+            inner = data["data"]
+            assert "steps" in inner
+            assert "concept_graph" in inner
+            assert isinstance(inner["steps"], list)
+            assert isinstance(inner["concept_graph"], dict)
 
     @pytest.mark.asyncio
     async def test_path_step_structure(self, async_client):
-        with patch("internal_api._get_path_agent") as mock_get:
+        with patch("internal_api._get_path_workflow") as mock_get:
             mock_agent = AsyncMock()
             mock_agent.run = AsyncMock(return_value={
                 "steps": [{"order": 1, "topic": "Test", "status": "pending"}],
                 "concept_graph": {"nodes": [], "edges": []},
             })
             mock_get.return_value = mock_agent
-            
-            response = await async_client.get("/internal/path/test_1")
+
+            response = await async_client.get("/internal/path/1")
             data = response.json()
-            steps = data["steps"]
+            steps = data["data"]["steps"]
             assert len(steps) > 0
             assert "order" in steps[0]
             assert "topic" in steps[0]

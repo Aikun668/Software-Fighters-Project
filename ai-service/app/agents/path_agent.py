@@ -150,7 +150,7 @@ class PathAgent(BaseAgent):
             interest = student_profile.get("interest_direction", [])
             if interest:
                 steps = [
-                    {**step, "status": "recommended" if any(i in step["topic"] for i in interest) else step.get("status", "pending")}
+                    {**step, "status": "recommended" if any(i in step.get("topic", "") for i in interest) else step.get("status", "pending")}
                     for step in steps
                 ]
 

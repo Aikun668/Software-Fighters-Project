@@ -126,36 +126,3 @@ class TestLearningPathWorkflowInit:
         assert graph is not None
 
 
-class TestBaseWorkflow:
-    """BaseWorkflow shared utilities"""
-
-    def test_load_profile_calls_service(self):
-        import asyncio
-        from app.workflows.base_workflow import BaseWorkflow
-
-        class DummyWorkflow(BaseWorkflow):
-            def _build_graph(self):
-                return None
-
-        wf = DummyWorkflow(use_mock=True)
-
-        with patch.object(wf.profile_service, "get_profile", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = {"knowledge_base": 50}
-            result = asyncio.run(wf._load_profile(1))
-            assert result == {"knowledge_base": 50}
-            mock_get.assert_called_once_with(1)
-
-    def test_load_profile_returns_empty_on_none(self):
-        import asyncio
-        from app.workflows.base_workflow import BaseWorkflow
-
-        class DummyWorkflow(BaseWorkflow):
-            def _build_graph(self):
-                return None
-
-        wf = DummyWorkflow(use_mock=True)
-
-        with patch.object(wf.profile_service, "get_profile", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = None
-            result = asyncio.run(wf._load_profile(1))
-            assert result == {}

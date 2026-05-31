@@ -251,6 +251,8 @@ class ProfileAgent(BaseAgent):
         from app.utils.json_parser import parse_llm_json
 
         data = parse_llm_json(text, fallback={})
+        if not isinstance(data, dict):
+            data = {}
         updates = data.get("updates", data)
         return {k: v for k, v in updates.items() if k in DIMENSIONS}
 
@@ -272,10 +274,15 @@ class ProfileAgent(BaseAgent):
                     changed = True
 
             elif dim in NUMBER_DIMENSIONS:
+                try:
+                    new_num = float(new_val)
+                except (TypeError, ValueError):
+                    logger.warning(f"Non-numeric value for {dim}: {new_val!r}")
+                    continue
                 if old_val is not None:
-                    merged = int(old_val * 0.7 + new_val * 0.3)
+                    merged = int(old_val * 0.7 + new_num * 0.3)
                 else:
-                    merged = int(new_val)
+                    merged = int(new_num)
                 if merged != old_val:
                     setattr(profile, dim, merged)
                     changed = True
@@ -308,10 +315,15 @@ class ProfileAgent(BaseAgent):
                     changed = True
 
             elif dim in NUMBER_DIMENSIONS:
+                try:
+                    new_num = float(new_val)
+                except (TypeError, ValueError):
+                    logger.warning(f"Non-numeric value for {dim}: {new_val!r}")
+                    continue
                 if old_val is not None:
-                    new_merged = int(old_val * 0.7 + new_val * 0.3)
+                    new_merged = int(old_val * 0.7 + new_num * 0.3)
                 else:
-                    new_merged = int(new_val)
+                    new_merged = int(new_num)
                 if new_merged != old_val:
                     merged[dim] = new_merged
                     changed = True

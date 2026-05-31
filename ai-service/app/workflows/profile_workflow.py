@@ -82,7 +82,7 @@ class ProfileWorkflow(BaseWorkflow):
     async def _director_node(self, state: ProfileWorkflowState) -> dict:
         """纯逻辑：检查画像完整度（借鉴 OpenMAIC director 纯代码路由策略）"""
         current_profile = state.get("current_profile", {})
-        status = ProfileWorkflow.check_profile_status(current_profile)
+        status = self.check_profile_status(current_profile)
 
         logger.info(
             f"Profile director check: {status['filled_dimensions']}/{status['total_dimensions']} "

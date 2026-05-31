@@ -44,7 +44,8 @@ class TutorAgent(BaseAgent):
 
     async def _retrieve_node(self, state: TutorState) -> dict:
         messages = state.get("messages", [])
-        query = messages[-1].get("content", "")[:100] if messages else ""
+        last_msg = messages[-1] if messages else {}
+        query = (last_msg.get("content", "") if isinstance(last_msg, dict) else "")[:100]
         
         knowledge_context = ""
         try:
@@ -77,7 +78,7 @@ class TutorAgent(BaseAgent):
                 messages, system_prompt=system_with_context
             ):
                 response += chunk
-        except (ConnectionError, RuntimeError, asyncio.TimeoutError, ValueError) as e:
+        except (ConnectionError, RuntimeError, ValueError) as e:
             logger.error(f"Tutor respond failed: {e}")
             response = "抱歉，我暂时无法回答这个问题。请稍后再试。"
         except Exception as e:

@@ -1,13 +1,12 @@
-import json
 import logging
 from typing import TypedDict
 
 from langgraph.graph import StateGraph
 
 from app.agents.base_agent import BaseAgent
+from app.orchestration.agent_turn_summary import AgentTurnSummary
 from app.services.llm_service import create_llm
 from app.utils.content_guard import ContentSafetyFilter
-from app.utils.mermaid_generator import concept_graph_to_mermaid
 from app.utils.prompt_loader import interpolate_variables
 
 logger = logging.getLogger(__name__)
@@ -26,16 +25,55 @@ class ContentState(TypedDict, total=False):
 class ContentAgent(BaseAgent):
     """内容生成 Agent —— 生成课程文档、代码案例、思维导图等"""
 
-    def __init__(self, config=None, use_mock_llm: bool = True):
+    def __init__(self, config=None, use_mock_llm: bool = True,
+                 model_profile=None):
         super().__init__(
             agent_name="content_agent",
             module="agents",
             language="zh",
             config=config,
             use_mock_llm=use_mock_llm,
+            model_profile=model_profile,
         )
         self.use_mock_llm = use_mock_llm
-        self.plan_llm = create_llm(temperature=0.3, use_mock=use_mock_llm)
+        if not hasattr(self, "plan_llm"):
+            self.plan_llm = create_llm(temperature=0.3, use_mock=use_mock_llm)
+
+    def create_turn_summary(
+        self, state: dict, output: dict
+    ) -> AgentTurnSummary:
+        """Override: 利用 ContentAgent 特有的 outline + content_blocks 结构精准提取"""
+        topic = state.get("topic", "")
+
+        concepts: list[str] = []
+        outline = state.get("outline", {})
+        subsections = outline.get("subsections", [])
+        for sub in subsections[:8]:
+            heading = sub.get("heading", "") if isinstance(sub, dict) else str(sub)
+            if heading:
+                concepts.append(str(heading))
+
+        if not concepts:
+            blocks = output.get("content_blocks") or output.get("blocks") or []
+            for b in blocks[:5]:
+                heading = b.get("heading") or ""
+                if heading:
+                    concepts.append(str(heading))
+
+        avoid = list(concepts[:4])
+        block_count = len(
+            output.get("content_blocks") or output.get("blocks") or []
+        )
+        intent = f"讲解{topic}的核心概念和原理，覆盖 {len(concepts)} 个知识点"
+
+        return AgentTurnSummary(
+            agent_name=self.__class__.__name__,
+            topic=topic,
+            covered_concepts=concepts[:8],
+            generation_intent=intent,
+            avoid_duplicating=avoid,
+            output_metrics={"block_count": block_count},
+        )
 
     def build_graph(self) -> "CompiledStateGraph":
         graph = StateGraph(ContentState)
@@ -46,6 +84,19 @@ class ContentAgent(BaseAgent):
         graph.set_finish_point("generate")
         return graph.compile()
 
+
+    @staticmethod
+    def _validate_outline(result: dict) -> list[str]:
+        """验证 outline 结构完整性"""
+        issues = []
+        subsections = result.get("subsections", [])
+        if not isinstance(subsections, list) or len(subsections) == 0:
+            issues.append("subsections 必须是非空数组")
+            return issues
+        for i, sub in enumerate(subsections):
+            if not isinstance(sub.get("heading"), str) or not sub["heading"]:
+                issues.append(f"subsections[{i}] 缺少或 heading 为空")
+        return issues
 
     async def _plan_node(self, state: ContentState) -> dict:
         """规划内容大纲"""
@@ -71,15 +122,20 @@ class ContentAgent(BaseAgent):
         )
 
         try:
-            result = await self.plan_llm.chat(
-                [{"role": "user", "content": user_filled}],
+            outline_result = await self._call_llm_json(
                 system_prompt=outline_prompt,
+                user_prompt=user_filled,
+                expected_key="subsections",
+                fallback={},
+                validator=self._validate_outline,
+                llm=self.plan_llm,
             )
-            outline = json.loads(result)
-            # Fix 3: 借鉴 DeepTutor _json_has_expected 模式：校验关键字段
-            if not isinstance(outline.get("subsections"), list) or len(outline.get("subsections", [])) == 0:
-                raise ValueError(f"Outline missing subsections, got keys: {list(outline.keys())}")
-        except (json.JSONDecodeError, ValueError, ConnectionError, RuntimeError) as e:
+            subsections = outline_result.get("subsections", [])
+            if subsections:
+                outline = outline_result
+            else:
+                raise ValueError("Outline has empty subsections")
+        except ValueError as e:
             logger.error(f"Content plan failed: {e}")
             outline = {
                 "intro": f"本节介绍{topic}的核心概念。",
@@ -138,29 +194,6 @@ class ContentAgent(BaseAgent):
             content = self._render_block_content(role, heading, focus, topic, result, fallback)
             content_blocks.append({"type": block_type, "heading": heading, "content": content})
 
-        # 思维导图
-        mindmap_nodes = [{"id": "root", "label": topic}]
-        for i, sub in enumerate(subsections):
-            mindmap_nodes.append({"id": f"sub_{i}", "label": sub.get("heading", f"第{i+1}节")})
-        content_blocks.append({
-            "type": "mindmap", "heading": "知识结构",
-            "content": json.dumps({
-                "nodes": mindmap_nodes,
-                "edges": [{"src": "root", "dst": f"sub_{i}"} for i in range(len(subsections))],
-            }, ensure_ascii=False),
-        })
-
-        # Mermaid 概念图
-        concept_graph_input = {
-            "nodes": [{"id": n["id"], "label": n["label"]} for n in mindmap_nodes],
-            "edges": [{"from": "root", "to": f"sub_{i}", "label": "包含"} for i in range(len(subsections))],
-        }
-        mermaid_diagram = concept_graph_to_mermaid(concept_graph_input)
-        content_blocks.append({
-            "type": "mermaid", "heading": "概念关系图",
-            "content": mermaid_diagram,
-        })
-
         # 关键要点
         key_takeaway = outline.get("key_takeaway", f"掌握{topic}的核心原理。")
         content_blocks.append({"type": "callout", "heading": "关键要点", "content": key_takeaway})
@@ -189,66 +222,33 @@ class ContentAgent(BaseAgent):
 
     def _route_block_prompt(self, heading: str, role: str, focus: str, topic: str) -> tuple[str, str, str, str, str]:
         """按 subsection role 路由到对应的子 prompt，返回 (sys, user_tpl, expected_key, block_type, fallback)"""
-        if role == "example":
-            return (
-                self._load_extra_prompt("code.yaml", key="system"),
-                self._load_extra_prompt("code.yaml", key="user_template"),
-                "code",
-                "code",
-                f"# {heading}\n# 示例代码\nprint('示例 - {topic}')",
-            )
-        elif role in ("comparison", "application"):
-            return (
-                self._load_extra_prompt("deep_dive.yaml", key="system"),
-                self._load_extra_prompt("deep_dive.yaml", key="user_template"),
-                "suggestions",
-                "callout",
-                f"**{heading}**\n\n{focus} 的拓展内容正在准备中。",
-            )
-        else:
-            return (
-                self._load_extra_prompt("outline.yaml", key="system"),
-                self._load_extra_prompt("outline.yaml", key="user_template"),
-                "subsections",
-                "section",
-                f"## {heading}\n\n{focus}\n\n本节详细讲解{topic}的核心知识点。",
-            )
+        # 核心内容统一使用 outline.yaml 生成 section 块
+        # code/reading/mindmap 已由 CodeAgent/ReadingAgent/MindMapAgent 独立生成
+        return (
+            self._load_extra_prompt("outline.yaml", key="system"),
+            self._load_extra_prompt("outline.yaml", key="user_template"),
+            "subsections",
+            "section",
+            f"## {heading}\n\n{focus}\n\n本节详细讲解{topic}的核心知识点。",
+        )
 
     def _render_block_content(
         self, role: str, heading: str, focus: str, topic: str,
         result: dict, fallback: str,
     ) -> str:
-        """从 LLM JSON 输出中提取展示内容"""
+        """从 LLM JSON 输出中提取展示内容（仅处理 section 类型）"""
         if not result:
             return fallback
 
-        if role == "example":
-            code = result.get("code", "")
-            lang = result.get("language", "python")
-            explanation = result.get("explanation", "")
-            if code:
-                return f"```{lang}\n{code}\n```\n\n{explanation}"
-            return fallback
-
-        elif role in ("comparison", "application"):
-            suggestions = result.get("suggestions", [])
-            if suggestions:
-                lines = [f"**{heading}**\n"]
-                for s in suggestions:
-                    lines.append(f"- **{s.get('topic', '')}**: {s.get('rationale', '')}")
-                return "\n".join(lines)
-            return fallback
-
-        else:  # core / derivation
-            intro_text = result.get("intro", "")
-            subs = result.get("subsections", [])
-            if subs:
-                lines = []
-                if intro_text:
-                    lines.append(intro_text)
-                for sub in subs:
-                    lines.append(f"### {sub.get('heading', '')}\n{sub.get('focus', '')}")
-                return "\n\n".join(lines)
+        intro_text = result.get("intro", "")
+        subs = result.get("subsections", [])
+        if subs:
+            lines = []
             if intro_text:
-                return f"## {heading}\n\n{intro_text}"
-            return fallback
+                lines.append(intro_text)
+            for sub in subs:
+                lines.append(f"### {sub.get('heading', '')}\n{sub.get('focus', '')}")
+            return "\n\n".join(lines)
+        if intro_text:
+            return f"## {heading}\n\n{intro_text}"
+        return fallback

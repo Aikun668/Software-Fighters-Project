@@ -6,6 +6,11 @@ LLM Provider 策略模式
   - OpenAI 兼容 HTTP API (DeepSeek/Qwen/Ollama 等)
 
 通过 LLM_PROVIDER 环境变量切换，Agent 层无感知。
+
+Per-agent 模型选择：
+  - ModelConfig: 单次 LLM 调用的参数集（model, temperature, max_tokens）
+  - AgentModelProfile: 将 Agent 角色（default/plan/generate）映射到 ModelConfig
+  - 预设 profiles: 开箱即用的 Director/Content/Exercise/Code/MindMap/Reading 配置
 """
 
 import asyncio
@@ -15,6 +20,7 @@ import hmac
 import hashlib
 import base64
 import logging
+from dataclasses import dataclass, field
 from datetime import datetime
 from time import mktime
 from typing import AsyncGenerator, Any
@@ -25,6 +31,73 @@ import websockets
 import httpx
 
 logger = logging.getLogger(__name__)
+
+
+# ═══════════════════════════════════════════════════════════════
+# Per-Agent Model Configuration
+# ═══════════════════════════════════════════════════════════════
+
+
+@dataclass
+class ModelConfig:
+    """单次 LLM 调用的参数集。
+
+    Attributes:
+        model: 模型名称（空字符串 = 使用环境变量默认值）
+        temperature: 生成温度 (0.0 = 确定性, 1.0 = 最高随机性)
+        max_tokens: 最大输出 token 数
+    """
+    model: str = ""
+    temperature: float = 0.7
+    max_tokens: int = 8192
+
+
+@dataclass
+class AgentModelProfile:
+    """将 Agent 逻辑角色映射到 ModelConfig。
+
+    若某个角色为 None，BaseAgent._get_llm(role) 回退到 default。
+    若整个 profile 为 None，Agent 使用 create_llm() 默认行为。
+    """
+    default: ModelConfig = field(default_factory=ModelConfig)
+    plan: ModelConfig | None = None
+    generate: ModelConfig | None = None
+
+    def get(self, role: str) -> ModelConfig:
+        if role == "plan" and self.plan is not None:
+            return self.plan
+        if role == "generate" and self.generate is not None:
+            return self.generate
+        return self.default
+
+
+# ── 开箱即用的预设 Profiles ──────────────────────────────────
+
+PROFILE_DIRECTOR = AgentModelProfile(
+    default=ModelConfig(temperature=0.0, max_tokens=256),
+)
+
+PROFILE_CONTENT = AgentModelProfile(
+    default=ModelConfig(temperature=0.7, max_tokens=8192),
+    plan=ModelConfig(temperature=0.3, max_tokens=4096),
+)
+
+PROFILE_EXERCISE = AgentModelProfile(
+    default=ModelConfig(temperature=0.7, max_tokens=4096),
+    plan=ModelConfig(temperature=0.3, max_tokens=2048),
+)
+
+PROFILE_CODE = AgentModelProfile(
+    default=ModelConfig(temperature=0.5, max_tokens=8192),
+)
+
+PROFILE_MINDMAP = AgentModelProfile(
+    default=ModelConfig(temperature=0.6, max_tokens=4096),
+)
+
+PROFILE_READING = AgentModelProfile(
+    default=ModelConfig(temperature=0.7, max_tokens=4096),
+)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -41,6 +114,12 @@ def get_llm_service(use_mock: bool | None = None):
         if use_mock is None:
             use_mock = os.getenv("USE_MOCK_LLM", "true").lower() == "true"
         _llm_service_singleton = create_llm(use_mock=use_mock)
+    elif use_mock is not None and use_mock != _llm_service_singleton.use_mock:
+        raise RuntimeError(
+            f"get_llm_service already initialized with use_mock="
+            f"{_llm_service_singleton.use_mock}, "
+            f"but called with use_mock={use_mock}"
+        )
     return _llm_service_singleton
 
 
@@ -48,11 +127,15 @@ def create_llm(
     temperature: float = 0.7,
     max_tokens: int = 8192,
     use_mock: bool = False,
+    model: str | None = None,
 ) -> Any:
     """LLM Provider 工厂——根据 LLM_PROVIDER 环境变量选择后端。
 
     LLM_PROVIDER=spark   → SparkLLM (讯飞 WebSocket)
     LLM_PROVIDER=openai  → OpenAILLM (OpenAI 兼容 HTTP)
+
+    Args:
+        model: 模型名称，仅 OpenAI 后端使用。None 时使用 OPENAI_MODEL 环境变量。
     """
     provider = os.getenv("LLM_PROVIDER", "spark").lower()
     if provider == "openai":
@@ -60,6 +143,7 @@ def create_llm(
             temperature=temperature,
             max_tokens=max_tokens,
             use_mock=use_mock,
+            model=model,
         )
     return SparkLLM(
         temperature=temperature,
@@ -304,10 +388,11 @@ class OpenAILLM:
         temperature: float = 0.7,
         max_tokens: int = 4096,
         use_mock: bool = False,
+        model: str | None = None,
     ):
         self.base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
         self.api_key = os.getenv("OPENAI_API_KEY", "")
-        self.model = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
+        self.model = model or os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.use_mock = use_mock

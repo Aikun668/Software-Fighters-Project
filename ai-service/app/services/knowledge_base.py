@@ -155,6 +155,7 @@ class KnowledgeBase:
         try:
             return self.collection.count() == 0
         except Exception:
+            logger.warning("Failed to check collection count, assuming empty")
             return True
 
 

@@ -25,16 +25,19 @@ class ExerciseState(TypedDict, total=False):
 class ExerciseAgent(BaseAgent):
     """练习题生成 Agent —— 基于薄弱点生成个性化题目"""
 
-    def __init__(self, config=None, use_mock_llm: bool = True):
+    def __init__(self, config=None, use_mock_llm: bool = True,
+                 model_profile=None):
         super().__init__(
             agent_name="exercise_agent",
             module="agents",
             language="zh",
             config=config,
             use_mock_llm=use_mock_llm,
+            model_profile=model_profile,
         )
         self.use_mock_llm = use_mock_llm
-        self.plan_llm = create_llm(temperature=0.3, use_mock=use_mock_llm)
+        if not hasattr(self, "plan_llm"):
+            self.plan_llm = create_llm(temperature=0.3, use_mock=use_mock_llm)
 
     def build_graph(self) -> "CompiledStateGraph":
         graph = StateGraph(ExerciseState)
@@ -72,6 +75,7 @@ class ExerciseAgent(BaseAgent):
             user_prompt=user_prompt,
             expected_key="templates",
             fallback={"templates": []},
+            validator=self._validate_templates,
         )
         plan = result.get("templates", [])
         if not plan:
@@ -81,6 +85,28 @@ class ExerciseAgent(BaseAgent):
             ]
 
         return {"plan": plan, "stage": "planned"}
+
+    @staticmethod
+    def _validate_question(result: dict) -> list[str]:
+        """包装 quiz_validator，只返回 issues（适配 _call_llm_json validator 签名）"""
+        from app.utils.quiz_validator import validate_question
+        _, issues = validate_question(result)
+        return issues
+
+    @staticmethod
+    def _validate_templates(result: dict) -> list[str]:
+        """验证模板数组的结构完整性"""
+        issues = []
+        templates = result.get("templates", [])
+        if not isinstance(templates, list) or len(templates) == 0:
+            issues.append("templates 必须是非空数组")
+            return issues
+        for i, t in enumerate(templates):
+            if not isinstance(t.get("question_id"), str) or not t["question_id"]:
+                issues.append(f"templates[{i}] 缺少或 question_id 为空")
+            if not isinstance(t.get("topic"), str) or not t["topic"]:
+                issues.append(f"templates[{i}] 缺少或 topic 为空")
+        return issues
 
     async def _generate_node(self, state: ExerciseState) -> dict:
         """生成题目（LLM 产出后经 validate→normalize 把关）"""
@@ -113,6 +139,7 @@ class ExerciseAgent(BaseAgent):
                 user_prompt=user_prompt,
                 expected_key="question",
                 fallback={},
+                validator=self._validate_question,
             )
 
             if result:
@@ -121,7 +148,9 @@ class ExerciseAgent(BaseAgent):
                     logger.warning(f"Question {q_id} has {len(issues)} issue(s): {issues}")
                 questions.append(normalized)
             else:
-                questions.append(self._mock_question(q_type, topic))
+                mock_q = self._mock_question(q_type, topic)
+                mock_q, _issues = validate_question(mock_q)
+                questions.append(mock_q)
 
         return {"questions": questions, "stage": "generated"}
 

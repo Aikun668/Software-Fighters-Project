@@ -40,7 +40,7 @@ def _normalize(q: dict[str, Any]) -> dict[str, Any]:
     """规范化题目字段（搬自 DeepTutor _normalize_quiz_payload）"""
     out: dict[str, Any] = {}
 
-    qtype = str(q.get("question_type", "") or "").strip().lower()
+    qtype = str(q.get("question_type", "")).strip().lower()
     if qtype not in _VALID_TYPES:
         qtype = "short_answer"
     out["question_type"] = qtype
@@ -69,7 +69,7 @@ def _normalize_options(raw: Any) -> dict[str, str] | None:
         key = str(k or "").strip().upper()[:1]
         val = str(v or "").strip()
         if key in _CHOICE_KEYS and val:
-            clean[key] = v
+            clean[key] = val
     return clean if len(clean) == 4 else None
 
 

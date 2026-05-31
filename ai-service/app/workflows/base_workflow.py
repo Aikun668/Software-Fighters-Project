@@ -14,7 +14,6 @@ from typing import Any
 from langgraph.graph import StateGraph
 
 from app.services.profile_service import get_profile_service
-from app.services.knowledge_base import get_kb
 
 
 class BaseWorkflow(ABC):
@@ -23,7 +22,6 @@ class BaseWorkflow(ABC):
     def __init__(self, use_mock: bool = False):
         self.use_mock = use_mock
         self.profile_service = get_profile_service()
-        self.kb = get_kb()
         self.logger = logging.getLogger(f"workflows.{self.__class__.__name__}")
         self._compiled_graph = None
 
@@ -48,10 +46,24 @@ class BaseWorkflow(ABC):
             await on_progress("done", f"[{self.__class__.__name__}] 执行完成")
         return result
 
-    async def _load_profile(self, user_id: int) -> dict:
-        """从 DB 加载学生画像，失败返回空 dict"""
-        profile = await self.profile_service.get_profile(user_id)
-        return profile or {}
+    @staticmethod
+    def _quality_check(content_blocks: list[dict], questions: list[dict]) -> tuple[bool, str]:
+        """纯逻辑质量检查（无 LLM 调用）。
+
+        Returns:
+            (passed, feedback): passed=True 表示通过，feedback 为失败时的具体原因。
+        """
+        if not content_blocks or len(content_blocks) < 2:
+            return False, "内容块过少（<2），请扩展各节内容，增加讲解深度和示例"
+
+        has_section = any(b.get("type") == "section" for b in content_blocks)
+        if not has_section:
+            return False, "缺少核心讲解内容（section 块），请为课程主题补充基础概念讲解"
+
+        if not questions or len(questions) == 0:
+            return False, "缺少练习题，请为课程生成配套习题以巩固学习效果"
+
+        return True, ""
 
     @staticmethod
     async def _emit_progress(on_progress, stage: str, message: str):

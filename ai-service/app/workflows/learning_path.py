@@ -14,7 +14,7 @@ import json
 import logging
 from typing import TypedDict
 
-from langgraph.graph import StateGraph
+from langgraph.graph import StateGraph, END
 
 from app.agents.path_agent import PathAgent
 from app.agents.content_agent import ContentAgent
@@ -27,12 +27,10 @@ logger = logging.getLogger(__name__)
 
 
 class LearningPathState(TypedDict, total=False):
-    student_id: str
     user_id: int
     student_profile: dict
     concept_graph: dict
     steps: list[dict]
-    critique: str
     version: int
     resource_ids: list[int]
     response: str
@@ -59,7 +57,7 @@ class LearningPathWorkflow(BaseWorkflow):
         graph.add_edge("draft", "revise")
         graph.add_edge("revise", "match_resources")
         graph.add_edge("match_resources", "persist")
-        graph.set_finish_point("persist")
+        graph.add_edge("persist", END)
 
         return graph.compile()
 
@@ -108,7 +106,7 @@ class LearningPathWorkflow(BaseWorkflow):
                 return {**step, "resource_id": None, "preview": intro[:120]}
             except Exception as e:
                 logger.warning(f"Resource matching failed for step '{topic}': {e}")
-                return step
+                return {**step, "resource_id": None, "preview": "", "match_error": str(e)}
 
         tasks = [_plan_one(step) for step in steps]
         matched_steps = list(await asyncio.gather(*tasks))
@@ -122,7 +120,7 @@ class LearningPathWorkflow(BaseWorkflow):
 
         try:
             async with get_db() as session:
-                for step in steps:
+                for idx, step in enumerate(steps):
                     topic = step.get("topic", "")
                     preview = step.get("preview", "")
 
@@ -148,8 +146,9 @@ class LearningPathWorkflow(BaseWorkflow):
                     session.add(record)
                     resource_ids.append(resource.id)
 
-                    # 回填 resource_id
-                    step["resource_id"] = resource.id
+                    # 回填 resource_id（不可变模式）
+                    step = {**step, "resource_id": resource.id}
+                    steps[idx] = step
 
                 await session.commit()
                 logger.info(f"Persisted path with {len(resource_ids)} steps for user {user_id}")
