@@ -59,6 +59,55 @@ class TestGradeChoice:
         assert result["correct"] is True
         assert result["score"] == 1
 
+    def test_multi_select_correct_order_independent(self):
+        result = grade_choice("A,C", "C,A", multi=True)
+        assert result["correct"] is True
+        assert result["score"] == 1
+
+    def test_multi_select_correct_same_order(self):
+        result = grade_choice("A,B", "A,B", multi=True)
+        assert result["correct"] is True
+
+    def test_multi_select_wrong(self):
+        result = grade_choice("A,C", "B,D", multi=True)
+        assert result["correct"] is False
+        assert result["score"] == 0
+
+    def test_multi_select_partial(self):
+        result = grade_choice("A,B", "A,B,C", multi=True)
+        assert result["correct"] is False
+
+    def test_multi_select_with_spaces(self):
+        result = grade_choice("A, B", "B, A", multi=True)
+        assert result["correct"] is True
+
+    def test_points_parameter(self):
+        result = grade_choice("A", "A", points=3)
+        assert result["correct"] is True
+        assert result["score"] == 3
+        assert result["earned"] == 3
+        assert result["max_score"] == 3
+
+    def test_points_parameter_wrong_answer(self):
+        result = grade_choice("B", "A", points=2)
+        assert result["correct"] is False
+        assert result["score"] == 0
+        assert result["earned"] == 0
+
+    def test_earned_and_max_score_fields(self):
+        result = grade_choice("A", "A")
+        assert result["earned"] == 1
+        assert result["max_score"] == 1
+
+    def test_feedback_field_correct(self):
+        result = grade_choice("A", "A")
+        assert "回答正确" in result["feedback"]
+
+    def test_feedback_field_wrong(self):
+        result = grade_choice("B", "A")
+        assert "回答错误" in result["feedback"]
+        assert result["correct_answer"] in result["feedback"]
+
 
 class TestGradeShortAnswer:
     @pytest.fixture
@@ -88,6 +137,9 @@ class TestGradeShortAnswer:
         result = await grade_short_answer("", "参考答案")
         assert result["type"] == "short_answer"
         assert result["score"] == 0
+        assert result["correct"] is False
+        assert result["earned"] == 0
+        assert result["max_score"] == 100
         assert "未作答" in result["feedback"]
 
     @pytest.mark.asyncio
@@ -95,6 +147,7 @@ class TestGradeShortAnswer:
         result = await grade_short_answer("   ", "参考答案")
         assert result["type"] == "short_answer"
         assert result["score"] == 0
+        assert result["correct"] is False
         assert "未作答" in result["feedback"]
 
     @pytest.mark.asyncio
@@ -110,7 +163,11 @@ class TestGradeShortAnswer:
             )
         assert result["type"] == "short_answer"
         assert result["score"] == 85
+        assert result["earned"] == 85
+        assert result["max_score"] == 100
+        assert result["correct"] is True
         assert "回答很好" in result["feedback"]
+        assert "回答很好" in result["ai_comment"]
         assert "数据预处理的作用" in result["key_points_matched"]
         assert "数据增强的局限" in result["key_points_missed"]
 
@@ -127,6 +184,8 @@ class TestGradeShortAnswer:
             )
         assert result["type"] == "short_answer"
         assert result["score"] == 40
+        assert result["correct"] is False
+        assert result["earned"] == 40
         assert "不够完整" in result["feedback"]
         assert len(result["key_points_missed"]) == 3
 
@@ -253,9 +312,9 @@ class TestEvaluateSession:
                 },
             ]
             result = await evaluate_session(answers)
-        assert result["total_score"] == 150  # 100 + 0 + 50
-        assert result["max_score"] == 300  # 100 + 100 + 100
-        assert result["overall_score"] == 50  # 150/300*100
+        assert result["total_score"] == 51  # earned: 1 + 0 + 50
+        assert result["max_score"] == 102  # max_score: 1 + 1 + 100
+        assert result["overall_score"] == 50  # 51/102*100
         assert result["results"][0]["correct"] is True
         assert result["results"][1]["correct"] is False
 
@@ -338,22 +397,22 @@ class TestGenerateReport:
         assert report["correct_count"] == 2
         assert "math" in report["dimension_scores"]
         assert "coding" in report["dimension_scores"]
-        assert "math" in report["weak_areas"]
+        assert "math" in report["weak_modules"]
         assert len(report["suggestions"]) > 0
 
     def test_dimension_scores_calculation(self):
         eval_results = {
             "results": [
-                {"type": "choice", "question": "Q1", "module": "math", "score": 1, "correct": True},
-                {"type": "choice", "question": "Q2", "module": "math", "score": 0, "correct": False},
-                {"type": "short_answer", "question": "Q3", "module": "coding", "score": 90},
-                {"type": "short_answer", "question": "Q4", "module": "coding", "score": 70},
+                {"type": "choice", "question": "Q1", "module": "math", "score": 1, "correct": True, "earned": 1, "max_score": 1},
+                {"type": "choice", "question": "Q2", "module": "math", "score": 0, "correct": False, "earned": 0, "max_score": 1},
+                {"type": "short_answer", "question": "Q3", "module": "coding", "score": 90, "earned": 90, "max_score": 100},
+                {"type": "short_answer", "question": "Q4", "module": "coding", "score": 70, "earned": 70, "max_score": 100},
             ],
             "overall_score": 75,
             "weak_modules": [],
         }
         report = generate_report(eval_results)
-        assert report["dimension_scores"]["math"] == 50  # round((100+0)/2)
+        assert report["dimension_scores"]["math"] == 50  # round((1+0)/(1+1)*100)
 
     def test_suggestions_for_low_score(self):
         eval_results = {

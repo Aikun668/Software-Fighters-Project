@@ -13,13 +13,12 @@ def generate_report(evaluation_results: dict, student_profile: Optional[dict] = 
     for r in results:
         mod = r.get("module", "general")
         if mod not in dimension_scores:
-            dimension_scores[mod] = {"total": 0, "count": 0}
-        normalized = r.get("score", 0) if r.get("type") == "short_answer" else r.get("score", 0) * 100
-        dimension_scores[mod]["total"] += normalized
-        dimension_scores[mod]["count"] += 1
+            dimension_scores[mod] = {"earned": 0, "max": 0}
+        dimension_scores[mod]["earned"] += r.get("earned", 0)
+        dimension_scores[mod]["max"] += r.get("max_score", 0)
 
     dimensions = {
-        mod: round(scores["total"] / scores["count"]) if scores["count"] > 0 else 0
+        mod: round(scores["earned"] / scores["max"] * 100) if scores["max"] > 0 else 0
         for mod, scores in dimension_scores.items()
     }
 
@@ -46,7 +45,7 @@ def generate_report(evaluation_results: dict, student_profile: Optional[dict] = 
     report = {
         "overall_score": overall,
         "dimension_scores": dimensions,
-        "weak_areas": weak_modules,
+        "weak_modules": weak_modules,
         "suggestions": suggestions,
         "results": results,
         "total_questions": len(results),

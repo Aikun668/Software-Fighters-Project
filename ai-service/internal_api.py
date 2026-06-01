@@ -9,6 +9,7 @@ from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 
 from app.utils.sse_heartbeat import sse_heartbeat_generator
 from app.api.errors import ErrorCode, api_error, api_success
+from app.events.types import StreamEvent, done_event
 
 logger = logging.getLogger(__name__)
 
@@ -201,32 +202,43 @@ async def resources_generate(request: Request):
     workflow = _get_resource_workflow()
 
     async def event_stream():
+        queue: asyncio.Queue = asyncio.Queue()
         try:
-            await asyncio.sleep(0.3)
-            yield f"data: {json.dumps({'type': 'progress', 'stage': 'plan', 'content': f'正在分析「{topic}」的知识点结构...'}, ensure_ascii=False)}\n\n"
+            # Kick off the workflow in background — it pushes StreamEvent to queue
+            async def run_workflow():
+                try:
+                    state = await workflow.run({
+                        "user_id": user_id,
+                        "topic": topic,
+                        "student_profile": student_profile,
+                        "event_queue": queue,
+                    })
+                    # Push final done event with results
+                    await queue.put(done_event({
+                        "content_blocks": state.get("content_blocks", []),
+                        "questions": state.get("questions", []),
+                        "resource_ids": state.get("resource_ids", []),
+                        "response": state.get("response", ""),
+                        "error": state.get("error", ""),
+                    }))
+                except Exception as e:
+                    logger.error(f"Resources generate workflow failed: {e}")
+                    await queue.put(done_event({"error": str(e)}))
 
-            state = await workflow.run({
-                "user_id": user_id,
-                "topic": topic,
-                "student_profile": student_profile,
-            })
+            task = asyncio.ensure_future(run_workflow())
 
-            yield f"data: {json.dumps({'type': 'progress', 'stage': 'outline_done', 'content': '大纲生成完成，开始并行生成资源...'}, ensure_ascii=False)}\n\n"
+            # Stream events from queue as they arrive
+            while True:
+                event = await queue.get()
+                if isinstance(event, StreamEvent):
+                    yield event.to_sse()
+                    if event.type == "done":
+                        break
+                else:
+                    # Backward compat: raw dicts
+                    yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
-            content_blocks = state.get("content_blocks", [])
-            questions = state.get("questions", [])
-
-            for i, block in enumerate(content_blocks):
-                await asyncio.sleep(0.3)
-                yield f"data: {json.dumps({'type': 'progress', 'stage': 'generating', 'index': i + 1, 'total': len(content_blocks), 'block_type': block.get('type', 'section')}, ensure_ascii=False)}\n\n"
-                yield f"data: {json.dumps({'type': 'content_block', 'data': block}, ensure_ascii=False)}\n\n"
-
-            if questions:
-                yield f"data: {json.dumps({'type': 'progress', 'stage': 'exercises', 'content': f'已生成 {len(questions)} 道练习题'}, ensure_ascii=False)}\n\n"
-
-            resource_ids = state.get("resource_ids", [])
-            error = state.get("error", "")
-            yield f"data: {json.dumps({'type': 'done', 'content_blocks': content_blocks, 'questions': questions, 'resource_ids': resource_ids, 'response': state.get('response', ''), 'error': error}, ensure_ascii=False)}\n\n"
+            await task
         except Exception as e:
             logger.error(f"Resources generate SSE error: {e}")
             yield f"data: {json.dumps({'type': 'error', 'content': f'资源生成失败: {str(e)}'}, ensure_ascii=False)}\n\n"
@@ -446,7 +458,9 @@ async def grade_exercise(request: Request):
         result = grade_choice(
             user_answer,
             correct_answer,
-            body.get("choices", [])
+            body.get("choices", []),
+            multi=body.get("multi", False),
+            points=body.get("points", 1),
         )
     elif q_type == "short_answer":
         user_answer = body.get("user_answer")

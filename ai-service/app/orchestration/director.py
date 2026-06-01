@@ -24,15 +24,15 @@ class RouteDecision:
 
 class Director:
     TOPIC_AGENT_MAP: dict[str, list[str]] = {
-        "python|编程|代码|语言基础|函数|类|模块": ["content", "code", "mindmap", "exercise"],
-        "机器学习|深度学习|神经网络|AI|人工智能": ["content", "code", "exercise", "reading"],
-        "数学|算法|线性代数|概率|统计|微积分": ["content", "code", "exercise"],
-        "概念|理论|原理|体系|概述|导论": ["content", "reading", "mindmap"],
-        "框架|工具|实战|项目|应用|部署|工程": ["content", "code", "exercise", "reading"],
-        "数据|数据库|SQL|数据处理|分析|可视化": ["content", "code", "exercise"],
+        "python|编程|代码|语言基础|函数|类|模块": ["content", "code", "mindmap", "exercise", "flashcard"],
+        "机器学习|深度学习|神经网络|AI|人工智能": ["content", "code", "exercise", "reading", "flashcard"],
+        "数学|算法|线性代数|概率|统计|微积分": ["content", "code", "exercise", "flashcard"],
+        "概念|理论|原理|体系|概述|导论": ["content", "reading", "mindmap", "flashcard"],
+        "框架|工具|实战|项目|应用|部署|工程": ["content", "code", "exercise", "reading", "flashcard"],
+        "数据|数据库|SQL|数据处理|分析|可视化": ["content", "code", "exercise", "flashcard"],
     }
 
-    DEFAULT_AGENTS: list[str] = ["content", "exercise", "mindmap", "reading", "code"]
+    DEFAULT_AGENTS: list[str] = ["content", "exercise", "mindmap", "reading", "code", "flashcard"]
     CODE_KB_THRESHOLD: int = 30
 
     def __init__(self, use_mock: bool = False, model_profile=None):
@@ -133,7 +133,8 @@ class Director:
             f"- exercise: 配套练习题\n"
             f"- mindmap: 思维导图/概念关系图\n"
             f"- reading: 拓展阅读推荐\n"
-            f"- code: 代码实操案例\n\n"
+            f"- code: 代码实操案例\n"
+            f"- flashcard: 记忆闪卡（核心概念问答）\n\n"
             f"请输出 JSON: {{\"agents\": [\"content\", ...], \"rationale\": \"...\"}}\n"
             f"直接输出 JSON，不要包含其他内容。"
         )

@@ -969,6 +969,26 @@ def export_to_pptx(
                 # Display Mermaid diagram as code block (for reference)
                 _add_code_slide(prs, heading, content, "mermaid")
 
+            elif block_type == "flash_cards":
+                # Render flash cards as structured text
+                try:
+                    import json
+                    fc = json.loads(content) if isinstance(content, str) else content
+                    cards = fc.get("cards", [])
+                    display = ""
+                    if cards:
+                        display = "**记忆闪卡:**\n\n"
+                        for i, card in enumerate(cards[:8], 1):
+                            front = card.get("front", "")
+                            back = card.get("back", "")
+                            display += f"**Q{i}:** {front}\n"
+                            display += f"**A{i}:** {back}\n\n"
+                    if not display:
+                        display = str(content)
+                except (json.JSONDecodeError, TypeError):
+                    display = str(content)
+                _add_content_slide(prs, heading or "核心概念速记", display)
+
             elif block_type == "error":
                 _add_callout_slide(prs, heading or "提示", content)
 

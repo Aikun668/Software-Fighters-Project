@@ -239,7 +239,7 @@ class TestDirector:
     def test_default_agents_present(self):
         director = Director(use_mock=True)
         for agent in director.DEFAULT_AGENTS:
-            assert agent in ("content", "exercise", "mindmap", "reading", "code")
+            assert agent in ("content", "exercise", "mindmap", "reading", "code", "flashcard")
 
 
 class TestRouteDecision:
