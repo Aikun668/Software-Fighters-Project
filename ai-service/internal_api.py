@@ -4,12 +4,22 @@ import logging
 import os
 import time
 
-from fastapi import APIRouter, Request, Query
-from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
+from fastapi import APIRouter, Query
+from fastapi.responses import StreamingResponse, FileResponse
 
 from app.utils.sse_heartbeat import sse_heartbeat_generator
 from app.api.errors import ErrorCode, api_error, api_success
+from app.api.models import (
+    ProfileChatRequest,
+    ResourceGenRequest,
+    ExportPptxRequest,
+    TutorChatRequest,
+    ExerciseGenRequest,
+    GradeRequest,
+    EvaluationReportRequest,
+)
 from app.events.types import StreamEvent, done_event
+from app.services.conversation_service import get_conversation_service
 
 logger = logging.getLogger(__name__)
 
@@ -130,21 +140,9 @@ async def _load_profile(user_id: int) -> dict:
 
 
 @router.post("/profile/chat")
-async def profile_chat(request: Request):
-    try:
-        body = await request.json()
-    except Exception:
-        return api_error(ErrorCode.INVALID_REQUEST, "请求体必须是有效的 JSON")
-
-    messages = body.get("messages")
-    user_id = body.get("user_id", 1)
-
-    if messages is None:
-        return api_error(ErrorCode.INVALID_REQUEST, "缺少 messages 字段")
-    if not isinstance(messages, list):
-        return api_error(ErrorCode.INVALID_REQUEST, f"messages 必须是数组，当前类型: {type(messages).__name__}")
-    if len(messages) == 0:
-        return api_error(ErrorCode.INVALID_REQUEST, "messages 不能为空数组")
+async def profile_chat(body: ProfileChatRequest):
+    messages = body.messages
+    user_id = body.user_id
 
     current_profile = await _load_profile(user_id)
     workflow = _get_profile_workflow()
@@ -172,29 +170,17 @@ async def profile_chat(request: Request):
             yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
         except Exception as e:
             logger.error(f"Profile chat SSE error: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'content': f'画像对话失败: {str(e)}'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'content': '画像对话失败，请稍后重试'}, ensure_ascii=False)}\n\n"
             yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
 
 
 @router.post("/resources/generate")
-async def resources_generate(request: Request):
-    try:
-        body = await request.json()
-    except Exception:
-        return api_error(ErrorCode.INVALID_REQUEST, "请求体必须是有效的 JSON")
-
-    topic = body.get("topic", "").strip() if isinstance(body.get("topic"), str) else ""
-    user_id = body.get("user_id", 1)
-    student_profile = body.get("student_profile", {})
-
-    if not topic:
-        return api_error(ErrorCode.MISSING_REQUIRED_FIELD, "topic is required")
-    if not isinstance(user_id, int) or isinstance(user_id, bool):
-        return api_error(ErrorCode.INVALID_REQUEST, "user_id must be an integer")
-    if not isinstance(student_profile, dict):
-        return api_error(ErrorCode.INVALID_REQUEST, "student_profile must be an object")
+async def resources_generate(body: ResourceGenRequest):
+    topic = body.topic.strip()
+    user_id = body.user_id
+    student_profile = body.student_profile
 
     if not student_profile:
         student_profile = await _load_profile(user_id)
@@ -241,33 +227,32 @@ async def resources_generate(request: Request):
             await task
         except Exception as e:
             logger.error(f"Resources generate SSE error: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'content': f'资源生成失败: {str(e)}'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'content': '资源生成失败，请稍后重试'}, ensure_ascii=False)}\n\n"
             yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
 
 
 @router.post("/tutor/chat")
-async def tutor_chat(request: Request):
-    try:
-        body = await request.json()
-    except Exception:
-        return api_error(ErrorCode.INVALID_REQUEST, "请求体必须是有效的 JSON")
+async def tutor_chat(body: TutorChatRequest):
+    user_id = body.user_id
+    student_profile = body.student_profile
+    content = body.content
+    messages = body.messages
+    conversation_id = body.conversation_id
 
-    messages = body.get("messages")
-    user_id = body.get("user_id", 1)
-    student_profile = body.get("student_profile", {})
-
-    if messages is None:
-        return api_error(ErrorCode.INVALID_REQUEST, "缺少 messages 字段")
-    if not isinstance(messages, list):
-        return api_error(ErrorCode.INVALID_REQUEST, "messages 必须是数组")
-    if len(messages) == 0:
-        return api_error(ErrorCode.INVALID_REQUEST, "messages 不能为空数组")
-    if not isinstance(user_id, int) or isinstance(user_id, bool):
-        return api_error(ErrorCode.INVALID_REQUEST, "user_id must be an integer")
-    if not isinstance(student_profile, dict):
-        return api_error(ErrorCode.INVALID_REQUEST, "student_profile must be an object")
+    # ── 新 API：content + conversation_id ──
+    if content is not None and content.strip():
+        conv_service = get_conversation_service()
+        conv = await conv_service.get_or_create_conversation(user_id, conversation_id)
+        history = await conv_service.load_history(conv.id)
+        messages = history + [{"role": "user", "content": content.strip()}]
+        is_new_api = True
+    # ── 旧 API：完整 messages 数组（向后兼容）──
+    elif messages is not None and len(messages) > 0:
+        is_new_api = False
+    else:
+        return api_error(ErrorCode.INVALID_REQUEST, "需要 content 或 messages 字段")
 
     if not student_profile:
         student_profile = await _load_profile(user_id)
@@ -275,6 +260,9 @@ async def tutor_chat(request: Request):
     agent = _get_tutor_agent()
 
     async def event_stream():
+        user_conversation_id = (
+            conv.id if is_new_api else None
+        )
         try:
             state = await agent.run({
                 "messages": messages,
@@ -283,6 +271,29 @@ async def tutor_chat(request: Request):
             })
 
             response = state.get("response", "")
+
+            # 发送会话元信息
+            if user_conversation_id is not None:
+                yield (
+                    "data: "
+                    + json.dumps(
+                        {"type": "meta", "conversation_id": user_conversation_id},
+                        ensure_ascii=False,
+                    )
+                    + "\n\n"
+                )
+
+            # 持久化新消息（不阻塞流式输出）
+            if is_new_api and response:
+                import asyncio as _asyncio
+                _asyncio.ensure_future(
+                    conv_service.save_messages(
+                        user_conversation_id,
+                        content.strip(),
+                        response,
+                    )
+                )
+
             if response:
                 for char in response:
                     await asyncio.sleep(0.03)
@@ -291,39 +302,19 @@ async def tutor_chat(request: Request):
             yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
         except Exception as e:
             logger.error(f"Tutor chat SSE error: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'content': f'答疑失败: {str(e)}'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'content': '答疑失败，请稍后重试'}, ensure_ascii=False)}\n\n"
             yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
 
 
 @router.post("/exercise/generate")
-async def exercise_generate(request: Request):
-    try:
-        body = await request.json()
-    except Exception:
-        return api_error(ErrorCode.INVALID_REQUEST, "请求体必须是有效的 JSON")
-
-    topic = body.get("topic", "").strip() if isinstance(body.get("topic"), str) else ""
-    count = body.get("count", 3)
-    difficulty = body.get("difficulty", "medium")
-    student_profile = body.get("student_profile", {})
-    user_id = body.get("user_id", 1)
-
-    if not topic:
-        return api_error(ErrorCode.MISSING_REQUIRED_FIELD, "topic is required")
-    if type(count) is not int or count < 1 or count > 20:
-        return api_error(ErrorCode.INVALID_REQUEST, "count must be an integer between 1 and 20")
-    ALLOWED_DIFFICULTY = {"easy", "medium", "hard"}
-    if difficulty not in ALLOWED_DIFFICULTY:
-        return api_error(
-            ErrorCode.INVALID_REQUEST,
-            f"difficulty must be one of: {sorted(ALLOWED_DIFFICULTY)}",
-        )
-    if not isinstance(user_id, int) or isinstance(user_id, bool):
-        return api_error(ErrorCode.INVALID_REQUEST, "user_id must be an integer")
-    if not isinstance(student_profile, dict):
-        return api_error(ErrorCode.INVALID_REQUEST, "student_profile must be an object")
+async def exercise_generate(body: ExerciseGenRequest):
+    topic = body.topic.strip()
+    count = body.count
+    difficulty = body.difficulty
+    student_profile = body.student_profile
+    user_id = body.user_id
 
     if not student_profile:
         student_profile = await _load_profile(user_id)
@@ -349,7 +340,7 @@ async def exercise_generate(request: Request):
             yield f"data: {json.dumps({'type': 'done', 'questions': state.get('questions', [])}, ensure_ascii=False)}\n\n"
         except Exception as e:
             logger.error(f"Exercise generate SSE error: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'content': f'题目生成失败: {str(e)}'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'content': '题目生成失败，请稍后重试'}, ensure_ascii=False)}\n\n"
             yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
@@ -396,16 +387,12 @@ async def profile_workflow_status(user_id: int = Query(default=1)):
 
 
 @router.post("/resources/export-pptx")
-async def export_pptx(request: Request):
+async def export_pptx(body: ExportPptxRequest):
     """Export content blocks to PPTX file."""
     from app.utils.ppt_exporter import export_to_pptx
 
-    try:
-        body = await request.json()
-    except Exception:
-        return api_error(ErrorCode.INVALID_REQUEST, "请求体必须是有效的 JSON")
-    content_blocks = body.get("content_blocks", [])
-    title = body.get("title", "AI学习资源")
+    content_blocks = body.content_blocks
+    title = body.title
     output_dir = os.path.join(os.path.dirname(__file__), "exports")
     os.makedirs(output_dir, exist_ok=True)
     output_path = os.path.join(output_dir, f"export_{int(time.time())}.pptx")
@@ -439,57 +426,39 @@ async def download_pptx(filename: str = Query(...)):
 
 
 @router.post("/exercise/grade")
-async def grade_exercise(request: Request):
-    try:
-        body = await request.json()
-    except Exception:
-        return api_error(ErrorCode.INVALID_REQUEST, "请求体必须是有效的 JSON")
-    q_type = body.get("type", "choice")
+async def grade_exercise(body: GradeRequest):
     from app.services.evaluation_service import grade_choice, grade_short_answer
 
-    if q_type == "choice":
-        user_answer = body.get("user_answer")
-        correct_answer = body.get("correct_answer")
-        if user_answer is None or correct_answer is None:
+    if body.type == "choice":
+        if body.user_answer is None or body.correct_answer is None:
             return api_error(
                 ErrorCode.MISSING_REQUIRED_FIELD,
                 "user_answer and correct_answer are required",
             )
         result = grade_choice(
-            user_answer,
-            correct_answer,
-            body.get("choices", []),
-            multi=body.get("multi", False),
-            points=body.get("points", 1),
+            body.user_answer,
+            body.correct_answer,
+            body.choices,
+            multi=body.multi,
+            points=body.points,
         )
-    elif q_type == "short_answer":
-        user_answer = body.get("user_answer")
-        if user_answer is None:
+    else:
+        if body.user_answer is None:
             return api_error(
                 ErrorCode.MISSING_REQUIRED_FIELD, "user_answer is required"
             )
         result = await grade_short_answer(
-            user_answer,
-            body.get("reference_answer", ""),
-            body.get("rubric", "")
-        )
-    else:
-        return api_error(
-            ErrorCode.INVALID_REQUEST, f"Unknown question type: {q_type}"
+            body.user_answer,
+            body.reference_answer,
+            body.rubric,
         )
     return api_success(result)
 
 
 @router.post("/evaluation/report")
-async def get_evaluation_report(request: Request):
-    try:
-        body = await request.json()
-    except Exception:
-        return api_error(ErrorCode.INVALID_REQUEST, "请求体必须是有效的 JSON")
-    user_id = body.get("user_id")
-    evaluation_results = body.get("evaluation_results", {})
-    if not isinstance(evaluation_results, dict):
-        return api_error(ErrorCode.INVALID_REQUEST, "evaluation_results must be an object")
+async def get_evaluation_report(body: EvaluationReportRequest):
+    user_id = body.user_id
+    evaluation_results = body.evaluation_results
 
     from app.services.evaluation_report import generate_report
 

@@ -16,3 +16,6 @@ class StudentProfile(Base):
     interest_direction = Column(JSON)
     raw_profile_json = Column(JSON)
     updated_at = Column(DateTime, default=func.now())
+    # 动态权重系统
+    tag_weights = Column(JSON, default=dict)  # {"weak_points": {"标签": 0.8}, "interest_direction": {...}}
+    stability_counter = Column(JSON, default=dict)  # {"cognitive_style": {"value": "视觉型", "count": 2}}
