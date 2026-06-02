@@ -1,5 +1,8 @@
 import pytest
 import pytest_asyncio
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 from httpx import AsyncClient, ASGITransport
 from unittest.mock import patch, AsyncMock
@@ -7,20 +10,34 @@ from unittest.mock import patch, AsyncMock
 from internal_api import router
 
 
+def _make_app() -> FastAPI:
+    app = FastAPI()
+
+    @app.exception_handler(RequestValidationError)
+    async def _handler(request: Request, exc: RequestValidationError):
+        errors = exc.errors()
+        msg = errors[0]["msg"] if errors else "请求参数验证失败"
+        loc = errors[0].get("loc", [])
+        if loc:
+            field = str(loc[-1]) if len(loc) > 1 else str(loc[0])
+            msg = f"字段 '{field}' {msg}"
+        return JSONResponse(
+            status_code=400,
+            content={"success": False, "error": msg, "error_code": "INVALID_REQUEST"},
+        )
+
+    app.include_router(router)
+    return app
+
+
 @pytest.fixture
 def client():
-    from fastapi import FastAPI
-    app = FastAPI()
-    app.include_router(router)
-    return TestClient(app)
+    return TestClient(_make_app())
 
 
 @pytest_asyncio.fixture
 async def async_client():
-    from fastapi import FastAPI
-    app = FastAPI()
-    app.include_router(router)
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(transport=ASGITransport(app=_make_app()), base_url="http://test") as client:
         yield client
 
 

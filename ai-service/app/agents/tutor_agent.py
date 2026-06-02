@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from typing import TypedDict
 
@@ -10,6 +9,11 @@ from app.utils.content_guard import KBCoverageChecker
 from app.utils.prompt_loader import interpolate_variables
 
 logger = logging.getLogger(__name__)
+
+MAX_MESSAGES = 20         # 传给 LLM 的最大消息数
+HEAD_KEEP = 4             # 超限时保留的开头消息数（上下文锚点）
+RAG_QUERY_TURNS = 3       # RAG 检索时合并最近 N 条用户消息
+RAG_QUERY_MAX_CHARS = 300  # RAG query 最大字符数
 
 
 class TutorState(TypedDict, total=False):
@@ -42,11 +46,67 @@ class TutorAgent(BaseAgent):
         graph.set_finish_point("respond")
         return graph.compile()
 
+    # ── message truncation ──────────────────────────────────────
+
+    @staticmethod
+    def _truncate_messages(messages: list[dict]) -> list[dict]:
+        """截断消息历史，防止 token 爆炸。
+
+        策略：
+        - ≤ MAX_MESSAGES 条：原样返回
+        - > MAX_MESSAGES 条：保留开头 HEAD_KEEP 条（早期上下文）
+          + 末尾 (MAX_MESSAGES - HEAD_KEEP) 条（最近对话）
+        """
+        if len(messages) <= MAX_MESSAGES:
+            return messages
+
+        head = messages[:HEAD_KEEP]
+        tail = messages[-(MAX_MESSAGES - HEAD_KEEP):]
+        logger.info(
+            f"Truncated messages: {len(messages)} → {len(head) + len(tail)} "
+            f"(head={len(head)}, tail={len(tail)})"
+        )
+        return head + tail
+
+    # ── RAG query construction ──────────────────────────────────
+
+    @staticmethod
+    def _build_rag_query(messages: list[dict]) -> str:
+        """构建多轮 RAG 检索 query。
+
+        合并最近 RAG_QUERY_TURNS 条用户消息，解决「第1个问题里提到的卷积」
+        这类跨轮指代无法被单条消息捕获的问题。
+        """
+        user_msgs = [
+            m.get("content", "") if isinstance(m, dict) else ""
+            for m in messages
+            if isinstance(m, dict) and m.get("role") == "user"
+        ]
+        recent = user_msgs[-RAG_QUERY_TURNS:]
+
+        # 短对话直接用最后一条
+        if len(recent) <= 1:
+            return (recent[0] if recent else "")[:RAG_QUERY_MAX_CHARS]
+
+        # 拼接最近 N 条，分隔符明确
+        combined = " | ".join(recent)
+        if len(combined) <= RAG_QUERY_MAX_CHARS:
+            return combined
+
+        # 超出上限：优先保留最后一条完整内容，其余截断
+        last = recent[-1]
+        budget = RAG_QUERY_MAX_CHARS - len(last) - 3
+        if budget > 0:
+            prefix = " | ".join(recent[:-1])[:budget]
+            return f"{prefix} | {last}"
+        return last[:RAG_QUERY_MAX_CHARS]
+
+    # ── nodes ───────────────────────────────────────────────────
+
     async def _retrieve_node(self, state: TutorState) -> dict:
         messages = state.get("messages", [])
-        last_msg = messages[-1] if messages else {}
-        query = (last_msg.get("content", "") if isinstance(last_msg, dict) else "")[:100]
-        
+        query = self._build_rag_query(messages)
+
         knowledge_context = ""
         try:
             kb = get_kb()
@@ -54,14 +114,17 @@ class TutorAgent(BaseAgent):
                 knowledge_context = kb.format_context(query, top_k=3)
         except Exception as e:
             logger.warning(f"Knowledge retrieval failed: {e}")
-        
+
         return {"knowledge_context": knowledge_context}
 
     async def _respond_node(self, state: TutorState) -> dict:
-        """基于画像和上下文生成回复"""
+        """基于画像和 RAG 上下文生成回复"""
         messages = state.get("messages", [])
         student_profile = state.get("student_profile", {})
         knowledge_context = state.get("knowledge_context", "")
+
+        # 截断后再传给 LLM
+        truncated = self._truncate_messages(messages)
 
         profile_text = self._format_profile(student_profile)
         system_with_context = interpolate_variables(
@@ -75,14 +138,11 @@ class TutorAgent(BaseAgent):
         try:
             response = ""
             async for chunk in self.llm.chat_stream(
-                messages, system_prompt=system_with_context
+                truncated, system_prompt=system_with_context
             ):
                 response += chunk
         except (ConnectionError, RuntimeError, ValueError) as e:
             logger.error(f"Tutor respond failed: {e}")
-            response = "抱歉，我暂时无法回答这个问题。请稍后再试。"
-        except Exception as e:
-            logger.error(f"Tutor respond unexpected error: {e}", exc_info=True)
             response = "抱歉，我暂时无法回答这个问题。请稍后再试。"
 
         try:
@@ -97,9 +157,13 @@ class TutorAgent(BaseAgent):
                     for w in weak:
                         idx = response.find(w.claim)
                         if idx >= 0:
-                            response = response[:idx + len(w.claim)] + "[需要验证]" + response[idx + len(w.claim):]
+                            marker = "[需要验证]"
+                            response = (
+                                response[:idx + len(w.claim)]
+                                + marker
+                                + response[idx + len(w.claim):]
+                            )
         except Exception as e:
             logger.warning(f"KBCoverage check failed: {e}")
 
         return {"response": response}
-

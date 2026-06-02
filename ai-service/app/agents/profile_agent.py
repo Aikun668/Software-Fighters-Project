@@ -38,6 +38,11 @@ ARRAY_DIMENSIONS = {"weak_points", "interest_direction"}
 NUMBER_DIMENSIONS = {"knowledge_base"}
 REPLACE_DIMENSIONS = {"cognitive_style", "learning_goal", "learning_pace"}
 
+# 动态权重参数
+TAG_EMA_ALPHA = 0.4       # 标签权重 EMA 系数（每次出现向 1.0 收敛）
+TAG_CUTOFF = 0.2          # 低于此权重自动清除
+STABILITY_N = 3           # REPLACE 维度连续确认次数阈值
+
 MAX_EXTRACT_TURNS = 10
 
 
@@ -166,12 +171,18 @@ class ProfileAgent(BaseAgent):
                     profile.raw_profile_json = {
                         d: getattr(profile, d) for d in DIMENSIONS
                     }
+                    profile.raw_profile_json["tag_weights"] = profile.tag_weights
+                    profile.raw_profile_json["stability_counter"] = (
+                        profile.stability_counter
+                    )
 
                 await session.commit()
 
                 current_profile = {
                     d: getattr(profile, d) for d in DIMENSIONS
                 }
+                current_profile["tag_weights"] = profile.tag_weights
+                current_profile["stability_counter"] = profile.stability_counter
                 return {
                     "current_profile": current_profile,
                     "profile_changed": changed,
@@ -221,7 +232,7 @@ class ProfileAgent(BaseAgent):
         return "\n".join(lines)
 
     def _format_profile_for_response(self, profile: dict) -> str:
-        """将画像 dict 格式化为 LLM 可读的文本"""
+        """将画像 dict 格式化为 LLM 可读的文本（含标签权重）"""
         if not profile or all(v is None or v == [] for v in profile.values()):
             return "（尚无画像信息，这是第一次对话）"
 
@@ -234,12 +245,19 @@ class ProfileAgent(BaseAgent):
             "learning_pace": "学习节奏",
             "interest_direction": "兴趣方向",
         }
+        tag_weights = profile.get("tag_weights", {})
 
         for dim, label in labels.items():
             val = profile.get(dim)
             if val is not None and val != []:
                 if isinstance(val, list):
-                    val = "、".join(val)
+                    # 附加权重信息
+                    weights = tag_weights.get(dim, {})
+                    parts = [
+                        f"{tag}({weights[tag]:.0%})" if tag in weights else tag
+                        for tag in val[:6]  # 最多展示 6 个标签
+                    ]
+                    val = "、".join(parts)
                 elif dim == "knowledge_base":
                     val = f"{val}/100"
                 lines.append(f"  - {label}: {val}")
@@ -257,20 +275,46 @@ class ProfileAgent(BaseAgent):
         return {k: v for k, v in updates.items() if k in DIMENSIONS}
 
     def _apply_merge(self, profile: StudentProfile, fragment: dict) -> bool:
-        """将 fragment 合并到 ORM 对象，返回是否发生变化"""
+        """将 fragment 合并到 ORM 对象（动态权重 + 稳定性门控），返回是否发生变化"""
         changed = False
+
+        tag_weights = dict(profile.tag_weights or {})
+        stability = dict(profile.stability_counter or {})
 
         for dim, new_val in fragment.items():
             if new_val is None or new_val == []:
                 continue
 
-            old_val = getattr(profile, dim)
-
             if dim in ARRAY_DIMENSIONS:
-                old_list = list(old_val or [])
-                merged = list(set(old_list) | set(new_val))
-                if merged != old_list:
-                    setattr(profile, dim, merged)
+                dim_weights = dict(tag_weights.get(dim, {}))
+                new_tags = set(new_val)
+                existing_tags = set(dim_weights.keys())
+
+                # 未被本轮提取的标签 → 衰减
+                for tag in existing_tags - new_tags:
+                    decayed = round(dim_weights[tag] * (1 - TAG_EMA_ALPHA), 2)
+                    if decayed >= TAG_CUTOFF:
+                        dim_weights[tag] = decayed
+                    else:
+                        del dim_weights[tag]
+
+                # 本轮出现的标签 → EMA 增强（目标值 1.0）
+                for tag in new_tags:
+                    old_w = dim_weights.get(tag, 0.0)
+                    dim_weights[tag] = round(
+                        old_w * (1 - TAG_EMA_ALPHA) + TAG_EMA_ALPHA, 2
+                    )
+
+                if dim_weights != tag_weights.get(dim, {}):
+                    tag_weights[dim] = dim_weights
+                    changed = True
+
+                # 向后兼容：同步到旧版 list 字段（按权重降序）
+                legacy = sorted(
+                    dim_weights.keys(), key=lambda k: dim_weights[k], reverse=True
+                )
+                if legacy != getattr(profile, dim):
+                    setattr(profile, dim, legacy)
                     changed = True
 
             elif dim in NUMBER_DIMENSIONS:
@@ -279,6 +323,7 @@ class ProfileAgent(BaseAgent):
                 except (TypeError, ValueError):
                     logger.warning(f"Non-numeric value for {dim}: {new_val!r}")
                     continue
+                old_val = getattr(profile, dim)
                 if old_val is not None:
                     merged = int(old_val * 0.7 + new_num * 0.3)
                 else:
@@ -288,30 +333,69 @@ class ProfileAgent(BaseAgent):
                     changed = True
 
             elif dim in REPLACE_DIMENSIONS:
-                if new_val != old_val:
+                sc = dict(stability.get(dim, {"value": None, "count": 0}))
+                if sc["value"] == new_val:
+                    sc["count"] += 1
+                else:
+                    sc = {"value": new_val, "count": 1}
+
+                stability[dim] = sc
+
+                if sc["count"] >= STABILITY_N and new_val != getattr(profile, dim):
                     setattr(profile, dim, new_val)
                     changed = True
+                    stability[dim] = {"value": new_val, "count": 0}
+
+        if tag_weights != (profile.tag_weights or {}):
+            profile.tag_weights = tag_weights
+            changed = True
+        if stability != (profile.stability_counter or {}):
+            profile.stability_counter = stability
+            changed = True
 
         return changed
 
     def _merge_in_memory(
         self, old: dict, fragment: dict
     ) -> tuple[dict, bool]:
-        """纯内存合并（DB 不可用时的降级方案）"""
+        """纯内存合并（DB 不可用时的降级方案，含动态权重）"""
         merged = dict(old)
         changed = False
+
+        tag_weights = dict(old.get("tag_weights", {}))
+        inmem_stability = dict(old.get("stability_counter", {}))
 
         for dim, new_val in fragment.items():
             if new_val is None or new_val == []:
                 continue
 
-            old_val = merged.get(dim)
-
             if dim in ARRAY_DIMENSIONS:
-                old_list = list(old_val or [])
-                new_merged = list(set(old_list) | set(new_val))
-                if new_merged != old_list:
-                    merged[dim] = new_merged
+                dim_weights = dict(tag_weights.get(dim, {}))
+                new_tags = set(new_val)
+                existing_tags = set(dim_weights.keys())
+
+                for tag in existing_tags - new_tags:
+                    decayed = round(dim_weights[tag] * (1 - TAG_EMA_ALPHA), 2)
+                    if decayed >= TAG_CUTOFF:
+                        dim_weights[tag] = decayed
+                    else:
+                        del dim_weights[tag]
+
+                for tag in new_tags:
+                    old_w = dim_weights.get(tag, 0.0)
+                    dim_weights[tag] = round(
+                        old_w * (1 - TAG_EMA_ALPHA) + TAG_EMA_ALPHA, 2
+                    )
+
+                if dim_weights != tag_weights.get(dim, {}):
+                    tag_weights[dim] = dim_weights
+                    changed = True
+
+                legacy = sorted(
+                    dim_weights.keys(), key=lambda k: dim_weights[k], reverse=True
+                )
+                if legacy != merged.get(dim):
+                    merged[dim] = legacy
                     changed = True
 
             elif dim in NUMBER_DIMENSIONS:
@@ -320,17 +404,31 @@ class ProfileAgent(BaseAgent):
                 except (TypeError, ValueError):
                     logger.warning(f"Non-numeric value for {dim}: {new_val!r}")
                     continue
+                old_val = merged.get(dim)
                 if old_val is not None:
-                    new_merged = int(old_val * 0.7 + new_num * 0.3)
+                    merged[dim] = int(old_val * 0.7 + new_num * 0.3)
                 else:
-                    new_merged = int(new_num)
-                if new_merged != old_val:
-                    merged[dim] = new_merged
+                    merged[dim] = int(new_num)
+                if merged[dim] != old_val:
                     changed = True
 
             elif dim in REPLACE_DIMENSIONS:
-                if new_val != old_val:
+                sc = dict(inmem_stability.get(dim, {"value": None, "count": 0}))
+                if sc["value"] == new_val:
+                    sc["count"] += 1
+                else:
+                    sc = {"value": new_val, "count": 1}
+
+                inmem_stability[dim] = sc
+
+                if sc["count"] >= STABILITY_N and new_val != merged.get(dim):
                     merged[dim] = new_val
                     changed = True
+                    inmem_stability[dim] = {"value": new_val, "count": 0}
+
+        if tag_weights != old.get("tag_weights", {}):
+            merged["tag_weights"] = tag_weights
+        if inmem_stability != old.get("stability_counter", {}):
+            merged["stability_counter"] = inmem_stability
 
         return merged, changed

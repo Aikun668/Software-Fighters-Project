@@ -5,8 +5,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from internal_api import router as internal_router
 
@@ -38,6 +40,22 @@ app = FastAPI(
 )
 
 app.include_router(internal_router)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """将 Pydantic 422 验证错误转为统一的 400 格式"""
+    errors = exc.errors()
+    msg = errors[0]["msg"] if errors else "请求参数验证失败"
+    loc = errors[0].get("loc", [])
+    if loc:
+        field = str(loc[-1]) if len(loc) > 1 else str(loc[0])
+        msg = f"字段 '{field}' {msg}"
+    return JSONResponse(
+        status_code=400,
+        content={"success": False, "error": msg, "error_code": "INVALID_REQUEST"},
+    )
+
 
 app.add_middleware(
     CORSMiddleware,
