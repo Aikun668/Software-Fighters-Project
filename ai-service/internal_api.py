@@ -139,60 +139,6 @@ async def _load_profile(user_id: int) -> dict:
     return profile or {}
 
 
-# ── 多模态消息构建 ──────────────────────────────────────────────
-
-ALLOWED_IMAGE_MIMES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
-
-
-def _extract_text_from_multimodal(content) -> str:
-    """从多模态 content（字符串或数组）中提取纯文本，用于 RAG 检索和 DB 持久化"""
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        parts = [p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text"]
-        return " ".join(parts)
-    return ""
-
-
-def _build_multimodal_message(text: str, images: list[str] | None) -> dict:
-    """构建用户消息 dict，支持多模态图片。
-
-    纯文本 → {"role": "user", "content": "text"}
-    带图片 → {"role": "user", "content": [{"type": "text", ...}, {"type": "image_url", ...}]}
-    """
-    if not images:
-        return {"role": "user", "content": text}
-
-    content_parts: list[dict] = []
-    if text:
-        content_parts.append({"type": "text", "text": text})
-
-    for img in images:
-        if not img or not img.strip():
-            continue
-        if img.startswith("data:image/"):
-            mime_end = img.find(";")
-            if mime_end > 0:
-                mime = img[len("data:"):mime_end]
-                if mime not in ALLOWED_IMAGE_MIMES:
-                    logger.warning(f"Rejected image with unsupported MIME: {mime}")
-                    continue
-            url = img
-        elif img.startswith("http://") or img.startswith("https://"):
-            url = img
-        else:
-            # 裸 base64，默认当作 JPEG
-            url = f"data:image/jpeg;base64,{img}"
-        content_parts.append({"type": "image_url", "image_url": {"url": url}})
-
-    if not content_parts:
-        return {"role": "user", "content": text}
-    # 如果只有文本没有图片，降级为纯字符串格式
-    if len(content_parts) == 1 and content_parts[0].get("type") == "text":
-        return {"role": "user", "content": text}
-    return {"role": "user", "content": content_parts}
-
-
 @router.post("/profile/chat")
 async def profile_chat(body: ProfileChatRequest):
     messages = body.messages
@@ -294,18 +240,14 @@ async def tutor_chat(body: TutorChatRequest):
     content = body.content
     messages = body.messages
     conversation_id = body.conversation_id
-    images = body.images
 
     # ── 新 API：content + conversation_id ──
     if content is not None and content.strip():
         conv_service = get_conversation_service()
         conv = await conv_service.get_or_create_conversation(user_id, conversation_id)
         history = await conv_service.load_history(conv.id)
-        user_msg = _build_multimodal_message(content.strip(), images)
-        messages = history + [user_msg]
+        messages = history + [{"role": "user", "content": content.strip()}]
         is_new_api = True
-        # 用于 DB 持久化：只存文本部分（图片不跨轮携带）
-        text_for_db = content.strip()
     # ── 旧 API：完整 messages 数组（向后兼容）──
     elif messages is not None and len(messages) > 0:
         is_new_api = False
@@ -341,13 +283,13 @@ async def tutor_chat(body: TutorChatRequest):
                     + "\n\n"
                 )
 
-            # 持久化新消息（不阻塞流式输出，只存文本部分）
+            # 持久化新消息（不阻塞流式输出）
             if is_new_api and response:
                 import asyncio as _asyncio
                 _asyncio.ensure_future(
                     conv_service.save_messages(
                         user_conversation_id,
-                        text_for_db,
+                        content.strip(),
                         response,
                     )
                 )
