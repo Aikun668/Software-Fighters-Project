@@ -32,10 +32,6 @@ class TutorChatRequest(BaseModel):
     content: Optional[str] = Field(default=None, description="【新 API】当前消息文本")
     messages: Optional[list[dict]] = Field(default=None, description="【旧 API】完整消息数组")
     conversation_id: Optional[int] = Field(default=None, description="【新 API】会话 ID")
-    images: Optional[list[str]] = Field(
-        default=None, max_length=5,
-        description="【多模态】图片 URL 或 base64 数据（data:image/...;base64,...），最多 5 张"
-    )
 
 
 # ── Exercise ───────────────────────────────────────────────────
