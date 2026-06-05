@@ -27,7 +27,7 @@ class ReadingState(TypedDict, total=False):
 class ReadingAgent(BaseAgent):
     """拓展阅读推荐 Agent — 输出 reading 类型 block"""
 
-    def __init__(self, config=None, use_mock_llm: bool = True,
+    def __init__(self, config=None, use_mock_llm: bool = False,
                  model_profile=None):
         super().__init__(
             agent_name="reading_agent",

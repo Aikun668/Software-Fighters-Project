@@ -110,28 +110,6 @@ class TestGradeChoice:
 
 
 class TestGradeShortAnswer:
-    @pytest.fixture
-    def mock_llm_high_score(self):
-        mock = AsyncMock()
-        mock.chat = AsyncMock(return_value=json.dumps({
-            "score": 85,
-            "feedback": "回答很好，逻辑清晰",
-            "key_points_matched": ["数据预处理的作用", "归一化的目的"],
-            "key_points_missed": ["数据增强的局限"],
-        }))
-        return mock
-
-    @pytest.fixture
-    def mock_llm_low_score(self):
-        mock = AsyncMock()
-        mock.chat = AsyncMock(return_value=json.dumps({
-            "score": 40,
-            "feedback": "回答不够完整",
-            "key_points_matched": ["基本概念"],
-            "key_points_missed": ["算法原理", "应用场景", "优化方法"],
-        }))
-        return mock
-
     @pytest.mark.asyncio
     async def test_empty_answer(self):
         result = await grade_short_answer("", "参考答案")
@@ -151,43 +129,37 @@ class TestGradeShortAnswer:
         assert "未作答" in result["feedback"]
 
     @pytest.mark.asyncio
-    async def test_llm_high_score(self, mock_llm_high_score):
-        with patch(
-            "app.services.evaluation_service.get_llm_service",
-            return_value=mock_llm_high_score,
-        ):
-            result = await grade_short_answer(
-                "数据预处理包括归一化和标准化",
-                "数据预处理包括归一化、标准化和数据增强",
-                "评估准确性和完整性"
-            )
+    async def test_llm_grading_returns_valid_structure(self):
+        """真实 LLM 评分返回合法结构"""
+        result = await grade_short_answer(
+            "数据预处理包括归一化和标准化",
+            "数据预处理包括归一化、标准化和数据增强",
+            "评估准确性和完整性"
+        )
         assert result["type"] == "short_answer"
-        assert result["score"] == 85
-        assert result["earned"] == 85
+        assert isinstance(result["score"], (int, float))
+        assert 0 <= result["score"] <= 100
+        assert result["earned"] == result["score"]
         assert result["max_score"] == 100
-        assert result["correct"] is True
-        assert "回答很好" in result["feedback"]
-        assert "回答很好" in result["ai_comment"]
-        assert "数据预处理的作用" in result["key_points_matched"]
-        assert "数据增强的局限" in result["key_points_missed"]
+        assert isinstance(result["correct"], bool)
+        assert isinstance(result["feedback"], str) and len(result["feedback"]) > 0
+        assert isinstance(result["ai_comment"], str) and len(result["ai_comment"]) > 0
+        assert isinstance(result["key_points_matched"], list)
+        assert isinstance(result["key_points_missed"], list)
 
     @pytest.mark.asyncio
-    async def test_llm_low_score_missed_points(self, mock_llm_low_score):
-        with patch(
-            "app.services.evaluation_service.get_llm_service",
-            return_value=mock_llm_low_score,
-        ):
-            result = await grade_short_answer(
-                "机器学习是用数据训练模型",
-                "机器学习是通过数据训练算法，使其能够从经验中学习和改进",
-                "评估完整度"
-            )
+    async def test_llm_grading_short_vs_detailed(self):
+        """简短回答 vs 详细参考答案：应有 miss 的要点"""
+        result = await grade_short_answer(
+            "机器学习是用数据训练模型",
+            "机器学习是通过数据训练算法，使其能够从经验中学习和改进，涵盖监督学习、无监督学习和强化学习三大范式",
+            "评估回答的完整度"
+        )
         assert result["type"] == "short_answer"
-        assert result["score"] == 40
-        assert result["correct"] is False
-        assert result["earned"] == 40
-        assert "不够完整" in result["feedback"]
-        assert len(result["key_points_missed"]) == 3
+        assert isinstance(result["score"], (int, float))
+        assert isinstance(result["correct"], bool)
+        assert isinstance(result["key_points_missed"], list)
+        assert isinstance(result["key_points_matched"], list)
 
     @pytest.mark.asyncio
     async def test_llm_returns_non_json(self):

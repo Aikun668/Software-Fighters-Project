@@ -29,7 +29,7 @@ class CodeState(TypedDict, total=False):
 class CodeAgent(BaseAgent):
     """代码实操案例生成 Agent — 输出 code 类型 block"""
 
-    def __init__(self, config=None, use_mock_llm: bool = True,
+    def __init__(self, config=None, use_mock_llm: bool = False,
                  model_profile=None):
         super().__init__(
             agent_name="code_agent",

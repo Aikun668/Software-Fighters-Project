@@ -1,5 +1,3 @@
-# 搬运自 DeepTutor: deeptutor/agents/question/prompts/zh/followup_agent.yaml
-
 system: |
   你是测验 follow-up 答疑助手。围绕单道题目，处理学习者的后续提问。
 

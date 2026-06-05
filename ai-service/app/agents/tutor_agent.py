@@ -4,8 +4,9 @@ from typing import TypedDict
 from langgraph.graph import StateGraph
 
 from app.agents.base_agent import BaseAgent
+from app.services.analogy_library import get_analogy_library
+from app.services.hallucination_guard import HallucinationGuard
 from app.services.knowledge_base import get_kb
-from app.utils.content_guard import KBCoverageChecker
 from app.utils.prompt_loader import interpolate_variables
 
 logger = logging.getLogger(__name__)
@@ -22,12 +23,13 @@ class TutorState(TypedDict, total=False):
     student_profile: dict
     knowledge_context: str
     response: str
+    conversation_id: int | None  # 用于加载对话摘要
 
 
 class TutorAgent(BaseAgent):
     """智能答疑 Agent —— 基于 RAG 上下文回答学生问题"""
 
-    def __init__(self, config=None, use_mock_llm: bool = True):
+    def __init__(self, config=None, use_mock_llm: bool = False):
         super().__init__(
             agent_name="tutor_agent",
             module="agents",
@@ -101,6 +103,16 @@ class TutorAgent(BaseAgent):
             return f"{prefix} | {last}"
         return last[:RAG_QUERY_MAX_CHARS]
 
+    def _load_followup_context(self, profile: dict) -> str:
+        """加载追问引导 prompt，初学阶段追加到系统指令中"""
+        try:
+            level = profile.get("level") or profile.get("knowledge_base")
+            if isinstance(level, (int, float)) and level < 3:
+                return self._load_extra_prompt("followup.yaml", key="system")
+        except Exception:
+            pass
+        return ""
+
     # ── nodes ───────────────────────────────────────────────────
 
     async def _retrieve_node(self, state: TutorState) -> dict:
@@ -135,6 +147,35 @@ class TutorAgent(BaseAgent):
             },
         )
 
+        # Inject follow-up instruction for beginner students
+        followup_context = self._load_followup_context(student_profile)
+        if followup_context:
+            system_with_context += "\n\n" + followup_context
+
+        # Inject analogy if available for the query topic
+        query = self._build_rag_query(messages)
+        try:
+            analogy_text = get_analogy_library().format_for_prompt(query)
+            if analogy_text:
+                system_with_context += "\n\n" + analogy_text
+        except Exception:
+            pass
+
+        # Inject conversation summary (LLM-compressed history)
+        conversation_id = state.get("conversation_id")
+        if conversation_id:
+            try:
+                from app.services.conversation_service import get_conversation_service
+                summary = await get_conversation_service().get_summary(conversation_id)
+                if summary:
+                    system_with_context += (
+                        "\n\n## 对话历史摘要（经过压缩的早期对话记录）\n"
+                        + summary
+                        + "\n---"
+                    )
+            except Exception:
+                pass
+
         try:
             response = ""
             async for chunk in self.llm.chat_stream(
@@ -146,24 +187,12 @@ class TutorAgent(BaseAgent):
             response = "抱歉，我暂时无法回答这个问题。请稍后再试。"
 
         try:
-            results = KBCoverageChecker.check_coverage(response, get_kb())
-            if results:
-                weak = [r for r in results if r.coverage == "WEAK"]
-                logger.info(
-                    f"KBCoverage: {len(weak)}/{len(results)} claims WEAK coverage"
-                )
-                if weak:
-                    weak.sort(key=lambda r: len(r.claim), reverse=True)
-                    for w in weak:
-                        idx = response.find(w.claim)
-                        if idx >= 0:
-                            marker = "[需要验证]"
-                            response = (
-                                response[:idx + len(w.claim)]
-                                + marker
-                                + response[idx + len(w.claim):]
-                            )
+            kb = get_kb()
+            guard = HallucinationGuard(kb)
+            verified = guard.verify_and_format(response)
+            if verified != response:
+                response = verified
         except Exception as e:
-            logger.warning(f"KBCoverage check failed: {e}")
+            logger.warning(f"Hallucination guard check failed: {e}")
 
         return {"response": response}
