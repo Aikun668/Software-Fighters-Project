@@ -6,7 +6,7 @@ from langgraph.graph import StateGraph
 
 from app.agents.base_agent import BaseAgent
 from app.services.llm_service import create_llm
-from app.utils.prompt_loader import interpolate_variables
+from app.utils.prompt_loader import build_prompt, interpolate_variables
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +16,7 @@ class ExerciseState(TypedDict, total=False):
     count: int
     difficulty: str
     student_profile: dict
+    purpose: str
     plan: list[dict]
     questions: list[dict]
     stage: str
@@ -25,7 +26,7 @@ class ExerciseState(TypedDict, total=False):
 class ExerciseAgent(BaseAgent):
     """练习题生成 Agent —— 基于薄弱点生成个性化题目"""
 
-    def __init__(self, config=None, use_mock_llm: bool = True,
+    def __init__(self, config=None, use_mock_llm: bool = False,
                  model_profile=None):
         super().__init__(
             agent_name="exercise_agent",
@@ -56,9 +57,13 @@ class ExerciseAgent(BaseAgent):
         count = state.get("count", 3)
         difficulty = state.get("difficulty", "medium")
         student_profile = state.get("student_profile", {})
+        purpose = state.get("purpose", "")
         weak_points = student_profile.get("weak_points", [])
 
-        plan_system = self._load_extra_prompt("pipeline.yaml", key="plan_system")
+        conditions = {"warmup": purpose == "warmup_not_exam"}
+        plan_system = build_prompt(
+            "exercise_agent", "pipeline.yaml", conditions=conditions, key="plan_system"
+        )
         plan_user_tpl = self._load_extra_prompt("pipeline.yaml", key="plan_user")
         user_prompt = interpolate_variables(
             plan_user_tpl,
@@ -67,6 +72,7 @@ class ExerciseAgent(BaseAgent):
                 "count": str(count),
                 "difficulty": difficulty,
                 "weak_points": ", ".join(weak_points) if weak_points else "无",
+                "purpose": purpose,
             },
         )
 
@@ -113,9 +119,13 @@ class ExerciseAgent(BaseAgent):
         from app.utils.quiz_validator import validate_question
 
         plan = state.get("plan", [])
+        purpose = state.get("purpose", "")
         questions = []
 
-        quiz_system = self._load_extra_prompt("pipeline.yaml", key="quiz_system")
+        conditions = {"warmup": purpose == "warmup_not_exam"}
+        quiz_system = build_prompt(
+            "exercise_agent", "pipeline.yaml", conditions=conditions, key="quiz_system"
+        )
         quiz_user_tpl = self._load_extra_prompt("pipeline.yaml", key="quiz_user")
 
         for template in plan:
@@ -131,6 +141,7 @@ class ExerciseAgent(BaseAgent):
                     "topic": topic,
                     "question_type": q_type,
                     "difficulty": difficulty,
+                    "purpose": purpose,
                 },
             )
 

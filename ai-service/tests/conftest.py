@@ -2,6 +2,10 @@ import asyncio
 import pytest
 from unittest.mock import patch
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 pytestmark = pytest.mark.asyncio(loop_scope="function")
 
 @pytest.fixture(autouse=True)

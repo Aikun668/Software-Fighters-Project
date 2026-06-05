@@ -160,7 +160,7 @@ class TestAgentBus:
 class TestDirector:
     @pytest.mark.asyncio
     async def test_route_returns_route_decision(self):
-        director = Director(use_mock=True)
+        director = Director()
         decision = await director.route("Python基础")
         assert isinstance(decision, RouteDecision)
         assert "content" in decision.selected_agents
@@ -168,7 +168,7 @@ class TestDirector:
 
     @pytest.mark.asyncio
     async def test_rule_route_python_topic(self):
-        director = Director(use_mock=True)
+        director = Director()
         decision = await director.route("Python函数和类")
         assert decision.strategy == "rule"
         assert "code" in decision.selected_agents
@@ -176,7 +176,7 @@ class TestDirector:
 
     @pytest.mark.asyncio
     async def test_rule_route_theory_topic(self):
-        director = Director(use_mock=True)
+        director = Director()
         decision = await director.route("机器学习理论概述")
         agents = decision.selected_agents
         assert "content" in agents
@@ -184,7 +184,7 @@ class TestDirector:
 
     @pytest.mark.asyncio
     async def test_rule_route_ml_topic(self):
-        director = Director(use_mock=True)
+        director = Director()
         decision = await director.route("深度学习与神经网络")
         agents = decision.selected_agents
         assert "code" in agents
@@ -192,7 +192,7 @@ class TestDirector:
 
     @pytest.mark.asyncio
     async def test_low_knowledge_base_skips_code(self):
-        director = Director(use_mock=True)
+        director = Director()
         decision = await director.route(
             "Python编程",
             student_profile={"knowledge_base": 20},
@@ -201,7 +201,7 @@ class TestDirector:
 
     @pytest.mark.asyncio
     async def test_high_knowledge_base_keeps_code(self):
-        director = Director(use_mock=True)
+        director = Director()
         decision = await director.route(
             "Python编程",
             student_profile={"knowledge_base": 70},
@@ -210,7 +210,7 @@ class TestDirector:
 
     @pytest.mark.asyncio
     async def test_visual_learner_includes_mindmap(self):
-        director = Director(use_mock=True)
+        director = Director()
         decision = await director.route(
             "数据分析方法",
             student_profile={
@@ -221,7 +221,7 @@ class TestDirector:
 
     @pytest.mark.asyncio
     async def test_content_is_always_selected(self):
-        director = Director(use_mock=True)
+        director = Director()
         for topic in [
             "Python", "机器学习", "数据结构", "量子物理", "unknown_xyz",
         ]:
@@ -231,13 +231,13 @@ class TestDirector:
             )
 
     def test_default_route_returns_all(self):
-        director = Director(use_mock=True)
+        director = Director()
         decision = director._default_route("some_unmatched_topic")
         assert len(decision.selected_agents) >= 4
         assert decision.strategy == "llm"
 
     def test_default_agents_present(self):
-        director = Director(use_mock=True)
+        director = Director()
         for agent in director.DEFAULT_AGENTS:
             assert agent in ("content", "exercise", "mindmap", "reading", "code", "flashcard")
 
@@ -265,7 +265,7 @@ class TestDirectorLLMRoute:
     @pytest.mark.asyncio
     async def test_llm_route_triggered_for_unknown_topic(self):
         """无关键词匹配的 topic 触发 LLM 路由"""
-        director = Director(use_mock=True)
+        director = Director()
         decision = await director.route("量子计算与量子信息")
         # 不断言 strategy（mock LLM 返回可能不标准），但确保不抛异常
         assert isinstance(decision, RouteDecision)
@@ -275,7 +275,7 @@ class TestDirectorLLMRoute:
     @pytest.mark.asyncio
     async def test_llm_route_fallback_on_error(self):
         """LLM 路由失败时回退到默认全 Agent 集合"""
-        director = Director(use_mock=True)
+        director = Director()
         # 用不带任何关键词的 topic 确保走 LLM 路径
         decision = await director.route("xyzzy_unmatched_abc")
         assert isinstance(decision, RouteDecision)
@@ -288,7 +288,7 @@ class TestContentAgentTurnSummary:
     def test_extracts_concepts_from_outline_in_state(self):
         from app.agents.content_agent import ContentAgent
 
-        agent = ContentAgent(use_mock_llm=True)
+        agent = ContentAgent()
         state = {
             "topic": "机器学习",
             "outline": {
@@ -317,7 +317,7 @@ class TestContentAgentTurnSummary:
     def test_falls_back_to_content_blocks_when_no_outline(self):
         from app.agents.content_agent import ContentAgent
 
-        agent = ContentAgent(use_mock_llm=True)
+        agent = ContentAgent()
         state = {"topic": "Python", "outline": {}}
         output = {
             "content_blocks": [
@@ -335,7 +335,7 @@ class TestDirectorThreshold:
     """硬编码阈值配置化验证"""
 
     def test_code_kb_threshold_is_configurable(self):
-        director = Director(use_mock=True)
+        director = Director()
         assert hasattr(director, "CODE_KB_THRESHOLD")
         assert director.CODE_KB_THRESHOLD == 30
 
@@ -464,7 +464,7 @@ class TestBaseAgentWithProfile:
             default=ModelConfig(temperature=0.5),
             plan=ModelConfig(temperature=0.2, max_tokens=2048),
         )
-        agent = CodeAgent(use_mock_llm=True, model_profile=profile)
+        agent = CodeAgent(model_profile=profile)
         assert hasattr(agent, "plan_llm")
         assert agent.plan_llm is not None
         assert agent.llm is not agent.plan_llm
@@ -472,14 +472,14 @@ class TestBaseAgentWithProfile:
     def test_agent_without_profile_has_no_plan_llm(self):
         from app.agents.code_agent import CodeAgent
 
-        agent = CodeAgent(use_mock_llm=True)
+        agent = CodeAgent()
         # CodeAgent doesn't create plan_llm on its own
         assert not hasattr(agent, "plan_llm")
 
     def test_agent_without_profile_still_has_default_llm(self):
         from app.agents.reading_agent import ReadingAgent
 
-        agent = ReadingAgent(use_mock_llm=True)
+        agent = ReadingAgent()
         assert agent.llm is not None
 
     def test_content_agent_profile_overrides_manual_plan_llm(self):
@@ -490,7 +490,7 @@ class TestBaseAgentWithProfile:
             default=ModelConfig(temperature=0.7, max_tokens=8192),
             plan=ModelConfig(temperature=0.2, max_tokens=2048),
         )
-        agent = ContentAgent(use_mock_llm=True, model_profile=profile)
+        agent = ContentAgent(model_profile=profile)
         # plan_llm should come from profile, not manual creation
         assert hasattr(agent, "plan_llm")
 
@@ -502,7 +502,7 @@ class TestBaseAgentWithProfile:
             default=ModelConfig(temperature=0.7),
             plan=ModelConfig(temperature=0.1, max_tokens=1024),
         )
-        agent = ExerciseAgent(use_mock_llm=True, model_profile=profile)
+        agent = ExerciseAgent(model_profile=profile)
         assert hasattr(agent, "plan_llm")
 
 
@@ -512,7 +512,7 @@ class TestResourceGenProfiles:
     def test_workflow_agents_have_profiles(self):
         from app.workflows.resource_gen import ResourceGenWorkflow
 
-        wf = ResourceGenWorkflow(use_mock=True)
+        wf = ResourceGenWorkflow()
         assert wf.content_agent._model_profile is not None
         assert wf.exercise_agent._model_profile is not None
         assert wf.code_agent._model_profile is not None
@@ -522,13 +522,13 @@ class TestResourceGenProfiles:
     def test_workflow_director_has_profile(self):
         from app.workflows.resource_gen import ResourceGenWorkflow
 
-        wf = ResourceGenWorkflow(use_mock=True)
+        wf = ResourceGenWorkflow()
         assert wf.director._model_profile is not None
 
     def test_workflow_agents_with_profile_have_plan_llm(self):
         from app.workflows.resource_gen import ResourceGenWorkflow
 
-        wf = ResourceGenWorkflow(use_mock=True)
+        wf = ResourceGenWorkflow()
         # ContentAgent 和 ExerciseAgent 的 profile 包含 plan
         assert hasattr(wf.content_agent, "plan_llm")
         assert hasattr(wf.exercise_agent, "plan_llm")

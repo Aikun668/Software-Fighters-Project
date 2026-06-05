@@ -1,7 +1,6 @@
 """Tests for TutorAgent: message truncation + multi-turn RAG query + conversation persistence."""
 
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
 
 from app.agents.tutor_agent import (
     TutorAgent,
@@ -136,7 +135,6 @@ class TestTutorAgentGraph:
     @pytest.mark.asyncio
     async def test_truncation_applied_in_respond(self, agent, mock_llm):
         """_respond_node 传给 LLM 的消息是截断后的"""
-        # 创建超过 MAX_MESSAGES 的消息历史
         long_history = []
         for i in range(40):
             long_history.append({"role": "user", "content": f"q{i}"})
@@ -193,3 +191,102 @@ class TestTutorAgentGraph:
         }
         result = await agent._respond_node(state)
         assert "抱歉" in result["response"]
+
+
+class TestMultimodalContentExtraction:
+    """多模态 content 的文本提取"""
+
+    def test_string_content_returns_as_is(self):
+        result = TutorAgent._extract_text("你好")
+        assert result == "你好"
+
+    def test_multimodal_array_extracts_text(self):
+        content = [
+            {"type": "text", "text": "这张图里的公式对吗？"},
+            {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,/9j/..."}},
+        ]
+        result = TutorAgent._extract_text(content)
+        assert result == "这张图里的公式对吗？"
+
+    def test_multimodal_multiple_text_parts(self):
+        content = [
+            {"type": "text", "text": "第一部分"},
+            {"type": "text", "text": "第二部分"},
+        ]
+        result = TutorAgent._extract_text(content)
+        assert result == "第一部分 第二部分"
+
+    def test_empty_multimodal_returns_empty(self):
+        assert TutorAgent._extract_text([]) == ""
+        assert TutorAgent._extract_text([{"type": "image_url", "image_url": {}}]) == ""
+
+    def test_non_dict_items_skipped(self):
+        content = ["not a dict", {"type": "text", "text": "有效文本"}]
+        result = TutorAgent._extract_text(content)
+        assert result == "有效文本"
+
+
+class TestMultimodalRagQuery:
+    """多模态消息的 RAG query 构建"""
+
+    def test_multimodal_current_turn_included(self):
+        msgs = [
+            {"role": "user", "content": "什么是梯度下降？"},
+            {"role": "assistant", "content": "梯度下降是..."},
+            {"role": "user", "content": [
+                {"type": "text", "text": "结合这张图解释"},
+                {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,..."}},
+            ]},
+        ]
+        result = TutorAgent._build_rag_query(msgs)
+        assert "梯度下降" in result
+        assert "结合这张图解释" in result
+
+    def test_image_only_message_handled(self):
+        """纯图片消息（无文本）不会被遗漏"""
+        msgs = [
+            {"role": "user", "content": "前一轮问题"},
+            {"role": "assistant", "content": "..."},
+            {"role": "user", "content": [
+                {"type": "image_url", "image_url": {"url": "data:image/png;base64,..."}},
+            ]},
+        ]
+        result = TutorAgent._build_rag_query(msgs)
+        assert "前一轮问题" in result
+
+    def test_mixed_text_and_multimodal_history(self):
+        """历史中有纯文本，当前轮是多模态"""
+        msgs = [
+            {"role": "user", "content": "历史问题1"},
+            {"role": "assistant", "content": "历史回答1"},
+            {"role": "user", "content": "历史问题2"},
+            {"role": "assistant", "content": "历史回答2"},
+            {"role": "user", "content": [
+                {"type": "text", "text": "当前问题"},
+                {"type": "image_url", "image_url": {"url": "data:image/webp;base64,..."}},
+            ]},
+        ]
+        result = TutorAgent._build_rag_query(msgs)
+        assert "历史问题2" in result
+        assert "当前问题" in result
+        assert "data:image" not in result  # 图片 URL 不应出现在 query 中
+
+
+class TestTruncationWithMultimodal:
+    """多模态消息的截断"""
+
+    def test_multimodal_messages_counted_as_one(self):
+        """多模态内容数组仍算作一条消息"""
+        msgs = []
+        for i in range(30):
+            msgs.append({"role": "user", "content": f"msg{i}"})
+            msgs.append({"role": "assistant", "content": f"ans{i}"})
+        msgs[-2] = {"role": "user", "content": [
+            {"type": "text", "text": "last question"},
+            {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,..."}},
+        ]}
+
+        result = TutorAgent._truncate_messages(msgs)
+        assert len(result) == MAX_MESSAGES
+        last_user = [m for m in result if m["role"] == "user"][-1]
+        assert isinstance(last_user["content"], list)  # content 仍是数组

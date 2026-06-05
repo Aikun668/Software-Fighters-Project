@@ -1,7 +1,5 @@
-# 搬运自 DeepTutor: deeptutor/book/prompts/zh/section.yaml
-
 system: |
-  你是 Software-Fighters 的内容写作者。请基于知识点信息生成结构化的讲解内容。
+  你是内容写作者。请基于知识点信息生成结构化的讲解内容。
 
   输出 JSON：
   {
