@@ -24,7 +24,7 @@ class PathState(TypedDict, total=False):
 class PathAgent(BaseAgent):
     """学习路径规划 Agent —— 基于画像设计个性化学习路径"""
 
-    def __init__(self, config=None, use_mock_llm: bool = True):
+    def __init__(self, config=None, use_mock_llm: bool = False):
         super().__init__(
             agent_name="path_agent",
             module="agents",
@@ -98,26 +98,11 @@ class PathAgent(BaseAgent):
         ]
 
     def _build_concept_graph(self, chapters: list[dict]) -> dict:
-        nodes = []
-        edges = []
-        for i, ch in enumerate(chapters):
-            node_id = f"ch_{i}"
-            nodes.append({
-                "id": node_id,
-                "label": ch["title"],
-                "description": ch.get("summary", ""),
-                "weight": round(0.3 + 0.6 * (i / max(len(chapters) - 1, 1)), 2),
-            })
-            for prereq in ch.get("prerequisites", []):
-                for j, prev in enumerate(chapters):
-                    if prev["title"] == prereq:
-                        edges.append({
-                            "src": f"ch_{j}",
-                            "dst": node_id,
-                            "relation": "depends_on",
-                            "rationale": f"{ch['title']} 需要 {prereq} 基础",
-                        })
-        return {"nodes": nodes, "edges": edges}
+        """从骨架 JSON 加载知识图谱节点和边（不再从 LLM 章节生成）。"""
+        from app.services.graph_service import get_graph_service
+
+        skeleton = get_graph_service().load_skeleton()
+        return {"nodes": skeleton["nodes"], "edges": skeleton["edges"]}
 
     async def _revise_node(self, state: PathState) -> dict:
         """Revise: LLM 自我审查 + 修正 drafted 路径"""

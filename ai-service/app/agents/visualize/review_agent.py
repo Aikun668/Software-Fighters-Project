@@ -17,7 +17,7 @@ class ReviewState(TypedDict, total=False):
 
 
 class ReviewAgent(BaseAgent):
-    def __init__(self, config=None, use_mock_llm: bool = True, model_profile=None):
+    def __init__(self, config=None, use_mock_llm: bool = False, model_profile=None):
         super().__init__(
             agent_name="visualize_review_agent",
             module="agents",

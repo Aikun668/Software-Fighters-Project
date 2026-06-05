@@ -33,6 +33,7 @@ class ProfileWorkflowState(TypedDict, total=False):
     profile_complete: bool
     filled_dimensions: int
     response: str
+    last_extracted_msg_index: int
 
 
 class ProfileWorkflow(BaseWorkflow):
