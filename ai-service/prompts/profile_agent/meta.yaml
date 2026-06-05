@@ -1,5 +1,4 @@
 # ProfileAgent 维度元数据定义
-# 借鉴 DeepTutor _meta.yaml 的 surface/slot/section 组织方式
 
 dimensions:
   knowledge_base:

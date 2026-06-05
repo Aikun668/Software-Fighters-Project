@@ -1,0 +1,103 @@
+{
+  "course_id": "ai_intro",
+  "version": 1,
+  "nodes": [
+    {
+      "id": "ai_overview",
+      "name": "AI 概述",
+      "description": "人工智能的定义、发展历程、核心分支（ML/DL/NLP/CV）及典型应用场景",
+      "difficulty": 1,
+      "category": "基础",
+      "doc": "01-ai-overview.md"
+    },
+    {
+      "id": "ml_basics",
+      "name": "机器学习基础",
+      "description": "监督学习、无监督学习、强化学习的基本范式，训练/验证/测试集划分，偏差-方差权衡",
+      "difficulty": 2,
+      "category": "ML",
+      "doc": "02-machine-learning.md"
+    },
+    {
+      "id": "dl_basics",
+      "name": "深度学习基础",
+      "description": "神经网络的基本结构、激活函数、前向传播、损失函数、优化器与训练流程",
+      "difficulty": 3,
+      "category": "DL",
+      "doc": "03-deep-learning.md"
+    },
+    {
+      "id": "transformer",
+      "name": "Transformer 架构",
+      "description": "Encoder-Decoder 结构、多头注意力、位置编码、LayerNorm、残差连接",
+      "difficulty": 4,
+      "category": "LLM",
+      "doc": "04-transformer.md"
+    },
+    {
+      "id": "nlp_llm",
+      "name": "NLP 与 LLM",
+      "description": "语言模型演进（RNN→LSTM→Transformer→GPT）、预训练+微调范式、Prompt Engineering",
+      "difficulty": 3,
+      "category": "NLP",
+      "doc": "05-nlp-llm.md"
+    },
+    {
+      "id": "backprop",
+      "name": "反向传播推导",
+      "description": "链式法则的矩阵形式推导、梯度在计算图中的反向流动、常见激活函数的梯度",
+      "difficulty": 5,
+      "category": "DL",
+      "doc": "06-backprop-derivation.md"
+    },
+    {
+      "id": "overfitting",
+      "name": "过拟合与正则化",
+      "description": "过拟合/欠拟合的诊断方法、L1/L2正则化、Dropout、Early Stopping、数据增强",
+      "difficulty": 3,
+      "category": "ML",
+      "doc": "07-overfitting-regularization.md"
+    },
+    {
+      "id": "self_attention",
+      "name": "Self-Attention 详解",
+      "description": "Q/K/V 线性变换、缩放点积注意力、多头并行、注意力权重可视化",
+      "difficulty": 5,
+      "category": "LLM",
+      "doc": "08-self-attention-detail.md"
+    },
+    {
+      "id": "gradient_variants",
+      "name": "梯度下降变体",
+      "description": "BGD/SGD/Mini-batch 的区别与权衡、Momentum、Adam、RMSprop 的更新公式与适应场景",
+      "difficulty": 4,
+      "category": "ML",
+      "doc": "09-gradient-descent-variants.md"
+    },
+    {
+      "id": "cnn",
+      "name": "CNN 卷积神经网络",
+      "description": "卷积层/池化层/全连接层的结构、感受野、经典架构（LeNet/AlexNet/ResNet）",
+      "difficulty": 4,
+      "category": "DL",
+      "doc": "10-cnn.md"
+    }
+  ],
+  "edges": [
+    {"source": "ai_overview",       "target": "ml_basics",         "relation": "depends_on", "rationale": "ML 是 AI 的核心方法"},
+    {"source": "ml_basics",         "target": "dl_basics",         "relation": "depends_on", "rationale": "深度学习是 ML 的子领域"},
+    {"source": "ml_basics",         "target": "overfitting",       "relation": "depends_on", "rationale": "过拟合是 ML 中的核心问题"},
+    {"source": "ml_basics",         "target": "gradient_variants", "relation": "depends_on", "rationale": "梯度下降是 ML 的核心优化方法"},
+    {"source": "dl_basics",         "target": "cnn",               "relation": "depends_on", "rationale": "CNN 是深度学习的经典架构"},
+    {"source": "dl_basics",         "target": "backprop",          "relation": "depends_on", "rationale": "反向传播是深度学习训练的核心"},
+    {"source": "dl_basics",         "target": "transformer",       "relation": "extends",    "rationale": "Transformer 是深度学习在序列建模的延伸"},
+    {"source": "gradient_variants", "target": "backprop",          "relation": "depends_on", "rationale": "反向传播基于梯度下降"},
+    {"source": "overfitting",       "target": "backprop",          "relation": "parallel",   "rationale": "训练深度网络的两大挑战"},
+    {"source": "backprop",          "target": "cnn",               "relation": "depends_on", "rationale": "CNN 训练依赖反向传播"},
+    {"source": "transformer",       "target": "self_attention",    "relation": "depends_on", "rationale": "Self-Attention 是 Transformer 的核心机制"},
+    {"source": "transformer",       "target": "nlp_llm",           "relation": "depends_on", "rationale": "LLM 基于 Transformer 架构"},
+    {"source": "self_attention",    "target": "nlp_llm",           "relation": "depends_on", "rationale": "注意力机制是 LLM 的关键技术"},
+    {"source": "cnn",               "target": "transformer",       "relation": "extends",    "rationale": "从 CNN 到 Transformer：序列建模的演进"},
+    {"source": "dl_basics",         "target": "nlp_llm",           "relation": "extends",    "rationale": "LLM 训练需要深度学习基础"}
+  ]
+}

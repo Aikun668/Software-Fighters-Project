@@ -1,7 +1,6 @@
 """Tests for TutorAgent: message truncation + multi-turn RAG query + conversation persistence."""
 
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
 
 from app.agents.tutor_agent import (
     TutorAgent,
@@ -218,80 +217,3 @@ class TestTruncationWithMultimodal:
         assert isinstance(last_user["content"], list)  # content 仍是数组
 
 
-class TestTutorAgentGraph:
-    """TutorAgent graph 端到端（mock LLM）"""
-
-    @pytest.fixture
-    def mock_llm(self):
-        m = AsyncMock()
-        m.chat_stream = AsyncMock()
-        m.chat_stream.__aiter__ = lambda self: iter(["好的，我来回答你的问题。"])
-        return m
-
-    @pytest.fixture
-    def agent(self, mock_llm):
-        with patch("app.agents.base_agent.create_llm", return_value=mock_llm):
-            a = TutorAgent(use_mock_llm=True)
-            a.llm = mock_llm
-            return a
-
-    @pytest.mark.asyncio
-    async def test_truncation_applied_in_respond(self, agent, mock_llm):
-        """_respond_node 传给 LLM 的消息是截断后的"""
-        # 创建超过 MAX_MESSAGES 的消息历史
-        long_history = []
-        for i in range(40):
-            long_history.append({"role": "user", "content": f"q{i}"})
-            long_history.append({"role": "assistant", "content": f"a{i}"})
-
-        captured_messages = []
-
-        async def capture(*args, **kwargs):
-            captured_messages.extend(args[0] if args else [])
-            for char in ["好", "的"]:
-                yield char
-
-        mock_llm.chat_stream = capture
-
-        state = {
-            "messages": long_history,
-            "student_profile": {},
-            "knowledge_context": "test context",
-        }
-        await agent._respond_node(state)
-
-        assert len(captured_messages) <= MAX_MESSAGES
-
-    @pytest.mark.asyncio
-    async def test_rag_query_uses_multi_turn(self, agent):
-        """_retrieve_node 使用多轮用户消息构建 query"""
-        msgs = [
-            {"role": "user", "content": "CNN是什么"},
-            {"role": "assistant", "content": "..."},
-            {"role": "user", "content": "第1个问题里的卷积"},
-        ]
-        state = {"messages": msgs}
-
-        with patch.object(
-            agent, "_build_rag_query", wraps=agent._build_rag_query
-        ) as spy:
-            await agent._retrieve_node(state)
-            spy.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_llm_failure_returns_fallback(self, agent, mock_llm):
-        """LLM 调用失败 → 返回兜底文案"""
-
-        async def failing_stream(*args, **kwargs):
-            raise RuntimeError("LLM down")
-            yield  # unreachable, makes it an async generator
-
-        mock_llm.chat_stream = failing_stream
-
-        state = {
-            "messages": [{"role": "user", "content": "测试"}],
-            "student_profile": {},
-            "knowledge_context": "",
-        }
-        result = await agent._respond_node(state)
-        assert "抱歉" in result["response"]

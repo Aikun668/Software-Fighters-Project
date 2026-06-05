@@ -159,6 +159,8 @@ class LearningPathWorkflow(BaseWorkflow):
                 "resource_ids": [],
                 "error": f"持久化失败: {e}",
                 "response": "路径规划成功，但保存失败，请稍后重试。",
+                "concept_graph": state.get("concept_graph", {}),
+                "version": state.get("version", 1),
             }
 
         response = f"已为您规划 {len(steps)} 步学习路径，并匹配了对应资源。"
@@ -166,4 +168,6 @@ class LearningPathWorkflow(BaseWorkflow):
             "steps": steps,
             "resource_ids": resource_ids,
             "response": response,
+            "concept_graph": state.get("concept_graph", {}),
+            "version": state.get("version", 1),
         }

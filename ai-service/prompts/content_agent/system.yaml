@@ -1,7 +1,5 @@
-# 搬运自 DeepTutor: deeptutor/book/prompts/zh/page_planner.yaml
-
 system: |
-  你是 Software-Fighters 的内容规划师。为给定的知识点设计丰富、引人入胜的学习内容序列。
+  你是内容规划师。为给定的知识点设计丰富、引人入胜的学习内容序列。
 
   可用内容类型：
   - section：核心讲解文本

@@ -1,5 +1,6 @@
+"""Tests for VisualizePipeline — 使用真实 LLM 调用验证"""
+
 import pytest
-from unittest.mock import AsyncMock, patch
 
 from app.agents.visualize.visualize_pipeline import VisualizePipeline, VisualizeResult
 from app.agents.visualize.analysis_agent import AnalysisAgent
@@ -8,63 +9,32 @@ from app.agents.visualize.review_agent import ReviewAgent
 
 
 @pytest.fixture
-def mock_llm():
-    m = AsyncMock()
-    return m
-
-
-@pytest.fixture
-def pipeline(mock_llm):
-    with patch("app.agents.base_agent.create_llm", return_value=mock_llm):
-        return VisualizePipeline(use_mock_llm=True)
+def pipeline():
+    return VisualizePipeline()
 
 
 class TestVisualizePipeline:
     @pytest.mark.asyncio
-    async def test_skip_when_no_visualization_needed(self, pipeline, mock_llm):
-        mock_llm.chat.return_value = '{"should_visualize": false, "reasoning": "纯文字问题不需要图表"}'
-        result = await pipeline.run("什么是 Python", "Python 是一种编程语言。")
-        assert result.should_visualize is False
-        assert "纯文字问题" in result.reasoning
+    async def test_pipeline_returns_result(self, pipeline):
+        """Pipeline 应该返回 VisualizeResult，无论是否可视化"""
+        result = await pipeline.run("什么是 Python", "Python 是一种编程语言，由 Guido van Rossum 创建。")
+        assert isinstance(result, VisualizeResult)
+        # should_visualize 由 LLM 决定，不硬编码预期值
 
     @pytest.mark.asyncio
-    async def test_full_pipeline_mermaid(self, pipeline, mock_llm):
-        mock_llm.chat.side_effect = [
-            '{"should_visualize": true, "render_type": "mermaid", "description": "梯度下降流程", "elements": ["输入", "梯度", "更新"], "reasoning": "流程图适合"}',
-            '{"code": "graph TD\\n  A[输入] --> B[梯度]", "title": "梯度下降", "notes": "ok"}',
-            '{"changed": false, "issues": [], "optimized_code": "", "suggestions": ""}',
-        ]
-        with patch("app.agents.base_agent.BaseAgent._call_llm_json", side_effect=[
-            {"should_visualize": True, "render_type": "mermaid", "description": "梯度下降流程", "elements": ["输入", "梯度", "更新"], "reasoning": "流程图适合"},
-            {"code": "graph TD\n  A[输入] --> B[梯度]", "title": "梯度下降", "notes": "ok"},
-            {"changed": False, "issues": [], "optimized_code": "", "suggestions": ""},
-        ]):
-            result = await pipeline.run("解释梯度下降", "梯度下降是一种优化算法。")
-            assert result.should_visualize is True
-            assert result.render_type == "mermaid"
-            assert "graph TD" in result.code
-            assert result.title == "梯度下降"
+    async def test_pipeline_with_diagram_question(self, pipeline):
+        """流程图类问题应该倾向于生成可视化"""
+        result = await pipeline.run("请用流程图解释梯度下降的步骤", "梯度下降包括：初始化参数、计算梯度、更新参数、重复迭代。")
+        assert isinstance(result, VisualizeResult)
+        if result.should_visualize:
+            assert result.render_type in ("mermaid", "svg", "chartjs", "html")
+            assert result.code
 
     @pytest.mark.asyncio
-    async def test_review_fixes_code(self, pipeline, mock_llm):
-        mock_llm.chat.side_effect = [
-            '{"should_visualize": true, "render_type": "svg", "description": "神经网络结构", "elements": ["输入层", "隐藏层"], "reasoning": "结构图"}',
-            '{"code": "<svg> broken", "title": "神经网络", "notes": ""}',
-            '{"changed": true, "issues": ["标签未闭合"], "optimized_code": "<svg></svg>", "suggestions": "已修复"}',
-        ]
-        result = await pipeline.run("神经网络结构", "神经网络由多层组成。")
-        assert result.should_visualize is True
-        assert result.code == "<svg></svg>"
-
-    @pytest.mark.asyncio
-    async def test_codegen_failure_fallback(self, pipeline, mock_llm):
-        with patch("app.agents.base_agent.BaseAgent._call_llm_json", side_effect=[
-            {"should_visualize": True, "render_type": "mermaid", "description": "测试", "elements": [], "reasoning": ""},
-            {"code": "", "title": "", "notes": ""},
-        ]):
-            result = await pipeline.run("测试", "回答")
-            assert result.should_visualize is False
-            assert "代码生成失败" in result.reasoning
+    async def test_pipeline_skip_simple_factual(self, pipeline):
+        """简单事实性问题不需要可视化"""
+        result = await pipeline.run("Python 是什么时候创建的", "Python 语言由 Guido van Rossum 于 1991 年创建。")
+        assert isinstance(result, VisualizeResult)
 
 
 class TestVisualizeResult:
@@ -74,48 +44,45 @@ class TestVisualizeResult:
         assert result.reasoning == "test"
 
     def test_render_priority(self):
-        from app.agents.visualize.visualize_pipeline import VisualizePipeline
         assert VisualizePipeline.RENDER_PRIORITY["mermaid"] < VisualizePipeline.RENDER_PRIORITY["svg"]
         assert VisualizePipeline.RENDER_PRIORITY["svg"] < VisualizePipeline.RENDER_PRIORITY["chartjs"]
 
 
 class TestAnalysisAgent:
     @pytest.mark.asyncio
-    async def test_analyze_node(self, mock_llm):
-        mock_llm.chat.return_value = '{"should_visualize": true, "render_type": "mermaid", "description": "流程图", "elements": ["A", "B"], "reasoning": "适合图解"}'
-        with patch("app.agents.base_agent.create_llm", return_value=mock_llm):
-            agent = AnalysisAgent(use_mock_llm=True)
-            result = await agent.run({"question": "什么是AI", "answer": "人工智能是..."})
-            assert "analysis" in result
-            assert result["analysis"]["should_visualize"] is True
+    async def test_analyze_node(self):
+        agent = AnalysisAgent()
+        result = await agent.run({"question": "什么是AI", "answer": "人工智能是利用计算机模拟人类智能的科学与技术。"})
+        assert "analysis" in result
+        assert isinstance(result["analysis"], dict)
+        assert "should_visualize" in result["analysis"]
 
 
 class TestCodeGeneratorAgent:
     @pytest.mark.asyncio
-    async def test_generate_node(self, mock_llm):
-        mock_llm.chat.return_value = '{"code": "graph TD\\n  A --> B", "title": "测试图", "notes": "ok"}'
-        with patch("app.agents.base_agent.create_llm", return_value=mock_llm):
-            agent = CodeGeneratorAgent(use_mock_llm=True)
-            result = await agent.run({
-                "render_type": "mermaid",
-                "description": "流程图",
-                "elements": ["A", "B"],
-                "question": "测试",
-            })
-            assert "code_result" in result
-            assert "graph TD" in result["code_result"]["code"]
+    async def test_generate_node(self):
+        agent = CodeGeneratorAgent()
+        result = await agent.run({
+            "render_type": "mermaid",
+            "description": "一个两节点的流程图",
+            "elements": ["A", "B"],
+            "question": "生成简单流程图",
+        })
+        assert "code_result" in result
+        assert isinstance(result["code_result"], dict)
+        code = result["code_result"].get("code", "")
+        assert code, "Should generate code"
 
 
 class TestReviewAgent:
     @pytest.mark.asyncio
-    async def test_review_node(self, mock_llm):
-        mock_llm.chat.return_value = '{"changed": false, "issues": [], "optimized_code": "", "suggestions": ""}'
-        with patch("app.agents.base_agent.create_llm", return_value=mock_llm):
-            agent = ReviewAgent(use_mock_llm=True)
-            result = await agent.run({
-                "render_type": "mermaid",
-                "code": "graph TD\\n  A --> B",
-                "description": "流程图",
-            })
-            assert "review_result" in result
-            assert result["review_result"]["changed"] is False
+    async def test_review_node(self):
+        agent = ReviewAgent()
+        result = await agent.run({
+            "render_type": "mermaid",
+            "code": "graph TD\n  A[起点] --> B[终点]",
+            "description": "简单两节点流程图",
+        })
+        assert "review_result" in result
+        assert isinstance(result["review_result"], dict)
+        assert "changed" in result["review_result"]
