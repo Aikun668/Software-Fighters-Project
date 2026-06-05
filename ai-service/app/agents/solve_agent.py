@@ -10,7 +10,8 @@ from app.utils.prompt_loader import interpolate_variables
 
 logger = logging.getLogger(__name__)
 
-MAX_QUESTION_LENGTH = 2000  # 过长题目截断，防止 prompt 膨胀和 token 浪费
+MAX_QUESTION_LENGTH = 2000
+SOLVE_TIMEOUT_SECONDS = 60  # 过长题目截断，防止 prompt 膨胀和 token 浪费
 
 
 class SolveState(TypedDict, total=False):
@@ -60,11 +61,14 @@ class SolveAgent(BaseAgent):
                 user_tpl, {"question": question, "context": context},
             )
 
-            result = await self._call_llm_json(
-                system_prompt=sys_prompt,
-                user_prompt=user_prompt,
-                expected_key="steps",
-                fallback={"steps": self._mock_plan(question)},
+            result = await asyncio.wait_for(
+                self._call_llm_json(
+                    system_prompt=sys_prompt,
+                    user_prompt=user_prompt,
+                    expected_key="steps",
+                    fallback={"steps": self._mock_plan(question)},
+                ),
+                timeout=SOLVE_TIMEOUT_SECONDS,
             )
             return {"steps": result.get("steps", [])}
         except (ConnectionError, RuntimeError, ValueError, asyncio.TimeoutError) as e:
@@ -89,11 +93,14 @@ class SolveAgent(BaseAgent):
                 },
             )
 
-            result = await self._call_llm_json(
-                system_prompt=sys_prompt,
-                user_prompt=user_prompt,
-                expected_key="solution",
-                fallback={"solution": self._mock_solution(steps, question)},
+            result = await asyncio.wait_for(
+                self._call_llm_json(
+                    system_prompt=sys_prompt,
+                    user_prompt=user_prompt,
+                    expected_key="solution",
+                    fallback={"solution": self._mock_solution(steps, question)},
+                ),
+                timeout=SOLVE_TIMEOUT_SECONDS,
             )
             return {"solution": result.get("solution", "")}
         except (ConnectionError, RuntimeError, ValueError, asyncio.TimeoutError) as e:
@@ -114,11 +121,14 @@ class SolveAgent(BaseAgent):
                 },
             )
 
-            result = await self._call_llm_json(
-                system_prompt=sys_prompt,
-                user_prompt=user_prompt,
-                expected_key="confidence_score",
-                fallback={"confidence_score": 0.8},
+            result = await asyncio.wait_for(
+                self._call_llm_json(
+                    system_prompt=sys_prompt,
+                    user_prompt=user_prompt,
+                    expected_key="confidence_score",
+                    fallback={"confidence_score": 0.8},
+                ),
+                timeout=SOLVE_TIMEOUT_SECONDS,
             )
             try:
                 conf = float(result.get("confidence_score", 0.8))

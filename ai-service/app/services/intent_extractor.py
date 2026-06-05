@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 INTENT_TYPES = Literal[
     "exercise_gen", "resource_gen", "tutor_question",
     "learning_path", "solve_problem", "flashcard_gen",
-    "unknown",
+    "profile_building", "unknown",
 ]
 
 
@@ -47,6 +47,10 @@ class FlashcardParams(BaseModel):
     count: int = Field(default=5, ge=1, le=20)
 
 
+class ProfileBuildingParams(BaseModel):
+    message: str = Field(..., min_length=1)
+
+
 PARAMS_BY_INTENT: dict[str, type[BaseModel]] = {
     "exercise_gen": ExerciseParams,
     "resource_gen": ResourceParams,
@@ -54,6 +58,7 @@ PARAMS_BY_INTENT: dict[str, type[BaseModel]] = {
     "learning_path": LearningPathParams,
     "solve_problem": SolveParams,
     "flashcard_gen": FlashcardParams,
+    "profile_building": ProfileBuildingParams,
 }
 
 
@@ -131,6 +136,19 @@ INTENT_REGISTRY: list[IntentDef] = [
         prompt="用户想要生成记忆闪卡。从消息中提取：topic(主题)、count(卡片数,默认5)",
         keywords=["闪卡", "记忆卡", "卡片", "背"],
         exclusive_keywords=[],
+    ),
+    IntentDef(
+        intent="profile_building",
+        params_model=ProfileBuildingParams,
+        prompt="用户在介绍自己的学习背景、基础水平或学习目标，应进行画像构建对话",
+        keywords=[
+            "零基础", "新手", "刚入门", "我是", "我想学", "我的基础",
+            "我刚", "刚开始", "小白", "第一次", "没学过", "不懂",
+            "完全不会", "基础差", "入门", "开始学", "学习目标",
+            "我想了解", "介绍一下", "我是新手", "完全不懂",
+        ],
+        exclusive_keywords=["出题", "做题", "练习", "闪卡", "资源", "课件"],
+        confidence=0.7,
     ),
 ]
 
@@ -213,6 +231,9 @@ def _mock_extract_params(intent: INTENT_TYPES, message: str) -> dict:
         count = int(cm.group(1)) if cm else 5
         return {"topic": topic, "count": count}
 
+    if intent == "profile_building":
+        return {"message": message.strip()}
+
     return {}
 
 
@@ -248,10 +269,6 @@ class IntentExtractor:
                     return IntentResult(
                         intent=best_def.intent,
                         params=validated.model_dump(),
-                        # 置信度 = 关键词命中分 * 0.7 + 基线 0.3，上限 0.95
-                        # 0.3 基线：即使命中 1 个关键词也保留最低置信度，避免 mock 模式过度自信
-                        # 0.7 权重：关键词命中贡献主体，但保留空间给 Pydantic 校验
-                        # 0.95 上限：mock 模式不给满分，提示前端此为规则推断非 LLM 结果
                         confidence=min(best_score * 0.7 + 0.3, 0.95),
                         raw_message=message,
                     )

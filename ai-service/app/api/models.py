@@ -90,6 +90,11 @@ class PlanCreateRequest(BaseModel):
     concept_graph: dict = Field(default_factory=dict, description="知识图谱数据")
 
 
+class CreatePlanFromPathRequest(BaseModel):
+    user_id: int = Field(..., ge=1, description="用户 ID")
+    course_id: str = Field(default="ai_intro", description="课程 ID")
+
+
 class PlanProgressRequest(BaseModel):
     user_id: int = Field(..., ge=1, description="用户 ID")
     step_id: int = Field(..., ge=1, description="步骤 ID")
