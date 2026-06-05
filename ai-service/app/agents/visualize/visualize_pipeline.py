@@ -27,7 +27,7 @@ class VisualizePipeline:
         "html": 4,
     }
 
-    def __init__(self, use_mock_llm: bool = True):
+    def __init__(self, use_mock_llm: bool = False):
         self.analysis_agent = AnalysisAgent(use_mock_llm=use_mock_llm)
         self.code_generator = CodeGeneratorAgent(use_mock_llm=use_mock_llm)
         self.review_agent = ReviewAgent(use_mock_llm=use_mock_llm)

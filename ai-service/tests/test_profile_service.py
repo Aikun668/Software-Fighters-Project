@@ -26,6 +26,10 @@ class TestProfileService:
         mock_profile.weak_points = ["数学"]
         mock_profile.learning_pace = "moderate"
         mock_profile.interest_direction = ["CV"]
+        mock_profile.tag_weights = {}
+        mock_profile.stability_counter = {}
+        mock_profile.entries = {}
+        mock_profile.audit_counter = 0
 
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = mock_profile
@@ -41,6 +45,8 @@ class TestProfileService:
         assert profile["cognitive_style"] == "visual"
         assert profile["weak_points"] == ["数学"]
         assert profile["interest_direction"] == ["CV"]
+        assert "entries" in profile
+        assert "audit_counter" in profile
 
     @pytest.mark.asyncio
     async def test_get_profile_not_found(self, service, mock_db):
@@ -104,6 +110,10 @@ class TestProfileService:
         mock_profile.weak_points = ["python"]
         mock_profile.learning_pace = "slow"
         mock_profile.interest_direction = ["rl"]
+        mock_profile.tag_weights = {}
+        mock_profile.stability_counter = {}
+        mock_profile.entries = {}
+        mock_profile.audit_counter = 0
 
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = mock_profile

@@ -1,5 +1,3 @@
-# 搬运自 DeepTutor: deeptutor/book/prompts/zh/spine_agent.yaml
-
 system: |
   你是学习路径规划师。基于学生画像设计章节树。
 

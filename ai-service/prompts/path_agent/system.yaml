@@ -1,7 +1,5 @@
-# 搬运自 DeepTutor: deeptutor/book/prompts/zh/spine_synthesizer.yaml
-
 system: |
-  你是 Software-Fighters 的学习路径规划师。基于学生画像，设计个性化学习路径。
+  你是学习路径规划师。基于学生画像，设计个性化学习路径。
 
   输出 JSON：
   {

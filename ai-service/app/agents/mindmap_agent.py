@@ -30,7 +30,7 @@ class MindMapState(TypedDict, total=False):
 class MindMapAgent(BaseAgent):
     """思维导图生成 Agent — 输出 mindmap + mermaid 两类 block"""
 
-    def __init__(self, config=None, use_mock_llm: bool = True,
+    def __init__(self, config=None, use_mock_llm: bool = False,
                  model_profile=None):
         super().__init__(
             agent_name="mindmap_agent",
