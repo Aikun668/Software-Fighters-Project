@@ -116,7 +116,7 @@ def get_llm_service(use_mock: bool | None = None):
     global _llm_service_singleton
     if _llm_service_singleton is None:
         if use_mock is None:
-            use_mock = os.getenv("USE_MOCK_LLM", "true").lower() == "true"
+            use_mock = os.getenv("USE_MOCK_LLM", "false").lower() == "true"
         _llm_service_singleton = create_llm(use_mock=use_mock)
     elif use_mock is not None and use_mock != _llm_service_singleton.use_mock:
         raise RuntimeError(

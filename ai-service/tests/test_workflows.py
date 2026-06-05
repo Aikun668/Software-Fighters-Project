@@ -1,6 +1,5 @@
-"""Workflow orchestration tests — use mock LLM to avoid API calls."""
+"""Workflow orchestration tests."""
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
 
 from app.workflows.profile_workflow import ProfileWorkflow, DIMENSIONS, MIN_FILLED_DIMENSIONS
 
@@ -97,14 +96,14 @@ class TestResourceGenWorkflowInit:
 
     def test_workflow_creates_agents(self):
         from app.workflows.resource_gen import ResourceGenWorkflow
-        wf = ResourceGenWorkflow(use_mock=True)
+        wf = ResourceGenWorkflow()
         assert wf.content_agent is not None
         assert wf.exercise_agent is not None
-        assert wf.use_mock is True
+        assert wf.use_mock is False
 
-    def test_graph_builds_with_mock(self):
+    def test_graph_builds(self):
         from app.workflows.resource_gen import ResourceGenWorkflow
-        wf = ResourceGenWorkflow(use_mock=True)
+        wf = ResourceGenWorkflow()
         graph = wf._build_graph()
         assert graph is not None
 
@@ -114,14 +113,14 @@ class TestLearningPathWorkflowInit:
 
     def test_workflow_creates_agents(self):
         from app.workflows.learning_path import LearningPathWorkflow
-        wf = LearningPathWorkflow(use_mock=True)
+        wf = LearningPathWorkflow()
         assert wf.path_agent is not None
         assert wf.content_agent is not None
-        assert wf.use_mock is True
+        assert wf.use_mock is False
 
-    def test_graph_builds_with_mock(self):
+    def test_graph_builds(self):
         from app.workflows.learning_path import LearningPathWorkflow
-        wf = LearningPathWorkflow(use_mock=True)
+        wf = LearningPathWorkflow()
         graph = wf._build_graph()
         assert graph is not None
 

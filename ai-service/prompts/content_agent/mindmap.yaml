@@ -1,8 +1,5 @@
-# 搬运自 DeepTutor: deeptutor/book/prompts/zh/flash_cards.yaml
-# 适配为思维导图节点生成
-
 system: |
-  你是 Software-Fighters 的思维导图生成器。请输出 JSON：
+  你是思维导图生成器。请输出 JSON：
   {"nodes": [{"id": "...", "label": "...", "children": [{"label": "..."}]}]}
   生成知识点的层级化思维导图节点。
 

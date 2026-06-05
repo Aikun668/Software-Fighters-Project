@@ -38,7 +38,7 @@ class FlashCardState(TypedDict, total=False):
 class FlashCardAgent(BaseAgent):
     """闪卡生成 Agent — 输出 flash_cards block"""
 
-    def __init__(self, config=None, use_mock_llm: bool = True,
+    def __init__(self, config=None, use_mock_llm: bool = False,
                  model_profile=None):
         super().__init__(
             agent_name="flashcard_agent",

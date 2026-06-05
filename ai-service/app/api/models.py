@@ -59,8 +59,61 @@ class GradeRequest(BaseModel):
     rubric: str = Field(default="", description="评分标准（简答题）")
 
 
+# ── Solve ──────────────────────────────────────────────────────
+
+class SolveRequest(BaseModel):
+    question: str = Field(..., min_length=1, description="需要解答的问题")
+    context: str = Field(default="", description="知识库上下文（可选）")
+    user_id: int = Field(default=1, description="用户 ID")
+
+
+class ErrorAnalysisRequest(BaseModel):
+    errors: list[dict] = Field(..., min_length=1, description="错题列表 [{question, user_answer, correct_answer}]")
+    level: int = Field(default=1, ge=1, le=5, description="学生水平 1-5")
+
+
 # ── Evaluation ─────────────────────────────────────────────────
 
 class EvaluationReportRequest(BaseModel):
     evaluation_results: dict = Field(..., description="评估结果")
     user_id: Optional[int] = Field(default=None, description="用户 ID（提供则触发画像增量更新）")
+
+
+class UnifiedChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, description="用户自然语言输入")
+    user_id: int = Field(default=1, description="用户 ID")
+
+
+# ── Knowledge Graph ──────────────────────────────────────────────
+
+
+class PlanCreateRequest(BaseModel):
+    user_id: int = Field(..., ge=1, description="用户 ID")
+    course_id: str = Field(default="ai_intro", description="课程 ID")
+    steps: list[dict] = Field(..., min_length=1, description="学习路径步骤列表")
+    concept_graph: dict = Field(default_factory=dict, description="知识图谱数据")
+
+
+class PlanProgressRequest(BaseModel):
+    user_id: int = Field(..., ge=1, description="用户 ID")
+    step_id: int = Field(..., ge=1, description="步骤 ID")
+    status: str = Field(default="completed", description="步骤状态: pending|in_progress|completed|paused|review")
+    score: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="练习得分 0-1")
+    activity_type: str = Field(default="study", description="活动类型: study|exercise|review|quiz")
+    duration_minutes: int = Field(default=0, ge=0, description="学习时长（分钟）")
+
+
+class PlanResumeRequest(BaseModel):
+    user_id: int = Field(..., ge=1, description="用户 ID")
+
+
+class RegressionCheckRequest(BaseModel):
+    user_id: int = Field(..., ge=1, description="用户 ID")
+    answers: Optional[list[dict]] = Field(default=None, description="用户答案 [{step_id, question_id, user_answer}]")
+
+
+class NodeStatusChangeRequest(BaseModel):
+    user_id: int = Field(..., ge=1, description="用户 ID")
+    node_id: str = Field(..., min_length=1, description="知识图谱节点 ID")
+    old_status: str = Field(..., description="旧状态")
+    new_status: str = Field(..., description="新状态")

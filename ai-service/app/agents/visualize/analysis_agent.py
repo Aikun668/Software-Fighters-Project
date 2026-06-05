@@ -14,7 +14,7 @@ class AnalysisState(TypedDict, total=False):
 
 
 class AnalysisAgent(BaseAgent):
-    def __init__(self, config=None, use_mock_llm: bool = True, model_profile=None):
+    def __init__(self, config=None, use_mock_llm: bool = False, model_profile=None):
         super().__init__(
             agent_name="visualize_analysis_agent",
             module="agents",

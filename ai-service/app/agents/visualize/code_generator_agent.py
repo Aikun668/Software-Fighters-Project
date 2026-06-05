@@ -18,9 +18,9 @@ class CodeGenState(TypedDict, total=False):
 
 
 class CodeGeneratorAgent(BaseAgent):
-    def __init__(self, config=None, use_mock_llm: bool = True, model_profile=None):
+    def __init__(self, config=None, use_mock_llm: bool = False, model_profile=None):
         super().__init__(
-            agent_name="visualize_codegen_agent",
+            agent_name="visualize_agent",
             module="agents",
             language="zh",
             config=config,
