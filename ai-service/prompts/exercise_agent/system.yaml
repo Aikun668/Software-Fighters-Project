@@ -23,4 +23,7 @@ user_template: |
   难度：{difficulty}
   薄弱点：{weak_points}
 
+  输出示例：
+  {"questions":[{"type":"choice","question":"以下哪项是监督学习的特征？","options":["A. 无标签数据","B. 有标签数据","C. 生成新数据","D. 聚类"],"answer":"B","explanation":"监督学习使用带标签的数据进行训练"}]}
+
   请生成题目。直接输出 JSON。

@@ -29,6 +29,7 @@ from app.api.models import (
     PlanResumeRequest,
     RegressionCheckRequest,
     NodeStatusChangeRequest,
+    CreatePlanFromPathRequest,
 )
 from app.services.plan_service import get_plan_service
 from app.services.plan_constants import RETURN_MESSAGES
@@ -412,6 +413,26 @@ async def tutor_chat(body: TutorChatRequest):
                     await asyncio.sleep(0.03)
                     yield f"data: {json.dumps({'type': 'token', 'content': char}, ensure_ascii=False)}\n\n"
 
+            # 后台增量画像提取（DeepTutor 模式：答疑中自然提取画像信号）
+            if response and messages:
+                import asyncio as _asyncio2
+
+                async def _bg_profile_extract():
+                    try:
+                        agent = _get_profile_agent()
+                        result = await agent.extract_and_merge(
+                            user_id, messages, student_profile,
+                        )
+                        if result.get("changed"):
+                            logger.info(
+                                "Background profile updated for user %d during tutor chat",
+                                user_id,
+                            )
+                    except Exception as exc:
+                        logger.warning("Background profile extract failed: %s", exc)
+
+                _asyncio2.ensure_future(_bg_profile_extract())
+
             yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
         except Exception as e:
             logger.error(f"Tutor chat SSE error: {e}")
@@ -747,6 +768,92 @@ async def create_plan(body: PlanCreateRequest):
     except Exception as e:
         logger.error(f"Failed to create plan: {e}")
         return api_error(ErrorCode.PERSIST_FAILED, f"创建计划失败: {e}", status_code=500)
+
+
+@router.post("/plans/create-from-path")
+async def create_plan_from_path(body: CreatePlanFromPathRequest):
+    """一键生成学习路径 + 创建执行计划（桥接两个功能模块）。
+
+    合并原先的两步操作：
+      1. GET /path/{student_id} → 生成学习路径
+      2. POST /plans/create → 手动创建计划
+    为单次调用：前端只需点一次"生成学习计划"。
+    """
+    from app.models.learning_plan import LearningPlan, PlanStep
+
+    try:
+        user_id = body.user_id
+        course_id = body.course_id
+
+        # 第一步：生成学习路径
+        student_profile = await _load_profile(user_id)
+        path_workflow = _get_path_workflow()
+        path_state = await path_workflow.run({
+            "user_id": user_id,
+            "student_profile": student_profile,
+        })
+
+        steps = path_state.get("steps", [])
+        concept_graph = path_state.get("concept_graph", {})
+
+        if not steps:
+            return api_error(
+                ErrorCode.GENERATION_FAILED, "未能生成学习路径，请确认画像已构建", status_code=400
+            )
+
+        # 第二步：自动创建执行计划
+        node_map = {}
+        for node in concept_graph.get("nodes", []):
+            node_map[node.get("name", "")] = node.get("id", "")
+            node_map[node.get("label", "")] = node.get("id", "")
+
+        async with get_db() as session:
+            plan = LearningPlan(
+                user_id=user_id,
+                course_id=course_id,
+                title=f"学习计划 - {course_id}",
+                status="in_progress",
+                total_steps=len(steps),
+                completed_steps=0,
+            )
+            session.add(plan)
+            await session.flush()
+
+            plan_steps = []
+            for i, step in enumerate(steps):
+                topic = step.get("topic", "")
+                knowledge_node_id = node_map.get(topic, "")
+
+                plan_step = PlanStep(
+                    plan_id=plan.id,
+                    step_order=i + 1,
+                    topic=topic,
+                    knowledge_node_id=knowledge_node_id,
+                    status=step.get("status", "pending"),
+                    estimated_days=step.get("estimated_days", 1),
+                    topic_difficulty=3,
+                )
+                session.add(plan_step)
+                plan_steps.append({
+                    "step_order": i + 1,
+                    "topic": topic,
+                    "knowledge_node_id": knowledge_node_id,
+                    "estimated_days": step.get("estimated_days", 1),
+                    "status": step.get("status", "pending"),
+                })
+
+            await session.commit()
+
+            return api_success({
+                "plan_id": plan.id,
+                "total_steps": len(steps),
+                "steps": plan_steps,
+                "concept_graph": concept_graph,
+                "summary": path_state.get("response", ""),
+            })
+    except Exception as e:
+        logger.error(f"Failed to create plan from path: {e}", exc_info=True)
+        return api_error(ErrorCode.INTERNAL_ERROR, f"创建学习计划失败: {e}", status_code=500)
 
 
 @router.get("/plans/{plan_id}/status")
@@ -1284,6 +1391,9 @@ async def unified_chat(body: UnifiedChatRequest):
         )),
         "flashcard_gen": lambda: resources_generate(ResourceGenRequest(
             topic=params.get("topic", "AI基础"), user_id=user_id,
+        )),
+        "profile_building": lambda: profile_chat(ProfileChatRequest(
+            messages=[{"role": "user", "content": message}], user_id=user_id,
         )),
     }
 
