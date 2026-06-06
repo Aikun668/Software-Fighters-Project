@@ -1,0 +1,159 @@
+:root {
+  /* ============ 主色调（Deep Amber 琥珀色系 - 柔和深沉） ============ */
+  --primary-color: #C2410C;
+  --primary-light: #EA580C;
+  --primary-dark: #9A3412;
+  --primary-bg: #FFF7ED;
+  
+  /* ============ 辅助色（状态与强调） ============ */
+  --success-color: #22C55E;
+  --success-light: #F0FDF4;
+  --warning-color: #F59E0B;
+  --warning-light: #FFFBEB;
+  --danger-color: #EF4444;
+  --danger-light: #FEF2F2;
+  --info-color: #C2410C;
+  --info-light: #FFF7ED;
+  
+  /* ============ 中性色（文字与背景） ============ */
+  --bg-page: #FAFAF9;
+  --bg-card: #FFFFFF;
+  --card-bg: #FFFFFF;
+  --border-color: #E7E5E4;
+  
+  --text-primary: #44403C;
+  --text-secondary: #C2410C;
+  --text-placeholder: #A8A29E;
+  
+  /* ============ 渐变色彩 ============ */
+  --gradient-primary: linear-gradient(135deg, #C2410C 0%, #EA580C 100%);
+  --gradient-success: linear-gradient(135deg, #16A34A 0%, #22C55E 100%);
+  --gradient-warning: linear-gradient(135deg, #D97706 0%, #F59E0B 100%);
+  --gradient-info: linear-gradient(135deg, #C2410C 0%, #EA580C 100%);
+  
+  /* ============ 阴影 ============ */
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  --shadow-primary: 0 8px 24px rgba(194, 65, 12, 0.25);
+  
+  /* ============ 圆角 ============ */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+  
+  /* ============ 间距尺度（基于 8px 网格） ============ */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 20px;
+  --spacing-2xl: 24px;
+  --spacing-3xl: 32px;
+  
+  /* ============ 字体大小 ============ */
+  --font-size-xs: 12px;
+  --font-size-sm: 14px;
+  --font-size-base: 16px;
+  --font-size-lg: 18px;
+  --font-size-xl: 24px;
+  --font-size-2xl: 32px;
+  
+  /* ============ 字体粗细 ============ */
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  
+  /* ============ 行高 ============ */
+  --line-height-xs: 1.2;
+  --line-height-sm: 1.4;
+  --line-height-base: 1.5;
+  --line-height-lg: 1.6;
+  
+  /* ============ 过渡动画 ============ */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.2s ease;
+  --transition-slow: 0.3s ease;
+  
+  /* ============ 布局尺寸 ============ */
+  --header-height: 64px;
+  --sidebar-width: 240px;
+  --sidebar-collapsed-width: 72px;
+  --content-max-width: 1440px;
+}
+
+/* ============ 全局滚动条样式 ============ */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F1F5F9;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+/* ============ 全局字体 ============ */
+body {
+  font-family: 'Baloo 2', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-display: swap;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-base);
+  color: var(--text-primary);
+  background-color: var(--bg-page);
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+/* ============ 全局链接样式 ============ */
+a {
+  color: var(--primary-color);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+a:hover {
+  color: var(--primary-dark);
+}
+
+/* ============ 全局选择文本样式 ============ */
+::selection {
+  background-color: rgba(79, 70, 229, 0.2);
+  color: var(--text-primary);
+}
+
+/* ============ 渐变背景装饰 ============ */
+.gradient-bg {
+  background: var(--gradient-primary);
+}
+
+.gradient-text {
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ============ 减少动画（无障碍） ============ */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
