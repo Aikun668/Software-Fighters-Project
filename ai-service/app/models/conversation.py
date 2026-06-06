@@ -24,4 +24,5 @@ class Message(Base):
     )
     role = Column(String(20), nullable=False)
     content = Column(Text, nullable=False)
+    mode = Column(String(20), default="tutor", nullable=True)
     created_at = Column(DateTime, default=func.now())

@@ -78,6 +78,23 @@ class EvaluationReportRequest(BaseModel):
 class UnifiedChatRequest(BaseModel):
     message: str = Field(..., min_length=1, description="用户自然语言输入")
     user_id: int = Field(default=1, description="用户 ID")
+    mode: Literal["tutor", "resource", "solve", "exercise", "research", "auto"] = Field(
+        default="auto", description="对话模式: auto=自动感知, tutor=答疑, resource=资源, solve=解题, exercise=练习, research=研究"
+    )
+    conversation_id: Optional[int] = Field(default=None, description="会话 ID，所有模式共享同一会话")
+    style: Optional[Literal["standard", "socratic"]] = Field(default="standard", description="tutor 子风格: standard=标准, socratic=苏格拉底引导")
+
+
+# ── Inquiry ──────────────────────────────────────────────────────
+
+class InquiryResolveRequest(BaseModel):
+    original_message: str = Field(..., min_length=1, description="原始用户消息")
+    answers: list[str] = Field(..., min_length=1, description="用户对追问的回答列表")
+    user_id: int = Field(default=1, description="用户 ID")
+    student_profile: dict = Field(default_factory=dict, description="学生画像（可选）")
+    questions: list[dict] = Field(default_factory=list, description="追问列表（客户端回传，用于构造上下文）")
+    suggested_types: list[str] = Field(default_factory=list, description="推荐的资源类型（客户端回传）")
+    clarified_topic: str = Field(default="", description="澄清后的主题（客户端回传）")
 
 
 # ── Knowledge Graph ──────────────────────────────────────────────

@@ -83,18 +83,21 @@ class ConversationService:
             await session.refresh(conv)
             return conv
 
-    async def load_history(self, conversation_id: int) -> list[dict]:
-        """从 DB 加载会话历史，返回 [{"role": "user", "content": "..."}, ...]"""
+    async def load_history(self, conversation_id: int, mode_filter: str | None = None) -> list[dict]:
+        """从 DB 加载会话历史，返回 [{"role": "user", "content": "...", "mode": "..."}, ...]"""
         try:
             async with get_db() as session:
-                result = await session.execute(
+                stmt = (
                     select(Message)
                     .where(Message.conversation_id == conversation_id)
                     .order_by(Message.created_at.asc())
                     .limit(MAX_LOAD_MESSAGES)
                 )
+                if mode_filter:
+                    stmt = stmt.where(Message.mode == mode_filter)
+                result = await session.execute(stmt)
                 rows = result.scalars().all()
-                return [{"role": m.role, "content": m.content} for m in rows]
+                return [{"role": m.role, "content": m.content, "mode": m.mode} for m in rows]
         except Exception as e:
             logger.warning(f"Failed to load history for conv {conversation_id}: {e}")
             return []
@@ -274,6 +277,8 @@ class ConversationService:
         conversation_id: int,
         user_msg: str,
         assistant_msg: str,
+        user_mode: str = "tutor",
+        assistant_mode: str = "tutor",
     ) -> None:
         """保存一轮对话到 DB（不阻塞主流程）"""
         try:
@@ -282,11 +287,13 @@ class ConversationService:
                     conversation_id=conversation_id,
                     role="user",
                     content=user_msg,
+                    mode=user_mode,
                 ))
                 session.add(Message(
                     conversation_id=conversation_id,
                     role="assistant",
                     content=assistant_msg,
+                    mode=assistant_mode,
                 ))
                 await session.execute(
                     update(Conversation)

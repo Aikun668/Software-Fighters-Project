@@ -24,6 +24,8 @@ class TutorState(TypedDict, total=False):
     knowledge_context: str
     response: str
     conversation_id: int | None  # 用于加载对话摘要
+    style: str                   # "standard" | "socratic"
+    socratic_round: int          # 苏格拉底追问轮次（0-based）
 
 
 class TutorAgent(BaseAgent):
@@ -130,36 +132,61 @@ class TutorAgent(BaseAgent):
         return {"knowledge_context": knowledge_context}
 
     async def _respond_node(self, state: TutorState) -> dict:
-        """基于画像和 RAG 上下文生成回复"""
+        """基于画像和 RAG 上下文生成回复。style="socratic" 时动态加载苏格拉底 prompt。"""
         messages = state.get("messages", [])
         student_profile = state.get("student_profile", {})
         knowledge_context = state.get("knowledge_context", "")
+        style = state.get("style", "standard")
+        socratic_round = state.get("socratic_round", 0)
 
         # 截断后再传给 LLM
         truncated = self._truncate_messages(messages)
 
         profile_text = self._format_profile(student_profile)
-        system_with_context = interpolate_variables(
-            self.system_prompt,
-            {
-                "student_profile": profile_text,
-                "knowledge_context": knowledge_context,
-            },
-        )
 
-        # Inject follow-up instruction for beginner students
-        followup_context = self._load_followup_context(student_profile)
-        if followup_context:
-            system_with_context += "\n\n" + followup_context
+        if style == "socratic":
+            # 动态加载苏格拉底 prompt，计算追问轮次指示
+            if socratic_round >= 3:
+                socratic_instruction = (
+                    f"⚠️ 当前为第 {socratic_round} 轮（最后一轮），已经不是引导轮次，"
+                    "请直接给出完整、清晰的解答，并简要标注学生之前卡在哪个环节。"
+                )
+            else:
+                socratic_instruction = (
+                    f"当前为第 {socratic_round} 轮引导。"
+                    "请你提出引导性的问题，不要给出完整答案。"
+                )
+            socratic_prompt = self._load_extra_prompt("socratic.yaml", key="system")
+            system_with_context = interpolate_variables(
+                socratic_prompt,
+                {
+                    "student_profile": profile_text,
+                    "knowledge_context": knowledge_context,
+                    "socratic_instruction": socratic_instruction,
+                },
+            )
+        else:
+            system_with_context = interpolate_variables(
+                self.system_prompt,
+                {
+                    "student_profile": profile_text,
+                    "knowledge_context": knowledge_context,
+                },
+            )
 
-        # Inject analogy if available for the query topic
-        query = self._build_rag_query(messages)
-        try:
-            analogy_text = get_analogy_library().format_for_prompt(query)
-            if analogy_text:
-                system_with_context += "\n\n" + analogy_text
-        except Exception:
-            pass
+            # Inject follow-up instruction for beginner students
+            followup_context = self._load_followup_context(student_profile)
+            if followup_context:
+                system_with_context += "\n\n" + followup_context
+
+            # Inject analogy if available for the query topic
+            query = self._build_rag_query(messages)
+            try:
+                analogy_text = get_analogy_library().format_for_prompt(query)
+                if analogy_text:
+                    system_with_context += "\n\n" + analogy_text
+            except Exception:
+                pass
 
         # Inject conversation summary (LLM-compressed history)
         conversation_id = state.get("conversation_id")

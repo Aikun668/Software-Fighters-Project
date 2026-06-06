@@ -69,6 +69,8 @@ class ResourceGenState(TypedDict, total=False):
     peer_context: str
     turn_summaries: list[dict]
     quality_result: dict
+    # ── Inquiry 层传递 ──
+    suggested_types: list[str]
     # ── 进度事件队列 ──
     event_queue: Any  # asyncio.Queue[StreamEvent]
 
@@ -174,19 +176,30 @@ class ResourceGenWorkflow(BaseWorkflow):
         topic = state.get("topic", "")
         student_profile = state.get("student_profile", {})
         iteration = state.get("iteration", 0)
+        suggested_types = state.get("suggested_types", [])
 
         self._emit(state, stage_start("director",
             "正在决定最优资源组合，请稍后..."))
 
         # Director 仅在首轮决策，retry 复用相同 agent_set
         if iteration == 0:
-            decision = await self.director.route(topic, student_profile)
-            agent_set = decision.selected_agents
-            logger.info(
-                f"Director routing for '{topic}': "
-                f"{agent_set} (strategy={decision.strategy}, "
-                f"rationale={decision.rationale})"
-            )
+            # ── Inquiry 层快车道：上游已确定 agent 子集，跳过路由 ──
+            if suggested_types:
+                agent_set = self.director.apply_profile_filter(
+                    list(suggested_types), student_profile,
+                )
+                logger.info(
+                    f"Director using inquiry suggested_types for '{topic}': "
+                    f"{agent_set} (from suggested={suggested_types})"
+                )
+            else:
+                decision = await self.director.route(topic, student_profile)
+                agent_set = decision.selected_agents
+                logger.info(
+                    f"Director routing for '{topic}': "
+                    f"{agent_set} (strategy={decision.strategy}, "
+                    f"rationale={decision.rationale})"
+                )
         else:
             agent_set = state.get("agent_set", DEFAULT_AGENTS)
             logger.info(

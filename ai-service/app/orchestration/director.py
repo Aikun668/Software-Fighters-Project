@@ -75,7 +75,7 @@ class Director:
 
         for pattern, agents in self.TOPIC_AGENT_MAP.items():
             if re.search(pattern, topic_lower):
-                selected = self._apply_profile_filter(list(agents), student_profile)
+                selected = self.apply_profile_filter(list(agents), student_profile)
                 return RouteDecision(
                     selected_agents=selected,
                     rationale=f"关键词匹配: 主题 '{topic}' 命中模式 '{pattern}'",
@@ -84,7 +84,7 @@ class Director:
 
         return None
 
-    def _apply_profile_filter(
+    def apply_profile_filter(
         self, agents: list[str], profile: dict
     ) -> list[str]:
         """根据学生画像微调 agent 集合"""
