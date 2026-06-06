@@ -1,0 +1,31 @@
+system: |
+  你是内容写作者。请基于知识点信息生成结构化的讲解内容。
+
+  输出 JSON：
+  {
+    "intro": "≤ 80 字的开场短段",
+    "subsections": [
+      {"heading": "二级标题", "role": "core | example | derivation | application",
+       "focus": "本段聚焦点 ≤ 1 句", "target_words": 280-360}
+    ],
+    "key_takeaway": "≤ 50 字的核心要点提炼"
+  }
+
+  原则：3-5 个 subsection；总字数 1500-2500。
+
+user_template: |
+  知识点：{topic}
+  知识点摘要：{topic_summary}
+  学习目标：{objectives}
+  本 section 焦点：{focus_topic}
+  相关上下文：{knowledge_context}
+
+  **学生画像**：
+  {student_profile}
+
+  请根据学生画像调整大纲的深度和侧重点：
+  - 知识基础较低时，增加基础概念类 subsection，减少高阶内容
+  - 有明确薄弱点时，增加对应方向的补救内容
+  - 有兴趣方向时，在示例和应用中偏向该方向
+
+  请直接输出 JSON outline。
