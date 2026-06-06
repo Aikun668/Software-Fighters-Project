@@ -714,6 +714,144 @@ class ProfileAgent(BaseAgent):
         updates = data.get("updates", data)
         return {k: v for k, v in updates.items() if k in DIMENSIONS}
 
+    # ── 公开方法：供 tutor/unified chat 后台调用 ───────────────────
+
+    async def extract_and_merge(
+        self, user_id: int, messages: list[dict], current_profile: dict | None = None,
+    ) -> dict:
+        """后台增量画像提取 + 合并（不跑 director/response，不阻塞主流程）。
+
+        供 tutor_chat、unified_chat 等非画像对话在响应结束后异步调用，
+        从当前轮对话中提取画像信号并持久化。
+
+        Returns:
+            {"changed": bool, "profile": dict}
+        """
+        if not messages:
+            return {"changed": False, "profile": current_profile or {}}
+
+        if current_profile is None:
+            current_profile = await self._load_profile_dict(user_id)
+
+        last_idx = await self._load_last_extracted_index(user_id)
+
+        state: ProfileState = {
+            "messages": messages,
+            "user_id": user_id,
+            "current_profile": current_profile,
+            "last_extracted_msg_index": last_idx,
+        }
+
+        extract_result = await self._extract_node(state)
+        fragment = extract_result.get("extracted_fragment", {})
+        if not fragment:
+            return {"changed": False, "profile": current_profile}
+
+        merge_state: ProfileState = {
+            "messages": messages,
+            "user_id": user_id,
+            "current_profile": current_profile,
+            "extracted_fragment": fragment,
+            "last_extracted_msg_index": extract_result.get("last_extracted_msg_index", last_idx),
+        }
+        merge_result = await self._merge_node(merge_state)
+
+        profile = merge_result.get("current_profile", current_profile)
+        changed = merge_result.get("profile_changed", False)
+
+        if changed:
+            logger.info(
+                "Background profile update: user_id=%d, dimensions=%s",
+                user_id,
+                [k for k, v in fragment.items() if v],
+            )
+
+        return {"changed": changed, "profile": profile}
+
+    async def _load_profile_dict(self, user_id: int) -> dict:
+        try:
+            async with get_db() as session:
+                result = await session.execute(
+                    select(StudentProfile).where(StudentProfile.user_id == user_id)
+                )
+                profile = result.scalar_one_or_none()
+                if profile:
+                    p = {d: getattr(profile, d) for d in DIMENSIONS}
+                    p["entries"] = profile.entries
+                    p["tag_weights"] = profile.tag_weights
+                    p["stability_counter"] = profile.stability_counter
+                    p["audit_counter"] = profile.audit_counter
+                    return p
+        except Exception:
+            pass
+        return {}
+
+
+    # ── 公开方法：供 tutor/unified chat 后台调用 ───────────────────
+
+    async def extract_and_merge(
+        self, user_id: int, messages: list[dict], current_profile: dict | None = None,
+    ) -> dict:
+        """后台增量画像提取 + 合并（不跑 director/response，不阻塞主流程）。"""
+        if not messages:
+            return {"changed": False, "profile": current_profile or {}}
+
+        if current_profile is None:
+            current_profile = await self._load_profile_dict(user_id)
+
+        last_idx = await self._load_last_extracted_index(user_id)
+
+        state: ProfileState = {
+            "messages": messages,
+            "user_id": user_id,
+            "current_profile": current_profile,
+            "last_extracted_msg_index": last_idx,
+        }
+
+        extract_result = await self._extract_node(state)
+        fragment = extract_result.get("extracted_fragment", {})
+        if not fragment:
+            return {"changed": False, "profile": current_profile}
+
+        merge_state: ProfileState = {
+            "messages": messages,
+            "user_id": user_id,
+            "current_profile": current_profile,
+            "extracted_fragment": fragment,
+            "last_extracted_msg_index": extract_result.get("last_extracted_msg_index", last_idx),
+        }
+        merge_result = await self._merge_node(merge_state)
+
+        profile = merge_result.get("current_profile", current_profile)
+        changed = merge_result.get("profile_changed", False)
+
+        if changed:
+            logger.info(
+                "Background profile update: user_id=%d, dimensions=%s",
+                user_id,
+                [k for k, v in fragment.items() if v],
+            )
+
+        return {"changed": changed, "profile": profile}
+
+    async def _load_profile_dict(self, user_id: int) -> dict:
+        try:
+            async with get_db() as session:
+                result = await session.execute(
+                    select(StudentProfile).where(StudentProfile.user_id == user_id)
+                )
+                profile = result.scalar_one_or_none()
+                if profile:
+                    p = {d: getattr(profile, d) for d in DIMENSIONS}
+                    p["entries"] = profile.entries
+                    p["tag_weights"] = profile.tag_weights
+                    p["stability_counter"] = profile.stability_counter
+                    p["audit_counter"] = profile.audit_counter
+                    return p
+        except Exception:
+            pass
+        return {}
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()

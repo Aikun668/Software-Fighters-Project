@@ -7,11 +7,12 @@ import os
 from collections import deque
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.db.database import get_db
 from app.models.node_mastery import NodeMastery
+from app.models.learning_activity import LearningActivity
 
 logger = logging.getLogger(__name__)
 
@@ -253,12 +254,27 @@ class GraphService:
                 sc["mastery"] = round(node_mastery_val, 2)
                 sc["tag"] = tag
 
-        # performance — 从 NodeMastery 取真实数据
+        # performance — 从 NodeMastery + LearningActivity 取真实数据
         perf = {
             "sub_concepts": sub_concepts,
-            "total_exercises": 0,
+            "total_exercises": await self._count_exercises(user_id),
             "last_practiced": None,
         }
+        if node_mastery_val is not None:
+            # 查 last_review_at
+            try:
+                async with get_db() as session:
+                    result = await session.execute(
+                        select(NodeMastery.last_review_at).where(
+                            NodeMastery.user_id == user_id,
+                            NodeMastery.node_id == node_id,
+                        )
+                    )
+                    last_review = result.scalar_one_or_none()
+                    if last_review:
+                        perf["last_practiced"] = last_review.isoformat()
+            except Exception:
+                pass
 
         # 推荐动作
         actions = self._build_actions(mastery, status)
@@ -275,6 +291,20 @@ class GraphService:
         }
 
     # ── 内部方法 ────────────────────────────────────
+
+    @staticmethod
+    async def _count_exercises(user_id: int) -> int:
+        try:
+            async with get_db() as session:
+                result = await session.execute(
+                    select(func.count(LearningActivity.id)).where(
+                        LearningActivity.user_id == user_id,
+                        LearningActivity.activity_type.in_(["exercise", "quiz"]),
+                    )
+                )
+                return result.scalar() or 0
+        except Exception:
+            return 0
 
     async def _get_user_masteries(
         self, user_id: int, course_id: str
