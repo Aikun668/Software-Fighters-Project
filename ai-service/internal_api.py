@@ -29,6 +29,8 @@ from app.api.models import (
     PlanResumeRequest,
     RegressionCheckRequest,
     NodeStatusChangeRequest,
+    CreatePlanFromPathRequest,
+    InquiryResolveRequest,
 )
 from app.services.plan_service import get_plan_service
 from app.services.plan_constants import RETURN_MESSAGES
@@ -51,6 +53,7 @@ _code_agent_singleton = None
 _profile_workflow_singleton = None
 _resource_workflow_singleton = None
 _path_workflow_singleton = None
+_inquiry_service_singleton = None
 
 
 # Mock 模式已全面废弃，始终使用真实 LLM 调用
@@ -156,6 +159,14 @@ def _get_path_workflow():
         from app.workflows.learning_path import LearningPathWorkflow
         _path_workflow_singleton = LearningPathWorkflow(use_mock=_get_mock_flag())
     return _path_workflow_singleton
+
+
+def _get_inquiry_service():
+    global _inquiry_service_singleton
+    if _inquiry_service_singleton is None:
+        from app.services.inquiry_service import InquiryService
+        _inquiry_service_singleton = InquiryService()
+    return _inquiry_service_singleton
 
 
 async def _load_profile(user_id: int) -> dict:
@@ -417,6 +428,26 @@ async def tutor_chat(body: TutorChatRequest):
                 for char in response:
                     await asyncio.sleep(0.03)
                     yield f"data: {json.dumps({'type': 'token', 'content': char}, ensure_ascii=False)}\n\n"
+
+            # 后台增量画像提取（DeepTutor 模式：答疑中自然提取画像信号）
+            if response and messages:
+                import asyncio as _asyncio2
+
+                async def _bg_profile_extract():
+                    try:
+                        agent = _get_profile_agent()
+                        result = await agent.extract_and_merge(
+                            user_id, messages, student_profile,
+                        )
+                        if result.get("changed"):
+                            logger.info(
+                                "Background profile updated for user %d during tutor chat",
+                                user_id,
+                            )
+                    except Exception as exc:
+                        logger.warning("Background profile extract failed: %s", exc)
+
+                _asyncio2.ensure_future(_bg_profile_extract())
 
             yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
         except Exception as e:
@@ -753,6 +784,84 @@ async def create_plan(body: PlanCreateRequest):
     except Exception as e:
         logger.error(f"Failed to create plan: {e}")
         return api_error(ErrorCode.PERSIST_FAILED, f"创建计划失败: {e}", status_code=500)
+
+
+@router.post("/plans/create-from-path")
+async def create_plan_from_path(body: CreatePlanFromPathRequest):
+    """一键生成学习路径 + 创建执行计划（桥接两个功能模块）。"""
+    from app.models.learning_plan import LearningPlan, PlanStep
+
+    try:
+        user_id = body.user_id
+        course_id = body.course_id
+
+        student_profile = await _load_profile(user_id)
+        path_workflow = _get_path_workflow()
+        path_state = await path_workflow.run({
+            "user_id": user_id,
+            "student_profile": student_profile,
+        })
+
+        steps = path_state.get("steps", [])
+        concept_graph = path_state.get("concept_graph", {})
+
+        if not steps:
+            return api_error(
+                ErrorCode.GENERATION_FAILED, "未能生成学习路径，请确认画像已构建", status_code=400
+            )
+
+        node_map = {}
+        for node in concept_graph.get("nodes", []):
+            node_map[node.get("name", "")] = node.get("id", "")
+            node_map[node.get("label", "")] = node.get("id", "")
+
+        async with get_db() as session:
+            plan = LearningPlan(
+                user_id=user_id,
+                course_id=course_id,
+                title=f"学习计划 - {course_id}",
+                status="in_progress",
+                total_steps=len(steps),
+                completed_steps=0,
+            )
+            session.add(plan)
+            await session.flush()
+
+            plan_steps = []
+            for i, step in enumerate(steps):
+                topic = step.get("topic", "")
+                knowledge_node_id = node_map.get(topic, "")
+
+                plan_step = PlanStep(
+                    plan_id=plan.id,
+                    step_order=i + 1,
+                    topic=topic,
+                    knowledge_node_id=knowledge_node_id,
+                    status=step.get("status", "pending"),
+                    estimated_days=step.get("estimated_days", 1),
+                    topic_difficulty=3,
+                )
+                session.add(plan_step)
+                plan_steps.append({
+                    "step_order": i + 1,
+                    "topic": topic,
+                    "knowledge_node_id": knowledge_node_id,
+                    "estimated_days": step.get("estimated_days", 1),
+                    "status": step.get("status", "pending"),
+                })
+
+            await session.commit()
+
+            return api_success({
+                "plan_id": plan.id,
+                "total_steps": len(steps),
+                "steps": plan_steps,
+                "concept_graph": concept_graph,
+                "summary": path_state.get("response", ""),
+            })
+    except Exception as e:
+        logger.error(f"Failed to create plan from path: {e}", exc_info=True)
+        return api_error(ErrorCode.INTERNAL_ERROR, f"创建学习计划失败: {e}", status_code=500)
 
 
 @router.get("/plans/{plan_id}/status")
@@ -1260,47 +1369,475 @@ def _get_intent_extractor() -> IntentExtractor:
     return _intent_extractor
 
 
+# ── 意图 → 模式映射 ────────────────────────────────────────────
+
+_INTENT_MODE_MAP: dict[str, str] = {
+    "exercise_gen": "exercise",
+    "resource_gen": "resource",
+    "tutor_question": "tutor",
+    "learning_path": "research",
+    "solve_problem": "solve",
+    "flashcard_gen": "research",
+    "profile_building": "tutor",
+    "unknown": "tutor",
+}
+
+
+def _build_confirmation(intent: str, confidence: float) -> str | None:
+    """置信度不足时生成确认追问。"""
+    hints: dict[str, str] = {
+        "exercise_gen": "检测到你可能想练习，需要切换到出题模式吗？",
+        "resource_gen": "检测到你可能想生成学习资源，需要切换吗？",
+        "solve_problem": "检测到你可能想解题，需要切换到解题模式吗？",
+        "learning_path": "检测到你可能想规划学习路径，需要切换吗？",
+        "flashcard_gen": "检测到你可能想深入学习，需要切换吗？",
+    }
+    if confidence < 0.8 and intent in hints:
+        return hints[intent]
+    return None
+
+
 @router.post("/api/chat")
 async def unified_chat(body: UnifiedChatRequest):
+    """统一对话入口 — 双层模式策略。
+
+    Layer 1 (显式): mode != "auto" → 直接路由到指定模式
+    Layer 2 (感知): mode == "auto" → IntentExtractor 分析 → 静默路由 + 提示
+    """
     message = body.message.strip()
     user_id = body.user_id
+    mode = body.mode
+    conversation_id = body.conversation_id
+    style = body.style or "standard"
+
+    # ── 统一 conversation ──
+    conv_service = get_conversation_service()
+    conv = await conv_service.get_or_create_conversation(user_id, conversation_id)
+    resolved_conv_id = conv.id
+
+    # ── 双层模式策略 ──
+    intent_meta: dict | None = None
+
+    if mode != "auto":
+        effective_mode = mode
+    else:
+        extractor = _get_intent_extractor()
+        result = await extractor.extract(message)
+        effective_mode = _INTENT_MODE_MAP.get(result.intent, "tutor")
+        intent_meta = {
+            "detected_intent": result.intent,
+            "confidence": result.confidence,
+            "raw_message": result.raw_message,
+        }
+        if _build_confirmation(result.intent, result.confidence):
+            intent_meta["confirmation_question"] = _build_confirmation(
+                result.intent, result.confidence
+            )
+
+    # ── 模式分发 ──
+    if effective_mode == "resource":
+        return await _resource_mode_dispatch(message, user_id)
+    elif effective_mode == "solve":
+        return await _unified_solve_chat(message, user_id, resolved_conv_id, style)
+    elif effective_mode == "exercise":
+        return await _unified_exercise_chat(message, user_id, resolved_conv_id, style)
+    elif effective_mode == "research":
+        return await _unified_research_chat(message, user_id, resolved_conv_id, style)
+    else:  # tutor (兜底)
+        return await _unified_tutor_chat(message, user_id, resolved_conv_id, style, intent_meta)
+
+
+# ── 资源模式分流 ─────────────────────────────────────────────────
+
+async def _resource_mode_dispatch(message: str, user_id: int):
+    """资源模式：先过 InquiryService 检查需求清晰度。
+    - 清晰 → 直接生成
+    - 模糊 → 返回追问让用户回答"""
+    profile = await _load_profile(user_id)
+    inquiry = _get_inquiry_service()
+    result = await inquiry.check(message, profile)
+
+    if result.is_clear:
+        return await resources_generate(ResourceGenRequest(
+            topic=result.clarified_topic,
+            user_id=user_id,
+            student_profile=profile,
+        ))
+
+    return api_success({
+        "type": "inquiry",
+        "is_clear": False,
+        "clarified_topic": result.clarified_topic,
+        "questions": result.questions,
+        "rationale": result.rationale,
+    })
+
+
+# ── Unified Dispatch: tutor ──────────────────────────────────────
+
+async def _unified_tutor_chat(
+    message: str, user_id: int, conversation_id: int,
+    style: str = "standard", intent_meta: dict | None = None,
+):
+    """答疑模式：统一 conversation 上下文 + 意图元信息提示"""
+    conv_service = get_conversation_service()
+    history = await conv_service.load_history(conversation_id)
+    user_msg = {"role": "user", "content": message}
+    messages = history + [user_msg]
+    profile = await _load_profile(user_id)
+
+    # 计算苏格拉底追问轮次（仅统计带 tutor:socratic 标记的 assistant 消息）
+    socratic_round = 0
+    if style == "socratic":
+        socratic_round = sum(
+            1 for m in history[-20:]
+            if m.get("role") == "assistant" and m.get("mode") == "tutor:socratic"
+        )
+
+    agent = _get_tutor_agent()
+    assistant_mode = "tutor:socratic" if style == "socratic" else "tutor"
+
+    async def event_stream():
+        try:
+            state = await agent.run({
+                "messages": messages,
+                "user_id": user_id,
+                "student_profile": profile,
+                "conversation_id": conversation_id,
+                "style": style,
+                "socratic_round": socratic_round,
+            })
+
+            # 意图提示
+            if intent_meta:
+                hint = intent_meta.get("confirmation_question")
+                if hint:
+                    yield f"data: {json.dumps({'type': 'intent_hint', 'content': hint, 'detected_intent': intent_meta.get('detected_intent'), 'confidence': intent_meta.get('confidence')}, ensure_ascii=False)}\n\n"
+
+            response = state.get("response", "")
+            if response:
+                for char in response:
+                    await asyncio.sleep(0.03)
+                    yield f"data: {json.dumps({'type': 'token', 'content': char}, ensure_ascii=False)}\n\n"
+
+            yield f"data: {json.dumps({'type': 'meta', 'conversation_id': conversation_id}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
+
+            # 后台持久化
+            if response:
+                import asyncio as _aio
+                _aio.ensure_future(
+                    conv_service.save_messages(conversation_id, message, response,
+                                               user_mode="tutor", assistant_mode=assistant_mode)
+                )
+                _aio.ensure_future(conv_service.compress_history(conversation_id))
+
+                # 后台画像提取
+                async def _bg_extract():
+                    try:
+                        p_agent = _get_profile_agent()
+                        result = await p_agent.extract_and_merge(user_id, messages, profile)
+                        if result.get("changed"):
+                            logger.info("Background profile updated for user %d", user_id)
+                    except Exception as exc:
+                        logger.warning("Background profile extract failed: %s", exc)
+                _aio.ensure_future(_bg_extract())
+
+        except Exception as e:
+            logger.error(f"Unified tutor chat error: {e}")
+            yield f"data: {json.dumps({'type': 'error', 'content': '答疑失败，请稍后重试'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
+
+
+# ── Unified Dispatch: solve ──────────────────────────────────────
+
+async def _unified_solve_chat(
+    message: str, user_id: int, conversation_id: int, _style: str = "standard",
+):
+    """解题模式：复用 SolveAgent + 历史上下文"""
+    conv_service = get_conversation_service()
+    history = await conv_service.load_history(conversation_id)
+
+    context_parts = []
+    for m in history[-6:]:
+        role_label = "学生" if m.get("role") == "user" else "AI"
+        ctx = m.get("content", "")[:200]
+        context_parts.append(f"[{role_label}]: {ctx}")
+    context = "\n".join(context_parts)
+
+    agent = _get_solve_agent()
+
+    async def event_stream():
+        try:
+            state = await agent.run({
+                "question": message,
+                "context": context,
+            })
+
+            steps = state.get("steps", [])
+            if steps:
+                yield f"data: {json.dumps({'type': 'steps', 'content': steps}, ensure_ascii=False)}\n\n"
+
+            solution = state.get("solution", "")
+            if solution:
+                for char in solution:
+                    await asyncio.sleep(0.03)
+                    yield f"data: {json.dumps({'type': 'token', 'content': char}, ensure_ascii=False)}\n\n"
+
+            confidence = state.get("confidence_score")
+            if confidence is not None:
+                yield f"data: {json.dumps({'type': 'confidence', 'score': confidence}, ensure_ascii=False)}\n\n"
+
+            yield f"data: {json.dumps({'type': 'meta', 'conversation_id': conversation_id}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
+
+            import asyncio as _aio
+            _aio.ensure_future(
+                conv_service.save_messages(conversation_id, message, solution,
+                                           user_mode="solve", assistant_mode="solve")
+            )
+
+        except Exception as e:
+            logger.error(f"Unified solve chat error: {e}")
+            yield f"data: {json.dumps({'type': 'error', 'content': '解题失败，请稍后重试'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
+
+
+# ── Unified Dispatch: exercise ───────────────────────────────────
+
+async def _unified_exercise_chat(
+    message: str, user_id: int, conversation_id: int, _style: str = "standard",
+):
+    """练习模式：复用 ExerciseAgent + IntentExtractor 提取参数"""
+    conv_service = get_conversation_service()
+    profile = await _load_profile(user_id)
 
     extractor = _get_intent_extractor()
-    result = await extractor.extract(message)
+    intent_result = await extractor.extract(message)
+    topic = intent_result.params.get("topic", message)
+    count = min(intent_result.params.get("count", 3), 10)
+    difficulty = intent_result.params.get("difficulty", "medium")
 
-    intent = result.intent
-    params = result.params
+    agent = _get_exercise_agent()
 
-    dispatch = {
-        "exercise_gen": lambda: exercise_generate(ExerciseGenRequest(
-            topic=params.get("topic", "AI基础"),
-            count=params.get("count", 3),
-            difficulty=params.get("difficulty", "medium"),
-            user_id=user_id,
-        )),
-        "resource_gen": lambda: resources_generate(ResourceGenRequest(
-            topic=params.get("topic", "AI基础"), user_id=user_id,
-        )),
-        "tutor_question": lambda: tutor_chat(TutorChatRequest(
-            user_id=user_id, content=params.get("question", message),
-        )),
-        "learning_path": lambda: learning_path(str(user_id)),
-        "solve_problem": lambda: solve_question(SolveRequest(
-            question=params.get("question", message), user_id=user_id,
-        )),
-        "flashcard_gen": lambda: resources_generate(ResourceGenRequest(
-            topic=params.get("topic", "AI基础"), user_id=user_id,
-        )),
-    }
+    async def event_stream():
+        try:
+            yield f"data: {json.dumps({'type': 'progress', 'stage': 'plan', 'content': f'正在为「{topic}」准备{count}道{difficulty}难度的练习题...'}, ensure_ascii=False)}\n\n"
 
-    handler = dispatch.get(intent)
-    if handler:
-        return await handler()
+            state = await agent.run({
+                "topic": topic,
+                "count": count,
+                "difficulty": difficulty,
+                "student_profile": profile,
+            })
 
-    # 意图识别为 unknown —— 记录日志，以 tutor_chat 兜底（通用问答）
-    logger.info("Unified chat: intent=unknown, falling back to tutor_chat. message=%s", message[:120])
-    return await tutor_chat(TutorChatRequest(
-        user_id=user_id,
-        content=message,
-        messages=[{"role": "user", "content": message}],
-    ))
+            questions = state.get("questions", [])
+            yield f"data: {json.dumps({'type': 'progress', 'stage': 'generate', 'content': f'已生成 {len(questions)} 道题目'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'questions': questions}, ensure_ascii=False)}\n\n"
+
+            # 持久化
+            response_text = f"已生成 {len(questions)} 道关于「{topic}」的{difficulty}难度练习题。"
+            import asyncio as _aio
+            _aio.ensure_future(
+                conv_service.save_messages(conversation_id, message, response_text,
+                                           user_mode="exercise", assistant_mode="exercise")
+            )
+        except Exception as e:
+            logger.error(f"Unified exercise chat error: {e}")
+            yield f"data: {json.dumps({'type': 'error', 'content': '练习题生成失败'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
+
+
+# ── Unified Dispatch: research ───────────────────────────────────
+
+async def _unified_research_chat(
+    message: str, user_id: int, conversation_id: int, _style: str = "standard",
+):
+    """研究模式：学习路径 + 资源组合"""
+    conv_service = get_conversation_service()
+    profile = await _load_profile(user_id)
+
+    extractor = _get_intent_extractor()
+    intent_result = await extractor.extract(message)
+    topic = intent_result.params.get("topic", message)
+
+    path_workflow = _get_path_workflow()
+
+    async def event_stream():
+        try:
+            yield f"data: {json.dumps({'type': 'progress', 'stage': 'path', 'content': f'正在为「{topic}」规划学习路径...'}, ensure_ascii=False)}\n\n"
+
+            path_state = await path_workflow.run({
+                "user_id": user_id,
+                "student_profile": profile,
+            })
+
+            steps = path_state.get("steps", [])
+            path_summary = path_state.get("response", "")
+
+            yield f"data: {json.dumps({'type': 'path', 'steps': steps}, ensure_ascii=False)}\n\n"
+
+            if path_summary:
+                for char in path_summary:
+                    await asyncio.sleep(0.02)
+                    yield f"data: {json.dumps({'type': 'token', 'content': char}, ensure_ascii=False)}\n\n"
+
+            yield f"data: {json.dumps({'type': 'meta', 'conversation_id': conversation_id}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
+
+            full_response = path_summary + f"\n\n已规划 {len(steps)} 步学习路径。"
+            import asyncio as _aio
+            _aio.ensure_future(
+                conv_service.save_messages(conversation_id, message, full_response,
+                                           user_mode="research", assistant_mode="research")
+            )
+        except Exception as e:
+            logger.error(f"Unified research chat error: {e}")
+            yield f"data: {json.dumps({'type': 'error', 'content': '研究模式暂时不可用'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
+
+
+@router.post("/inquiry/resolve")
+async def inquiry_resolve(body: InquiryResolveRequest):
+    """接收用户对追问的回答，合并后调用 ResourceGenWorkflow 生成资源。"""
+    user_id = body.user_id
+    if not body.student_profile:
+        student_profile = await _load_profile(user_id)
+    else:
+        student_profile = body.student_profile
+
+    inquiry = _get_inquiry_service()
+    resolved = inquiry.resolve(
+        body.original_message,
+        body.answers,
+        questions=body.questions or None,
+        suggested_types=body.suggested_types or None,
+        clarified_topic=body.clarified_topic or None,
+    )
+
+    topic = resolved.get("topic", body.original_message)
+    context_note = resolved.get("context_note", "")
+    suggested_types = resolved.get("suggested_types", [])
+
+    logger.info(
+        "Inquiry resolved: topic=%s, types=%s, answers=%s",
+        topic, suggested_types, body.answers,
+    )
+
+    # 将追问上下文和 suggested_types 注入 student_profile，供 ResourceGenWorkflow 使用
+    enriched_profile = dict(student_profile)
+    enriched_profile["_inquiry_context"] = context_note
+    enriched_profile["_suggested_types"] = suggested_types
+
+    async def event_stream():
+        queue: asyncio.Queue = asyncio.Queue()
+        try:
+            async def run_workflow():
+                try:
+                    workflow = _get_resource_workflow()
+                    state = await workflow.run({
+                        "user_id": user_id,
+                        "topic": topic,
+                        "student_profile": enriched_profile,
+                        "event_queue": queue,
+                        "suggested_types": suggested_types,
+                    })
+                    await queue.put(done_event({
+                        "content_blocks": state.get("content_blocks", []),
+                        "questions": state.get("questions", []),
+                        "resource_ids": state.get("resource_ids", []),
+                        "response": state.get("response", ""),
+                        "error": state.get("error", ""),
+                    }))
+                except Exception as e:
+                    logger.error(f"Inquiry resolve workflow failed: {e}")
+                    await queue.put(done_event({"error": str(e)}))
+
+            task = asyncio.ensure_future(run_workflow())
+
+            while True:
+                event = await queue.get()
+                if isinstance(event, StreamEvent):
+                    yield event.to_sse()
+                    if event.type == "done":
+                        break
+                else:
+                    yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+            await task
+        except Exception as e:
+            logger.error(f"Inquiry resolve SSE error: {e}")
+            yield f"data: {json.dumps({'type': 'error', 'content': '资源生成失败'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
+
+
+# ── Dashboard Endpoint ────────────────────────────────────────────
+
+
+@router.get("/user/dashboard")
+async def get_user_dashboard(
+    user_id: int = Query(default=1),
+    course_id: str = Query(default="ai_intro"),
+):
+    """聚合学生仪表盘数据：画像 + 学习轨迹 + 能力评估"""
+    from app.services.dashboard_service import DashboardService
+    try:
+        data = await DashboardService().get_dashboard(user_id, course_id)
+        return api_success(data)
+    except Exception as e:
+        logger.error(f"Dashboard query failed: {e}")
+        return api_error(ErrorCode.INTERNAL_ERROR, "获取仪表盘数据失败", status_code=500)
+
+
+# ── Summary & Session End ──────────────────────────────────────────
+
+
+@router.get("/conversations/{conversation_id}/summary")
+async def get_conversation_summary(
+    conversation_id: int,
+    user_id: int = Query(default=1),
+    course_id: str = Query(default="ai_intro"),
+):
+    """获取学习总结卡片"""
+    from app.services.summary_service import get_summary_service
+    try:
+        data = await get_summary_service().get_session_summary(
+            user_id, conversation_id, course_id,
+        )
+        return api_success(data)
+    except Exception as e:
+        logger.error(f"Summary generation failed: {e}")
+        return api_error(ErrorCode.INTERNAL_ERROR, "生成总结卡片失败", status_code=500)
+
+
+@router.post("/conversations/{conversation_id}/end")
+async def end_conversation(
+    conversation_id: int,
+    user_id: int = Query(default=1),
+    course_id: str = Query(default="ai_intro"),
+):
+    """结束会话：生成总结卡片 + 触发摘要压缩"""
+    from app.services.summary_service import get_summary_service
+    try:
+        summary = await get_summary_service().get_session_summary(
+            user_id, conversation_id, course_id,
+        )
+        conv_service = get_conversation_service()
+        await conv_service.compress_history(conversation_id)
+        return api_success({
+            "summary": summary,
+            "conversation_id": conversation_id,
+        })
+    except Exception as e:
+        logger.error(f"End conversation failed: {e}")
+        return api_error(ErrorCode.INTERNAL_ERROR, "结束会话失败", status_code=500)
