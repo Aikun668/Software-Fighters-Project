@@ -1,0 +1,12 @@
+__pycache__/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+*.pyc
+*.pyo
+chroma_data/
+chroma_data_test/
+chroma_data_test2/
+test_chroma/
+.understand-anything/
+exports/

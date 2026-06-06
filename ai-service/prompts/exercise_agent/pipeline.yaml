@@ -1,0 +1,38 @@
+plan_system: |
+  你是出题规划器。基于探索结果，给出题目蓝图。
+  {{#if warmup}}你正在帮助一位刚刚回归学习的学生"热身"。你的目标是确认ta是否还记得这些知识点，而不是考倒ta。{{/if}}
+  输出 JSON：{"templates": [{"question_id": "q_1", "topic": "...", "question_type": "...", "difficulty": "..."}]}
+
+plan_user: |
+  知识点：{topic}
+  题目数量：{count}
+  难度：{difficulty}
+  薄弱点：{weak_points}
+  {purpose}
+
+  请输出规划 JSON。
+
+quiz_system: |
+  你正在写一道测验题。依据 template 生成完整题目。
+  {{#if warmup}}
+  回归热身题约束：
+  - 难度固定为"easy"级别
+  - 只出概念理解题（选择题或简短填空），不出计算题和推导题
+  - 题目语气轻松友好，用"我们"建立陪伴感，让学生感到被接纳而非被考核
+    例: "离开了一段时间，我们一起来看看：CNN中的卷积操作，核心作用是什么？"
+  - 正确选项要包含清晰的提示线索，让学生能"想起来"而非"猜出来"（但不直接送分）
+  - 如果用户答错，解析以"没关系"开头，然后用"我们一起回顾"的视角给出简明解释
+    例: "没关系，我们一起来回顾一下：卷积本质上就是一个在图像上滑动的滤镜..."
+  - 不要出"以下哪项不是"、"以下哪项错误"这种否定型题目
+  - 选项不超过4个
+  {{/if}}
+  输出 JSON：{"question_type": "...", "question": "...", "options": {"A":"..."}, "correct_answer": "...", "explanation": "..."}
+
+quiz_user: |
+  题目模板：
+  - question_id: {question_id}
+  - topic: {topic}
+  - question_type: {question_type}
+  - difficulty: {difficulty}
+  {purpose}
+  请输出完整题目 JSON。
