@@ -3,8 +3,8 @@
     <!-- 左侧对话区域 -->
     <div class="chat-section">
       <!-- 消息列表 -->
-      <div 
-        class="message-list" 
+      <div
+        class="message-list"
         ref="messageList"
         @scroll="handleScroll"
         @wheel="handleScrollStart"
@@ -17,14 +17,14 @@
           :class="['message-item', `message-${msg.role}`]"
         >
           <div class="avatar">
-            <svg v-if="msg.role === 'user'" class="user-avatar" viewBox="0 0 24 24" width="24" height="24">
-              <circle cx="12" cy="8" r="4" fill="currentColor"/>
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" fill="currentColor"/>
+            <svg v-if="msg.role === 'user'" class="user-avatar" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
             </svg>
-            <svg v-else class="assistant-avatar" viewBox="0 0 24 24" width="24" height="24">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" fill="currentColor"/>
-              <circle cx="12" cy="10" r="3" fill="white"/>
-              <path d="M9 16h6" stroke="white" stroke-width="2" stroke-linecap="round" fill="none"/>
+            <svg v-else class="assistant-avatar" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+              <path d="M2 17l10 5 10-5"/>
+              <path d="M2 12l10 5 10-5"/>
             </svg>
           </div>
           <div class="message-content">
@@ -53,6 +53,7 @@
           :rows="2"
           placeholder="输入你的问题..."
           @keyup.enter.exact="sendMessage"
+          resize="none"
         />
         <button
           type="button"
@@ -60,13 +61,14 @@
           :disabled="!inputMessage.trim() && !isStreaming"
           @click="isStreaming ? abortStreaming() : sendMessage()"
         >
-          <svg v-if="!isStreaming" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-            <path d="M22 2L11 13l-4-4-4 18 11-9 11 9-4-14z"/>
+          <svg v-if="!isStreaming" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="22" y1="2" x2="11" y2="13"/>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
           </svg>
-          <svg v-else viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+          <svg v-else viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
           </svg>
-          <span>{{ isStreaming ? '中止输出' : '发送' }}</span>
+          <span>{{ isStreaming ? '中止' : '发送' }}</span>
         </button>
       </div>
     </div>
@@ -75,14 +77,14 @@
     <div class="profile-panel">
       <div class="panel-header">
         <div class="header-title">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
             <circle cx="12" cy="7" r="4"/>
           </svg>
           <h3>学生画像</h3>
         </div>
-        <button class="refresh-btn" @click="refreshProfile">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+        <button class="refresh-btn" @click="refreshProfile" title="刷新画像">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="23 4 23 10 17 10"/>
             <polyline points="1 20 1 14 7 14"/>
             <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
@@ -93,28 +95,15 @@
       <!-- 知识基础 -->
       <div class="profile-item">
         <div class="item-header">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
           </svg>
           <h4>知识基础</h4>
         </div>
         <div class="progress-container">
-          <svg class="progress-svg" viewBox="0 0 200 12">
-            <rect width="200" height="12" rx="6" fill="#E2E8F0"/>
-            <rect 
-              :width="profile.knowledgeBase * 2" 
-              height="12" 
-              rx="6" 
-              fill="url(#progressGradient)"
-              class="progress-fill"
-            />
-            <defs>
-              <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stop-color="#3B82F6"/>
-                <stop offset="100%" stop-color="#2563EB"/>
-              </linearGradient>
-            </defs>
-          </svg>
+          <div class="progress-bar">
+            <div class="progress-fill" :style="{ width: profile.knowledgeBase + '%' }"></div>
+          </div>
           <span class="progress-text">{{ profile.knowledgeBase }}%</span>
         </div>
       </div>
@@ -122,28 +111,22 @@
       <!-- 认知风格 -->
       <div class="profile-item">
         <div class="item-header">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"/>
             <path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
           </svg>
           <h4>认知风格</h4>
         </div>
         <div class="tag-list">
-          <span
-            v-for="tag in profile.cognitiveStyle"
-            :key="tag"
-            class="custom-tag"
-          >
-            {{ tag }}
-          </span>
+          <span v-for="tag in profile.cognitiveStyle" :key="tag" class="tag">{{ tag }}</span>
         </div>
       </div>
 
       <!-- 学习目标 -->
       <div class="profile-item">
         <div class="item-header">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
           </svg>
           <h4>学习目标</h4>
         </div>
@@ -153,27 +136,21 @@
       <!-- 易错点 -->
       <div class="profile-item">
         <div class="item-header">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"/>
-            <path d="M12 8v4M12 16h.01"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
           </svg>
           <h4>易错点</h4>
         </div>
         <ul class="error-list">
-          <li 
-            v-for="(item, index) in profile.entries.weak_points" 
+          <li
+            v-for="(item, index) in profile.entries.weak_points"
             :key="index"
-            :class="['entry-item', item.status]"
+            :class="['error-item', item.status]"
           >
-            <svg class="error-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
-            </svg>
-            <span class="entry-text">{{ item.text }}</span>
-            <span class="entry-confidence">{{ item.confidence }}/10</span>
-            <svg v-if="item.status === 'tentative'" class="status-icon" viewBox="0 0 24 24" width="12" height="12" fill="currentColor">
-              <circle cx="12" cy="12" r="10"/>
-              <path d="M9.4 16.6L14.8 12l-5.4-4.6L8 9.2l4 4 4-4L20 12l-6.6 6.6-4-4z"/>
-            </svg>
+            <span class="error-text">{{ item.text }}</span>
+            <span class="error-confidence">{{ item.confidence }}/10</span>
           </li>
         </ul>
       </div>
@@ -181,27 +158,18 @@
       <!-- 学习节奏 -->
       <div class="profile-item">
         <div class="item-header">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"/>
             <polyline points="12 6 12 12 16 14"/>
           </svg>
           <h4>学习节奏</h4>
         </div>
         <div class="rhythm-info">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-            <line x1="3" y1="9" x2="21" y2="9" stroke="currentColor" stroke-width="2"/>
-            <line x1="3" y1="15" x2="18" y2="15" stroke="currentColor" stroke-width="2"/>
-          </svg>
-          <span class="rhythm-label">每日学习时长：</span>
+          <span class="rhythm-label">每日学习时长</span>
           <span class="rhythm-value">{{ profile.learningRhythm.dailyHours }}小时</span>
         </div>
         <div class="rhythm-info">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-            <circle cx="12" cy="12" r="10"/>
-            <path d="M12 6v6l4 2"/>
-          </svg>
-          <span class="rhythm-label">学习频率：</span>
+          <span class="rhythm-label">学习频率</span>
           <span class="rhythm-value">{{ profile.learningRhythm.frequency }}</span>
         </div>
       </div>
@@ -209,8 +177,8 @@
       <!-- 兴趣方向 -->
       <div class="profile-item">
         <div class="item-header">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
           </svg>
           <h4>兴趣方向</h4>
         </div>
@@ -221,10 +189,6 @@
             :class="['interest-tag', item.status]"
           >
             {{ item.text }}
-            <svg v-if="item.status === 'tentative'" class="status-icon" viewBox="0 0 24 24" width="10" height="10" fill="currentColor">
-              <circle cx="12" cy="12" r="10"/>
-              <path d="M9.4 16.6L14.8 12l-5.4-4.6L8 9.2l4 4 4-4L20 12l-6.6 6.6-4-4z"/>
-            </svg>
           </span>
         </div>
       </div>
@@ -319,10 +283,10 @@ const scrollToBottom = async (force = false) => {
 
 const handleScroll = () => {
   if (!messageList.value) return
-  
+
   const { scrollTop, scrollHeight, clientHeight } = messageList.value
   const isAtBottom = scrollHeight - scrollTop - clientHeight <= 50
-  
+
   if (isUserScrolling.value) {
     if (isAtBottom) {
       shouldAutoScroll.value = true
@@ -378,7 +342,7 @@ const sendMessage = async () => {
 
   isStreaming.value = true
   streamContent.value = ''
-  
+
   const assistantMessage: ChatMessage = {
     id: (Date.now() + 1).toString(),
     role: 'assistant',
@@ -401,7 +365,7 @@ const simulateSSE = async () => {
   ]
 
   let scrollInterval: ReturnType<typeof setInterval> | null = null
-  
+
   scrollInterval = setInterval(() => {
     if (shouldAutoScroll.value) {
       scrollToBottom()
@@ -423,7 +387,7 @@ const simulateSSE = async () => {
   if (scrollInterval) {
     clearInterval(scrollInterval)
   }
-  
+
   await scrollToBottom()
 
   isStreaming.value = false
@@ -431,7 +395,7 @@ const simulateSSE = async () => {
   if (lastMessage) {
     lastMessage.streaming = false
   }
-  
+
   updateProfile()
 }
 
@@ -463,36 +427,32 @@ onMounted(() => {
   display: flex;
   width: 100%;
   height: 100%;
-  max-width: 100vw;
-  max-height: 100vh;
   background-color: var(--bg-page);
   overflow: hidden;
-  margin: 0;
-  padding: 0;
+  gap: 20px;
 }
 
 .chat-section {
-  flex: 0 0 70%;
+  flex: 1;
   display: flex;
   flex-direction: column;
   height: 100%;
-  box-sizing: border-box;
-  padding: var(--spacing-xl);
+  min-width: 0;
 }
 
 .message-list {
   flex: 1;
   overflow-y: auto;
-  padding: var(--spacing-xl);
+  padding: 20px;
   background-color: var(--bg-card);
-  border-radius: var(--radius-xl);
-  box-sizing: border-box;
-  box-shadow: var(--shadow-md);
+  border-radius: 16px;
+  border: 1px solid var(--border-color);
 }
 
 .message-item {
   display: flex;
-  margin-bottom: var(--spacing-xl);
+  gap: 12px;
+  margin-bottom: 20px;
 }
 
 .message-user {
@@ -504,64 +464,69 @@ onMounted(() => {
 }
 
 .avatar {
-  flex: 0 0 40px;
-  height: 40px;
-  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 var(--spacing-md);
+  flex-shrink: 0;
 }
 
 .user-avatar {
-  background-color: var(--primary-color);
+  background: var(--gradient-primary);
   color: white;
 }
 
 .assistant-avatar {
-  background-color: var(--success-color);
-  color: white;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  color: var(--primary-color);
 }
 
 .message-content {
   max-width: 70%;
+  display: flex;
+  flex-direction: column;
 }
 
 .message-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: var(--spacing-xs);
+  margin-bottom: 6px;
+  gap: 12px;
 }
 
 .message-header span:first-child {
-  font-weight: var(--font-weight-semibold);
+  font-weight: 600;
+  font-size: 13px;
   color: var(--text-primary);
 }
 
 .time {
-  font-size: var(--font-size-xs);
+  font-size: 11px;
   color: var(--text-placeholder);
 }
 
 .message-body {
-  background-color: #F1F5F9;
-  padding: var(--spacing-md) var(--spacing-lg);
-  border-radius: var(--radius-lg);
-  border-bottom-left-radius: 4px;
-  line-height: var(--line-height-base);
-  color: var(--text-secondary);
+  background-color: var(--card-bg);
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  line-height: 1.6;
+  color: var(--text-primary);
+  font-size: 14px;
 }
 
 .message-user .message-body {
-  background-color: rgba(59, 130, 246, 0.1);
-  color: var(--primary-color);
-  border-radius: var(--radius-lg);
-  border-bottom-right-radius: 4px;
+  background: var(--gradient-primary);
+  border: none;
+  color: white;
 }
 
 .message-body :deep(pre) {
-  background-color: #1E293B;
+  background-color: #0F172A;
   padding: 12px 16px;
   border-radius: 8px;
   overflow-x: auto;
@@ -569,14 +534,15 @@ onMounted(() => {
 }
 
 .message-body :deep(code) {
-  background-color: rgba(0, 0, 0, 0.05);
+  background-color: rgba(255, 255, 255, 0.1);
   padding: 2px 6px;
   border-radius: 4px;
-  font-size: 14px;
+  font-size: 13px;
+  font-family: 'Fira Code', monospace;
 }
 
 .message-user .message-body :deep(code) {
-  background-color: rgba(59, 130, 246, 0.2);
+  background-color: rgba(255, 255, 255, 0.2);
 }
 
 .message-body :deep(pre code) {
@@ -586,132 +552,126 @@ onMounted(() => {
 }
 
 .message-body :deep(blockquote) {
-  border-left: 4px solid #3B82F6;
+  border-left: 3px solid var(--primary-color);
   padding-left: 12px;
-  color: #64748B;
+  color: var(--text-secondary);
+  margin: 8px 0;
+}
+
+.message-body :deep(ul),
+.message-body :deep(ol) {
+  padding-left: 20px;
+  margin: 8px 0;
+}
+
+.message-body :deep(li) {
+  margin: 4px 0;
 }
 
 .typing-indicator {
   display: flex;
   align-items: center;
   padding: 8px 0;
+  gap: 4px;
 }
 
 .dot {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background-color: #94A3B8;
-  margin-right: 4px;
+  background-color: var(--primary-color);
   animation: typing 1.4s infinite ease-in-out;
 }
 
-.dot:nth-child(2) {
-  animation-delay: 0.2s;
-}
-
-.dot:nth-child(3) {
-  animation-delay: 0.4s;
-}
+.dot:nth-child(2) { animation-delay: 0.2s; }
+.dot:nth-child(3) { animation-delay: 0.4s; }
 
 @keyframes typing {
-  0%, 80%, 100% {
-    opacity: 0.2;
-  }
-  40% {
-    opacity: 1;
-  }
+  0%, 80%, 100% { opacity: 0.2; transform: scale(0.8); }
+  40% { opacity: 1; transform: scale(1); }
 }
 
 .input-area {
-  padding: var(--spacing-lg);
+  padding: 16px;
   background-color: var(--bg-card);
-  border-radius: var(--radius-xl);
-  margin-top: var(--spacing-xl);
+  border-radius: 16px;
+  margin-top: 16px;
   display: flex;
-  gap: var(--spacing-md);
-  box-shadow: var(--shadow-md);
+  gap: 12px;
+  border: 1px solid var(--border-color);
 }
 
 .input-area :deep(.el-textarea) {
   flex: 1;
 }
 
-.input-area :deep(.el-input__wrapper) {
-  border-radius: var(--radius-md);
-  padding: var(--spacing-md) var(--spacing-lg);
-  border: 1px solid var(--border-color);
-}
-
-.input-area :deep(.el-input__wrapper:focus-within) {
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-  border-color: var(--primary-color);
+.input-area :deep(.el-textarea__inner) {
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 14px;
 }
 
 .send-btn {
   align-self: flex-end;
-  padding: 0 var(--spacing-xl);
-  background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+  padding: 0 16px;
+  background: var(--gradient-primary);
   color: white;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: 10px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: var(--transition-normal);
-  height: 40px;
-  font-weight: var(--font-weight-medium);
+  gap: 6px;
+  transition: all 0.2s ease;
+  height: 44px;
+  font-weight: 600;
+  font-size: 14px;
 }
 
 .send-btn:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.35);
 }
 
 .send-btn:disabled {
-  background: var(--text-placeholder);
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
 .send-btn.abort-btn {
-  background: linear-gradient(135deg, var(--danger-color), #DC2626);
+  background: linear-gradient(135deg, #EF4444, #DC2626);
 }
 
-.send-btn.abort-btn:hover {
-  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
-}
-
-.send-btn span {
-  margin-left: var(--spacing-xs);
-  font-size: var(--font-size-sm);
+.send-btn.abort-btn:hover:not(:disabled) {
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);
 }
 
 .profile-panel {
-  flex: 0 0 30%;
-  padding: var(--spacing-xl);
-  background: var(--glass-bg);
-  backdrop-filter: blur(10px);
-  border: 1px solid var(--glass-border);
+  width: 320px;
+  flex-shrink: 0;
+  padding: 20px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
   overflow-y: auto;
   height: 100%;
   box-sizing: border-box;
-  border-radius: var(--radius-xl);
-  margin: var(--spacing-lg);
-  box-shadow: var(--glass-shadow);
 }
 
 .panel-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: var(--spacing-2xl);
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .header-title {
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm);
+  gap: 10px;
 }
 
 .header-title svg {
@@ -720,41 +680,48 @@ onMounted(() => {
 
 .panel-header h3 {
   margin: 0;
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-  color: var(--primary-color);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 .refresh-btn {
-  padding: var(--spacing-xs);
-  background-color: #F1F5F9;
-  border: none;
-  border-radius: var(--radius-sm);
+  width: 36px;
+  height: 36px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
   cursor: pointer;
-  color: #64748B;
-  transition: var(--transition-normal);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
 }
 
 .refresh-btn:hover {
-  background-color: var(--border-color);
+  background: var(--primary-bg);
+  border-color: var(--primary-color);
   color: var(--primary-color);
 }
 
 .profile-item {
-  margin-bottom: var(--spacing-2xl);
-  padding-bottom: var(--spacing-2xl);
+  margin-bottom: 20px;
+  padding-bottom: 20px;
   border-bottom: 1px solid var(--border-color);
 }
 
 .profile-item:last-child {
   border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
 }
 
 .item-header {
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-md);
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
 .item-header svg {
@@ -763,99 +730,145 @@ onMounted(() => {
 
 .item-header h4 {
   margin: 0;
-  font-size: var(--font-size-sm);
+  font-size: 13px;
   color: var(--text-primary);
-  font-weight: var(--font-weight-semibold);
+  font-weight: 600;
 }
 
 .progress-container {
   display: flex;
   align-items: center;
-  gap: var(--spacing-md);
+  gap: 12px;
 }
 
-.progress-svg {
+.progress-bar {
   flex: 1;
-  height: 6px;
+  height: 8px;
+  background: var(--border-color);
+  border-radius: 4px;
+  overflow: hidden;
 }
 
 .progress-fill {
-  transition: width var(--transition-slow);
+  height: 100%;
+  background: var(--gradient-primary);
+  border-radius: 4px;
+  transition: width 0.3s ease;
 }
 
 .progress-text {
-  font-weight: var(--font-weight-semibold);
+  font-weight: 700;
+  font-size: 14px;
   color: var(--primary-color);
   min-width: 40px;
   text-align: right;
 }
 
-.tag-list, .interest-tags {
+.tag-list {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--spacing-sm);
+  gap: 8px;
 }
 
-.custom-tag {
-  padding: var(--spacing-xs) var(--spacing-md);
-  background-color: var(--primary-bg);
+.tag {
+  padding: 6px 12px;
+  background: var(--primary-bg);
   color: var(--primary-color);
-  border-radius: var(--radius-full);
-  font-size: var(--font-size-xs);
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .goal-text {
   margin: 0;
   font-size: 13px;
   color: var(--text-secondary);
-  line-height: var(--line-height-base);
+  line-height: 1.6;
 }
 
 .error-list {
   margin: 0;
-  padding-left: 0;
+  padding: 0;
   list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.error-list li {
+.error-item {
   display: flex;
   align-items: center;
-  padding: var(--spacing-xs) 0;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--danger-light);
+  border-radius: 8px;
   font-size: 13px;
-  color: var(--danger-color);
-  gap: var(--spacing-sm);
 }
 
-.error-icon {
+.error-item.tentative {
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.error-text {
   color: var(--danger-color);
+}
+
+.error-item.tentative .error-text {
+  color: var(--warning-color);
+}
+
+.error-confidence {
+  font-size: 11px;
+  color: var(--text-placeholder);
+  font-weight: 600;
 }
 
 .rhythm-info {
   display: flex;
-  padding: var(--spacing-xs) 0;
+  justify-content: space-between;
   align-items: center;
-  gap: var(--spacing-sm);
-}
-
-.rhythm-info svg {
-  color: var(--primary-color);
+  padding: 8px 0;
 }
 
 .rhythm-label {
-  color: var(--text-placeholder);
-  font-size: 13px;
-}
-
-.rhythm-value {
   color: var(--text-secondary);
   font-size: 13px;
 }
 
+.rhythm-value {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.interest-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .interest-tag {
-  padding: var(--spacing-xs) var(--spacing-md);
-  background-color: var(--success-light);
+  padding: 6px 12px;
+  background: var(--success-light);
   color: var(--success-color);
-  border-radius: var(--radius-full);
-  font-size: var(--font-size-xs);
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.interest-tag.tentative {
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--warning-color);
+}
+
+@media (max-width: 900px) {
+  .profile-chat-container {
+    flex-direction: column;
+  }
+
+  .profile-panel {
+    width: 100%;
+    max-height: 300px;
+  }
 }
 </style>

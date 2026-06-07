@@ -3,13 +3,15 @@
     <div class="welcome-section">
       <div class="welcome-card">
         <div class="welcome-content">
-          <h1 class="welcome-title">你好，学习者 👋</h1>
+          <h1 class="welcome-title">你好，学习者</h1>
           <p class="welcome-desc">今天也要继续加油，让学习效率提升 100%</p>
         </div>
         <div class="welcome-decoration">
-          <div class="deco-circle circle-1"></div>
-          <div class="deco-circle circle-2"></div>
-          <div class="deco-circle circle-3"></div>
+          <svg class="deco-icon" viewBox="0 0 24 24" width="120" height="120" fill="none" stroke="currentColor" stroke-width="1">
+            <path d="M12 2L2 7l10 5 10-5-10-5z" opacity="0.3"/>
+            <path d="M2 17l10 5 10-5" opacity="0.5"/>
+            <path d="M2 12l10 5 10-5" opacity="0.7"/>
+          </svg>
         </div>
       </div>
     </div>
@@ -19,14 +21,25 @@
         <div class="stat-card" v-for="(stat, index) in statsList" :key="index">
           <div class="stat-card-content">
             <div class="stat-icon" :style="{ background: stat.gradient }">
-              <el-icon :size="28"><component :is="stat.icon" /></el-icon>
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+                <path v-if="stat.iconType === 'document'" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline v-if="stat.iconType === 'document'" points="14 2 14 8 20 8"/>
+                <g v-if="stat.iconType === 'chart'">
+                  <line x1="18" y1="20" x2="18" y2="10"/>
+                  <line x1="12" y1="20" x2="12" y2="4"/>
+                  <line x1="6" y1="20" x2="6" y2="14"/>
+                </g>
+                <circle v-if="stat.iconType === 'clock'" cx="12" cy="12" r="10"/>
+                <polyline v-if="stat.iconType === 'clock'" points="12 6 12 12 16 14"/>
+                <path v-if="stat.iconType === 'trophy'" d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/>
+                <path v-if="stat.iconType === 'trophy'" d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
+                <path v-if="stat.iconType === 'trophy'" d="M4 22h16"/>
+                <path v-if="stat.iconType === 'trophy'" d="M10 22V8a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v14"/>
+              </svg>
             </div>
             <div class="stat-info">
               <div class="stat-value">{{ stat.value }}</div>
               <div class="stat-label">{{ stat.label }}</div>
-            </div>
-            <div class="stat-arrow">
-              <el-icon><ArrowRight /></el-icon>
             </div>
           </div>
         </div>
@@ -35,17 +48,18 @@
 
     <div class="content-grid">
       <div class="recent-learning">
-        <el-card class="section-card">
-          <template #header>
-            <div class="card-header">
-              <span class="card-title">最近学习</span>
-              <el-button type="primary" link size="small">查看全部</el-button>
-            </div>
-          </template>
+        <div class="section-card">
+          <div class="card-header">
+            <span class="card-title">最近学习</span>
+            <button class="link-btn">查看全部</button>
+          </div>
           <div class="recent-list">
             <div v-for="(item, index) in recentItems" :key="index" class="recent-item">
               <div class="item-icon" :style="{ background: item.gradient }">
-                <el-icon :size="20"><component :is="item.icon" /></el-icon>
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                </svg>
               </div>
               <div class="item-info">
                 <div class="item-title">{{ item.title }}</div>
@@ -59,36 +73,34 @@
               </div>
             </div>
           </div>
-        </el-card>
+        </div>
       </div>
 
       <div class="learning-progress">
-        <el-card class="section-card">
-          <template #header>
-            <div class="card-header">
-              <span class="card-title">学习进度</span>
-            </div>
-          </template>
+        <div class="section-card">
+          <div class="card-header">
+            <span class="card-title">学习进度</span>
+          </div>
           <div class="progress-list">
             <div class="progress-item" v-for="(p, index) in progressList" :key="index">
               <div class="progress-header">
                 <span class="progress-label">{{ p.label }}</span>
                 <span class="progress-percent">{{ p.percent }}%</span>
               </div>
-              <el-progress :percentage="p.percent" :stroke-width="10" :color="p.color" :show-text="false" />
+              <div class="progress-bar">
+                <div class="progress-bar-fill" :style="{ width: p.percent + '%', background: p.color }"></div>
+              </div>
             </div>
           </div>
-        </el-card>
+        </div>
       </div>
     </div>
 
     <div class="chart-section">
-      <el-card class="section-card">
-        <template #header>
-          <div class="card-header">
-            <span class="card-title">本周学习时长</span>
-          </div>
-        </template>
+      <div class="section-card">
+        <div class="card-header">
+          <span class="card-title">本周学习时长</span>
+        </div>
         <div class="chart-container">
           <div class="bar-chart">
             <div v-for="(day, index) in weeklyData" :key="index" class="bar-item">
@@ -109,32 +121,31 @@
             </div>
           </div>
         </div>
-      </el-card>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { Document, TrendCharts, Clock, Trophy, Files, EditPen, ArrowRight } from '@element-plus/icons-vue';
 
 const statsList = ref([
-  { icon: Document, value: 12, label: '已完成课程', gradient: 'linear-gradient(135deg, #C2410C 0%, #EA580C 100%)' },
-  { icon: TrendCharts, value: '50%', label: '学习进度', gradient: 'linear-gradient(135deg, #16A34A 0%, #22C55E 100%)' },
-  { icon: Clock, value: '86h', label: '累计学习时长', gradient: 'linear-gradient(135deg, #D97706 0%, #F59E0B 100%)' },
-  { icon: Trophy, value: '7d', label: '连续学习天数', gradient: 'linear-gradient(135deg, #C2410C 0%, #EA580C 100%)' }
+  { iconType: 'document', value: 12, label: '已完成课程', gradient: 'linear-gradient(135deg, #22C55E 0%, #16A34A 100%)' },
+  { iconType: 'chart', value: '50%', label: '学习进度', gradient: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)' },
+  { iconType: 'clock', value: '86h', label: '累计学习时长', gradient: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)' },
+  { iconType: 'trophy', value: '7d', label: '连续学习天数', gradient: 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)' }
 ]);
 
 const recentItems = ref([
-  { title: '深度学习入门指南', meta: '课程文档 · 今天', progress: 80, icon: Document, gradient: 'linear-gradient(135deg, rgba(194, 65, 12, 0.1) 0%, rgba(234, 88, 12, 0.1) 100%)' },
-  { title: '神经网络基础', meta: '课程视频 · 昨天', progress: 100, icon: Files, gradient: 'linear-gradient(135deg, rgba(22, 163, 74, 0.1) 0%, rgba(34, 197, 94, 0.1) 100%)' },
-  { title: 'PyTorch实战练习', meta: '习题 · 2天前', progress: 60, icon: EditPen, gradient: 'linear-gradient(135deg, rgba(217, 119, 6, 0.1) 0%, rgba(245, 158, 11, 0.1) 100%)' }
+  { title: '深度学习入门指南', meta: '课程文档 · 今天', progress: 80, gradient: 'linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(22, 163, 74, 0.15) 100%)' },
+  { title: '神经网络基础', meta: '课程视频 · 昨天', progress: 100, gradient: 'linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.15) 100%)' },
+  { title: 'PyTorch实战练习', meta: '习题 · 2天前', progress: 60, gradient: 'linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(217, 119, 6, 0.15) 100%)' }
 ]);
 
 const progressList = ref([
-  { label: '整体进度', percent: 50, color: 'linear-gradient(90deg, #C2410C 0%, #EA580C 100%)' },
-  { label: '理论学习', percent: 65, color: 'linear-gradient(90deg, #16A34A 0%, #22C55E 100%)' },
-  { label: '实践练习', percent: 35, color: 'linear-gradient(90deg, #D97706 0%, #F59E0B 100%)' }
+  { label: '整体进度', percent: 50, color: 'linear-gradient(90deg, #22C55E 0%, #16A34A 100%)' },
+  { label: '理论学习', percent: 65, color: 'linear-gradient(90deg, #3B82F6 0%, #2563EB 100%)' },
+  { label: '实践练习', percent: 35, color: 'linear-gradient(90deg, #F59E0B 0%, #D97706 100%)' }
 ]);
 
 const weeklyData = ref([
@@ -162,11 +173,12 @@ const weeklyAverage = computed(() => (Number(weeklyTotal.value) / 7).toFixed(1))
 
 .welcome-card {
   position: relative;
-  background: var(--gradient-primary);
+  background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
+  border: 1px solid var(--border-color);
   border-radius: 24px;
   padding: 32px;
   overflow: hidden;
-  box-shadow: 0 20px 40px rgba(194, 65, 12, 0.25);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
 }
 
 .welcome-content {
@@ -178,49 +190,25 @@ const weeklyAverage = computed(() => (Number(weeklyTotal.value) / 7).toFixed(1))
   margin: 0;
   font-size: 28px;
   font-weight: 700;
-  color: #ffffff;
+  color: var(--text-primary);
   line-height: 1.2;
 }
 
 .welcome-desc {
   margin: 8px 0 0 0;
   font-size: 16px;
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--text-secondary);
 }
 
 .welcome-decoration {
   position: absolute;
-  right: -20px;
-  top: -20px;
-}
-
-.deco-circle {
-  position: absolute;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.circle-1 {
-  width: 120px;
-  height: 120px;
-  right: 40px;
-  top: 20px;
-}
-
-.circle-2 {
-  width: 80px;
-  height: 80px;
-  right: 100px;
+  right: -10px;
   top: -10px;
-  background: rgba(255, 255, 255, 0.15);
 }
 
-.circle-3 {
-  width: 50px;
-  height: 50px;
-  right: 0px;
-  top: 50px;
-  background: rgba(255, 255, 255, 0.08);
+.deco-icon {
+  color: var(--primary-color);
+  opacity: 0.3;
 }
 
 .stats-section {
@@ -234,7 +222,7 @@ const weeklyAverage = computed(() => (Number(weeklyTotal.value) / 7).toFixed(1))
 }
 
 .stat-card {
-  background: #ffffff;
+  background: var(--bg-card);
   border-radius: 20px;
   padding: 24px;
   border: 1px solid var(--border-color);
@@ -246,6 +234,7 @@ const weeklyAverage = computed(() => (Number(weeklyTotal.value) / 7).toFixed(1))
 .stat-card:hover {
   transform: translateY(-4px);
   box-shadow: var(--shadow-lg);
+  border-color: var(--primary-color);
 }
 
 .stat-card-content {
@@ -262,6 +251,7 @@ const weeklyAverage = computed(() => (Number(weeklyTotal.value) / 7).toFixed(1))
   align-items: center;
   justify-content: center;
   color: #ffffff;
+  flex-shrink: 0;
 }
 
 .stat-info {
@@ -277,20 +267,8 @@ const weeklyAverage = computed(() => (Number(weeklyTotal.value) / 7).toFixed(1))
 
 .stat-label {
   font-size: 14px;
-  color: var(--text-placeholder);
+  color: var(--text-secondary);
   margin-top: 4px;
-}
-
-.stat-arrow {
-  color: var(--text-placeholder);
-  transition: transform 0.2s ease;
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-}
-
-.stat-card:hover .stat-arrow {
-  transform: translateX(4px);
 }
 
 .content-grid {
@@ -301,9 +279,11 @@ const weeklyAverage = computed(() => (Number(weeklyTotal.value) / 7).toFixed(1))
 }
 
 .section-card {
+  background: var(--bg-card);
   border-radius: 20px;
   border: 1px solid var(--border-color);
   box-shadow: var(--shadow-sm);
+  padding: 24px;
   transition: all 0.2s ease;
 }
 
@@ -311,25 +291,30 @@ const weeklyAverage = computed(() => (Number(weeklyTotal.value) / 7).toFixed(1))
   box-shadow: var(--shadow-md);
 }
 
-.section-card :deep(.el-card__header) {
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.section-card :deep(.el-card__body) {
-  padding: 24px;
-}
-
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 20px;
 }
 
 .card-title {
   font-size: 18px;
   font-weight: 600;
   color: var(--text-primary);
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--primary-color);
+  font-size: 14px;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.link-btn:hover {
+  color: var(--primary-light);
 }
 
 .recent-list {
@@ -342,14 +327,16 @@ const weeklyAverage = computed(() => (Number(weeklyTotal.value) / 7).toFixed(1))
   display: flex;
   align-items: center;
   padding: 16px;
-  background: var(--bg-page);
+  background: var(--card-bg);
   border-radius: 14px;
   transition: all 0.2s ease;
   cursor: pointer;
+  border: 1px solid transparent;
 }
 
 .recent-item:hover {
   background: var(--primary-bg);
+  border-color: var(--primary-color);
   transform: translateX(4px);
 }
 
@@ -378,7 +365,7 @@ const weeklyAverage = computed(() => (Number(weeklyTotal.value) / 7).toFixed(1))
 
 .item-meta {
   font-size: 13px;
-  color: var(--text-placeholder);
+  color: var(--text-secondary);
 }
 
 .item-progress {
@@ -390,7 +377,7 @@ const weeklyAverage = computed(() => (Number(weeklyTotal.value) / 7).toFixed(1))
 .mini-progress {
   width: 80px;
   height: 6px;
-  background: #E2E8F0;
+  background: var(--border-color);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -432,6 +419,19 @@ const weeklyAverage = computed(() => (Number(weeklyTotal.value) / 7).toFixed(1))
   color: var(--text-primary);
 }
 
+.progress-bar {
+  height: 10px;
+  background: var(--border-color);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 5px;
+  transition: width 0.5s ease;
+}
+
 .chart-section {
   margin-bottom: 28px;
 }
@@ -466,7 +466,7 @@ const weeklyAverage = computed(() => (Number(weeklyTotal.value) / 7).toFixed(1))
   background: var(--gradient-primary);
   border-radius: 8px 8px 4px 4px;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(194, 65, 12, 0.15);
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
 }
 
 .bar:hover {
@@ -497,7 +497,7 @@ const weeklyAverage = computed(() => (Number(weeklyTotal.value) / 7).toFixed(1))
 
 .summary-label {
   font-size: 13px;
-  color: var(--text-placeholder);
+  color: var(--text-secondary);
 }
 
 .summary-value {

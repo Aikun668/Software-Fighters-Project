@@ -4,71 +4,110 @@
       <div class="header-left">
         <div class="logo-wrapper">
           <div class="logo-icon">
-            <el-icon :size="28"><Odometer /></el-icon>
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+              <path d="M2 17l10 5 10-5"/>
+              <path d="M2 12l10 5 10-5"/>
+            </svg>
           </div>
           <div class="logo-text">
             <h1 class="logo-title">智学云</h1>
-            <span class="logo-subtitle">个性化学习多智能体系统</span>
+            <span class="logo-subtitle">DeepTutor 智能学习系统</span>
           </div>
         </div>
       </div>
       <div class="header-right">
-        <div class="user-actions">
-          <el-button type="primary" size="default" class="login-btn" @click="goToLogin">
-            <el-icon><User /></el-icon>
-            <span>登录 / 注册</span>
-          </el-button>
+        <div class="header-actions">
+          <button class="icon-btn" title="通知">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+          </button>
+          <button class="icon-btn" title="设置">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+          </button>
         </div>
+        <button class="login-btn" @click="goToLogin">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
+          </svg>
+          <span>登录 / 注册</span>
+        </button>
       </div>
     </header>
 
     <div class="home-content">
       <aside :class="['sidebar', { collapsed: isCollapsed }]">
-       
         <el-menu
           :default-active="activeMenu"
           class="sidebar-menu"
           @select="handleMenuSelect"
         >
           <el-menu-item index="dashboard">
-            <el-icon><Odometer /></el-icon>
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="7" height="7"/>
+              <rect x="14" y="3" width="7" height="7"/>
+              <rect x="14" y="14" width="7" height="7"/>
+              <rect x="3" y="14" width="7" height="7"/>
+            </svg>
             <span>学习仪表盘</span>
           </el-menu-item>
           <el-menu-item index="profile-chat">
-            <el-icon><User /></el-icon>
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
             <span>学生画像</span>
           </el-menu-item>
           <el-menu-item index="resource-center">
-            <el-icon><Files /></el-icon>
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+            </svg>
             <span>资源中心</span>
           </el-menu-item>
           <el-menu-item index="learning-path">
-            <el-icon><Guide /></el-icon>
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+            </svg>
             <span>学习路径</span>
           </el-menu-item>
           <el-menu-item index="ai-tutor">
-            <el-icon><ChatDotRound /></el-icon>
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
             <span>智能答疑</span>
           </el-menu-item>
           <el-menu-item index="course-detail">
-            <el-icon><Document /></el-icon>
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+              <polyline points="10 9 9 9 8 9"/>
+            </svg>
             <span>课程文档</span>
           </el-menu-item>
           <el-menu-item index="exercise">
-            <el-icon><EditPen /></el-icon>
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+            </svg>
             <span>在线答题</span>
           </el-menu-item>
         </el-menu>
 
         <div class="sidebar-footer">
-
-
           <button class="collapse-btn" @click="toggleSidebar" :title="isCollapsed ? '展开侧边栏' : '收起侧边栏'">
-            <svg v-if="isCollapsed" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-              <path d="M9.29 6.71a.996.996 0 000 1.41L13.17 12l-3.88 3.88a.996.996 0 101.41 1.41l4.59-4.59a.996.996 0 000-1.41L10.7 6.7c-.38-.38-1.02-.38-1.41.01z"/>
+            <svg v-if="isCollapsed" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="9 18 15 12 9 6"/>
             </svg>
-            <svg v-else viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-              <path d="M15.29 17.71a.996.996 0 000-1.41L11.41 12l3.88-3.88a.996.996 0 00-1.41-1.41l-4.59 4.59a.996.996 0 000 1.41l4.59 4.59c.38.38 1.02.38 1.41 0z"/>
+            <svg v-else viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="15 18 9 12 15 6"/>
             </svg>
           </button>
         </div>
@@ -86,7 +125,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import { Odometer, User, Files, Guide, ChatDotRound, Document, EditPen } from '@element-plus/icons-vue';
 
 const router = useRouter();
 const route = useRoute();
@@ -123,12 +161,10 @@ const toggleSidebar = () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 28px;
+  padding: 0 24px;
   height: var(--header-height);
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(12px);
+  background: var(--bg-card);
   border-bottom: 1px solid var(--border-color);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   position: sticky;
   top: 0;
   z-index: 100;
@@ -141,25 +177,25 @@ const toggleSidebar = () => {
 .logo-wrapper {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
 }
 
 .logo-icon {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   background: var(--gradient-primary);
-  border-radius: 14px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #ffffff;
-  box-shadow: 0 8px 24px rgba(194, 65, 12, 0.25);
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .logo-icon:hover {
-  transform: translateY(-2px) scale(1.02);
-  box-shadow: 0 12px 32px rgba(194, 65, 12, 0.35);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(34, 197, 94, 0.4);
 }
 
 .logo-text {
@@ -169,40 +205,69 @@ const toggleSidebar = () => {
 
 .logo-title {
   margin: 0;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
-  background: var(--gradient-primary);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--text-primary);
   line-height: 1.2;
 }
 
 .logo-subtitle {
   font-size: 12px;
-  color: var(--text-placeholder);
+  color: var(--text-secondary);
   margin-top: 2px;
 }
 
 .header-right {
   display: flex;
   align-items: center;
+  gap: 16px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.icon-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.icon-btn:hover {
+  background: var(--primary-bg);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
 }
 
 .login-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   background: var(--gradient-primary);
   border: none;
   color: #ffffff;
   font-weight: 600;
-  padding: 10px 24px;
-  border-radius: 12px;
-  box-shadow: 0 4px 14px rgba(194, 65, 12, 0.2);
+  padding: 10px 20px;
+  border-radius: 10px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.25);
   transition: all 0.2s ease;
+  font-size: 14px;
 }
 
 .login-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(194, 65, 12, 0.3);
+  box-shadow: 0 6px 16px rgba(34, 197, 94, 0.35);
 }
 
 .home-content {
@@ -213,7 +278,7 @@ const toggleSidebar = () => {
 
 .sidebar {
   width: var(--sidebar-width);
-  background: #ffffff;
+  background: var(--bg-card);
   border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
@@ -223,175 +288,98 @@ const toggleSidebar = () => {
   bottom: 0;
   overflow-y: auto;
   z-index: 50;
-  transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: width 0.3s ease;
 }
 
 .sidebar.collapsed {
   width: var(--sidebar-collapsed-width);
 }
 
-.sidebar-header {
-  padding: 16px 12px;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.sidebar-logo {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.logo-mini {
-  width: 32px;
-  height: 32px;
-  background: var(--gradient-primary);
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #ffffff;
-}
-
-.logo-text {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
 .sidebar-menu {
   border: none;
-  padding: 12px 8px;
+  padding: 8px;
+  flex: 1;
 }
 
-.sidebar-menu .el-menu-item {
-  margin: 4px 8px;
-  border-radius: 10px;
-  height: 48px;
-  line-height: 48px;
+.sidebar-menu :deep(.el-menu-item) {
+  margin: 2px 4px;
+  border-radius: 8px;
+  height: 40px;
+  line-height: 40px;
   font-weight: 500;
   color: var(--text-secondary);
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
+  justify-content: flex-start;
+  padding: 0 12px !important;
 }
 
-.sidebar-menu .el-menu-item:hover {
+.sidebar-menu :deep(.el-menu-item) svg {
+  margin-right: 10px;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sidebar-menu :deep(.el-menu-item):hover {
   background: var(--primary-bg);
   color: var(--primary-color);
 }
 
-.sidebar-menu .el-menu-item.is-active {
+.sidebar-menu :deep(.el-menu-item.is-active) {
   background: var(--gradient-primary);
   color: #ffffff;
-  box-shadow: 0 4px 14px rgba(194, 65, 12, 0.25);
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.25);
 }
 
-.sidebar-menu .el-menu-item.is-active .el-icon {
-  color: #ffffff;
+.sidebar.collapsed .sidebar-menu :deep(.el-menu-item) {
+  padding: 0 !important;
+  justify-content: center;
 }
 
-.sidebar-menu .el-menu-item .el-icon {
-  font-size: 18px;
-  margin-right: 10px;
-  color: var(--text-secondary);
-  transition: color 0.2s ease;
+.sidebar.collapsed .sidebar-menu :deep(.el-menu-item) span {
+  display: none;
+}
+
+.sidebar.collapsed .sidebar-menu :deep(.el-menu-item) svg {
+  margin-right: 0;
 }
 
 .sidebar-footer {
-  padding: 16px 20px;
+  padding: 12px;
   border-top: 1px solid var(--border-color);
-  background: linear-gradient(180deg, transparent 0%, rgba(239, 246, 255, 0.5) 100%);
-  margin-top: auto;
-}
-
-.quick-stats {
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
-  padding: 14px;
-  background: var(--bg-page);
-  border-radius: 14px;
-  border: 1px solid var(--border-color);
-}
-
-.stat-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-
-.stat-value {
-  font-size: 22px;
-  font-weight: 700;
-  background: var(--gradient-primary);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.stat-label {
-  font-size: 12px;
-  color: var(--text-placeholder);
-}
-
-.stat-divider {
-  width: 1px;
-  height: 36px;
-  background: var(--border-color);
+  background: linear-gradient(180deg, transparent 0%, rgba(34, 197, 94, 0.05) 100%);
 }
 
 .collapse-btn {
-  width: 36px;
+  width: 100%;
   height: 36px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
-  color: #ffffff;
+  border-radius: 8px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  margin: 0 auto;
-  margin-top: 16px;
-  margin-bottom: 16px;
   transition: all 0.2s ease;
-  border: none;
-  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
-  position: relative;
-  z-index: 10;
 }
 
 .collapse-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(79, 70, 229, 0.4);
-}
-
-.collapse-btn:active {
-  transform: translateY(0);
-  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
-}
-
-.sidebar.collapsed .sidebar-menu .el-menu-item {
-  padding: 0;
-  justify-content: center;
-  margin: 4px 6px;
-}
-
-.sidebar.collapsed .sidebar-menu .el-menu-item span {
-  display: none;
-}
-
-.sidebar.collapsed .sidebar-menu .el-menu-item .el-icon {
-  margin-right: 0;
-  margin-left: 0;
-  font-size: 20px;
+  background: var(--primary-bg);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
 }
 
 .main-content-wrapper {
   flex: 1;
   margin-left: var(--sidebar-width);
   min-height: calc(100vh - var(--header-height));
-  transition: margin-left 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: margin-left 0.3s ease;
 }
 
 .main-content-wrapper.sidebar-collapsed {
@@ -399,11 +387,8 @@ const toggleSidebar = () => {
 }
 
 .main-content {
-  padding: 28px;
+  padding: 24px;
   min-height: 100%;
-  height: calc(100vh - var(--header-height));
-  overflow-y: auto;
-  background: var(--bg-page);
 }
 
 @media (max-width: 768px) {
@@ -411,11 +396,16 @@ const toggleSidebar = () => {
     width: var(--sidebar-collapsed-width);
   }
 
-  .sidebar-menu .el-menu-item span {
+  .sidebar-menu :deep(.el-menu-item) span {
     display: none;
   }
 
-  .sidebar-menu .el-menu-item .el-icon {
+  .sidebar-menu :deep(.el-menu-item) {
+    padding-left: 0 !important;
+    justify-content: center;
+  }
+
+  .sidebar-menu :deep(.el-menu-item) svg {
     margin-right: 0;
   }
 
