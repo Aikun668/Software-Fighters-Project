@@ -1,803 +1,498 @@
-# AI 服务 ↔ Java 后端 API 对接文档
+# Java → Python AI 服务 API 对接文档
 
-> **用途**：Java 后端团队据此实现 REST API，供 Python AI 服务调用
-> **环境变量**：Python 端通过 `JAVA_API_BASE_URL` 配置 Java 后端地址（默认 `http://localhost:8080/api`）
-> **最后更新**：2026-06-06
+> **架构**：Architecture #2 — Java 调 Python 做 AI 推理，Java 负责全部数据 CRUD
+> **端口**：Python AI 服务运行在 `http://localhost:8001`
+> **路由前缀**：所有 AI 端点统一在 `/internal/*` 下
+> **原则**：Python 绝不调 Java，Java 把全部上下文放在请求体中传入
+> **最后更新**：2026-06-09
 
 ---
 
-## 统一响应格式
+## 核心约定
 
-所有接口统一返回以下 JSON 结构：
+1. **请求方向**：Java → Python（单向调用）
+2. **数据传递**：Java 在请求体（JSON）中传入所有需要的数据（画像、消息历史、plan 步骤等）
+3. **响应格式**：
+   - 非流式：`{"success": true, "data": {...}}` 或 `{"success": false, "errorCode": "...", "error": "..."}`
+   - 流式：SSE（`text/event-stream`），每个事件格式 `data: {"type": "...", ...}\n\n`
+4. **Python 不做持久化**：所有结果在响应中返回，Java 自行持久化
+5. **Python 不调 Java**：Python 服务无任何 Java HTTP 调用
+
+---
+
+## SSE 事件格式
+
+所有流式端点（SSE）统一使用以下事件类型：
+
+| type | 说明 | 示例 |
+|------|------|------|
+| `token` | 逐字输出 | `{"type": "token", "content": "你好"}` |
+| `progress` | 进度提示 | `{"type": "progress", "stage": "plan", "content": "正在规划..."}` |
+| `stage_start` | 阶段开始 | `{"type": "stage_start", "stage": "content", "message": "正在生成..."}` |
+| `stage_end` | 阶段结束 | `{"type": "stage_end", "stage": "content", "message": "完成"}` |
+| `error` | 错误事件 | `{"type": "error", "content": "生成失败"}` |
+| `profile_update` | 画像更新 | `{"type": "profile_update", "content": {...}}` |
+| `meta` | 元信息 | `{"type": "meta", "conversation_id": 42}` |
+| `done` | **流结束（含完整结果）** | 见下方 done event 格式 |
+
+### done event 格式（标准化）
+
+所有 SSE 端点统一在 `done` 事件中包含完整结果：
 
 ```json
 {
-  "code": 0,
-  "message": "ok",
-  "data": { ... }
+  "type": "done",
+  "content_blocks": [...],
+  "questions": [...],
+  "steps": [...],
+  "response": "完整 AI 回复文本",
+  "profile_delta": {...},
+  "conversation_id": 42,
+  "error": null
 }
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `code` | int | 0 = 成功，非 0 = 错误（自定义错误码） |
-| `message` | string | 提示信息 |
-| `data` | any | 业务数据，错误时为 null |
+Java 从 `done` 事件中提取所需字段并持久化。
 
 ---
 
-## 1. Health
+## 端点清单
 
-### `GET /health`
+### 保留并修改的端点（19 个）
 
-Java 服务健康检查。Python 端 `/health` 端点会 ping 此接口判断连通性。
+| # | 方法 | 路径 | 说明 |
+|---|------|------|------|
+| 1 | POST | `/internal/profile/chat` | 画像对话（SSE） |
+| 2 | POST | `/internal/resources/generate` | 资源生成（SSE） |
+| 3 | POST | `/internal/tutor/chat` | 导师答疑（SSE） |
+| 4 | POST | `/internal/exercise/generate` | 练习题生成（SSE） |
+| 5 | POST | `/internal/path/{student_id}` | 学习路径规划 |
+| 6 | POST | `/internal/profile/workflow/status` | 画像完整度查询 |
+| 7 | POST | `/internal/resources/export-pptx` | 导出 PPTX |
+| 8 | GET | `/internal/resources/download-pptx` | 下载 PPTX |
+| 9 | POST | `/internal/solve` | 解题（SSE） |
+| 10 | POST | `/internal/exercise/error-analysis` | 错题分析 |
+| 11 | POST | `/internal/exercise/grade` | 批改打分 |
+| 12 | POST | `/internal/evaluation/report` | 评估报告生成 |
+| 13 | POST | `/internal/knowledge-graph/{course_id}` | 知识图谱 |
+| 14 | POST | `/internal/knowledge-graph/{course_id}/node/{node_id}` | 节点卡片 |
+| 15 | POST | `/internal/plans/create-from-path` | 一键生成学习路径 |
+| 16 | POST | `/internal/plans/{plan_id}/status` | 计划状态+软着陆检测 |
+| 17 | POST | `/internal/plans/{plan_id}/regression-check` | 回归检测 |
+| 18 | POST | `/internal/plans/{plan_id}/review-schedule` | 复习日程 |
+| 19 | POST | `/internal/api/chat` | 统一对话入口（SSE） |
+| 20 | POST | `/internal/inquiry/resolve` | 追问解析+资源生成（SSE） |
+| 21 | POST | `/internal/conversations/{conversation_id}/summary` | 对话总结 |
 
-**响应 data**：`{ "status": "ok" }`
+### 已删除的端点（7 个，Java 需自行处理）
+
+| # | 方法 | 路径 | 原功能 | Java 替代方案 |
+|---|------|------|--------|-------------|
+| 1 | POST | `/internal/plans/create` | 创建计划 | Java 直接 INSERT |
+| 2 | POST | `/internal/plans/{id}/progress` | 更新进度 | Java UPDATE + 内置 mastery 公式 |
+| 3 | POST | `/internal/plans/{id}/resume` | 恢复计划 | Java UPDATE status |
+| 4 | POST | `/internal/plans/{id}/node-status-change` | 节点状态联动 | Java UPDATE + 调 /status 重排 |
+| 5 | GET | `/internal/user/dashboard` | 仪表盘 | Java 查自己的 DB |
+| 6 | POST | `/internal/conversations/{id}/end` | 结束会话 | Java 自己处理 |
+| 7 | （原 POST /internal/plans/create 已删） | | | |
 
 ---
 
-## 2. Conversation（会话）
+## 各端点详细说明
 
-### `POST /api/conversations`
-
-创建新会话。
+### 1. POST /internal/profile/chat
 
 **请求体**：
 ```json
 {
+  "messages": [{"role": "user", "content": "我想学AI"}, ...],
+  "user_id": 1,
+  "student_profile": {                        // ← 新增：Java 传入
+    "knowledge_base": 50,
+    "cognitive_style": "视觉型",
+    "learning_goal": "转行AI工程师",
+    "weak_points": ["数学基础"],
+    "learning_pace": "中等",
+    "interest_direction": ["NLP"],
+    "entries": {...},
+    "tag_weights": {...},
+    "stability_counter": {...},
+    "last_extracted_msg_index": 0
+  }
+}
+```
+
+**响应**：SSE 流，done event 含 `profile_delta`（变更后的画像）。
+
+---
+
+### 2. POST /internal/resources/generate
+
+**请求体**：
+```json
+{
+  "topic": "Transformer 架构",
+  "user_id": 1,
+  "student_profile": {...}
+}
+```
+
+**响应**：SSE 流，done event 含 `content_blocks` + `questions`。
+Java 从 done event 提取结果自行持久化为 Resource。
+
+---
+
+### 3. POST /internal/tutor/chat
+
+**请求体**（简化，不再区分新旧 API）：
+```json
+{
+  "user_id": 1,
+  "student_profile": {...},
+  "messages": [                              // ← Java 传入完整历史消息
+    {"role": "user", "content": "什么是反向传播？"},
+    ...
+  ]
+}
+```
+
+**响应**：SSE 流，done event 含 `profile_delta`（后台画像提取结果）。
+
+---
+
+### 4. POST /internal/exercise/generate
+
+**请求体**：
+```json
+{
+  "topic": "反向传播",
+  "count": 5,
+  "difficulty": "medium",
+  "student_profile": {...},
   "user_id": 1
 }
 ```
 
-**响应 data**：
+**响应**：SSE 流，done event 含 `questions`。
+
+---
+
+### 5. POST /internal/path/{student_id}
+
+**请求体**：
 ```json
 {
-  "id": 100,
   "user_id": 1,
-  "title": "新对话",
-  "status": "active",
-  "created_at": "2026-06-06T10:00:00"
+  "student_profile": {...}
 }
 ```
 
----
-
-### `GET /api/conversations/{conversation_id}?user_id=1`
-
-获取指定会话详情。
-
-**响应 data**：同上（含 `summary` 字段用于摘要展示）
-
----
-
-### `PUT /api/conversations/{conversation_id}`
-
-更新会话（标题、状态、摘要等）。
-
-**请求体**（全部可选字段）：
+**响应**：
 ```json
 {
-  "title": "微积分学习讨论",
-  "status": "archived",
-  "summary": "本会话讨论了极限与导数的核心概念..."
-}
-```
-
-**响应 data**：更新后的完整会话对象
-
----
-
-### `GET /api/conversations/{conversation_id}/messages?mode=tutor&limit=50`
-
-加载会话消息历史。
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `mode` | string | 否 | 按对话模式过滤（`tutor` / `path` / `resource` 等） |
-| `limit` | int | 否 | 返回条数上限，默认 50 |
-
-**响应 data**（数组）：
-```json
-[
-  {
-    "id": 1,
-    "conversation_id": 100,
-    "role": "user",
-    "content": "什么是导数？",
-    "mode": "tutor",
-    "created_at": "2026-06-06T10:01:00"
-  },
-  {
-    "id": 2,
-    "conversation_id": 100,
-    "role": "assistant",
-    "content": "导数是函数在某一点的瞬时变化率...",
-    "mode": "tutor",
-    "created_at": "2026-06-06T10:01:05"
+  "success": true,
+  "data": {
+    "user_id": 1,
+    "steps": [{"topic": "...", "preview": "...", ...}],
+    "concept_graph": {...},
+    "response": "已为您规划 N 步学习路径"
   }
-]
+}
 ```
 
 ---
 
-### `GET /api/conversations/{conversation_id}/messages/raw?offset=0&limit=200`
-
-加载消息原始数据（不分 mode 过滤，用于压缩/摘要场景）。
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `offset` | int | 否 | 偏移量，默认 0 |
-| `limit` | int | 否 | 返回条数上限，默认 200 |
-
-**响应 data**：同上格式的数组
-
----
-
-### `POST /api/conversations/{conversation_id}/messages`
-
-批量保存用户消息和 AI 回复（一个事务内完成 2 条 INSERT + 更新会话时间）。
+### 6. POST /internal/profile/workflow/status
 
 **请求体**：
 ```json
 {
-  "user_message": "什么是导数？",
-  "assistant_message": "导数是函数在某一点的瞬时变化率...",
-  "user_mode": "tutor",
-  "assistant_mode": "tutor"
+  "user_id": 1,
+  "student_profile": {...}
 }
 ```
 
-**响应 data**：`{ "saved": 2 }`
+**响应**：画像完整度分析。
 
 ---
 
-## 3. StudentProfile（学生画像）
+### 7-8. PPTX 导出/下载
 
-### `GET /api/profiles/{user_id}`
+不变。
 
-获取学生画像。
+---
 
-**响应 data**：
+### 9. POST /internal/solve
+
+不变。请求体 `{"question": "...", "context": "...", "user_id": 1}`，SSE 流式返回解题步骤。
+
+---
+
+### 10. POST /internal/exercise/error-analysis
+
+不变。请求体 `{"errors": [...], "level": 1}`，返回分析结果。
+
+---
+
+### 11. POST /internal/exercise/grade
+
+不变。选择题/简答题批改评分。
+
+---
+
+### 12. POST /internal/evaluation/report
+
+**请求体**（移除 user_id，不再触发画像更新）：
+```json
+{
+  "evaluation_results": {
+    "results": [...],
+    "overall_score": 85,
+    "weak_modules": ["math"]
+  }
+}
+```
+
+**响应**：结构化评估报告。Java 自行决定是否更新画像。
+
+---
+
+### 13. POST /internal/knowledge-graph/{course_id}
+
+**请求体**（Java 传入掌握度数据）：
+```json
+{
+  "masteries": {
+    "ai_overview": 0.8,
+    "ml_basics": 0.5,
+    "dl_basics": 0.0
+  }
+}
+```
+
+**响应**：完整知识图谱 JSON（含颜色映射）。
+
+---
+
+### 14. POST /internal/knowledge-graph/{course_id}/node/{node_id}
+
+**请求体**：
+```json
+{
+  "masteries": {"ai_overview": 0.8, ...},
+  "total_exercises": 25,
+  "last_practiced": "2026-06-08T10:30:00Z"
+}
+```
+
+**响应**：节点卡片详情。
+
+---
+
+### 15. POST /internal/plans/create-from-path
+
+**请求体**：
 ```json
 {
   "user_id": 1,
-  "profile_dict": {
-    "knowledge": { "calculus": 0.6, "linear_algebra": 0.3 },
-    "style": "visual",
-    "pace": "moderate",
-    "entries": [
-      { "concept": "导数", "mastery": 0.75, "confidence": 0.8 },
-      { "concept": "积分", "mastery": 0.4, "confidence": 0.5 }
-    ]
+  "course_id": "ai_intro",
+  "student_profile": {...}
+}
+```
+
+**响应**（不再调 Java 创建 plan）：
+```json
+{
+  "success": true,
+  "data": {
+    "course_id": "ai_intro",
+    "total_steps": 8,
+    "steps": [
+      {"step_order": 1, "topic": "AI概述", "knowledge_node_id": "ai_overview", "estimated_days": 1, ...}
+    ],
+    "concept_graph": {...},
+    "summary": "已为您规划8步学习路径"
+  }
+}
+```
+
+Java 自行将 steps 持久化为 Plan。
+
+---
+
+### 16. POST /internal/plans/{plan_id}/status
+
+**请求体**（Java 传入 plan + steps 数据）：
+```json
+{
+  "plan": {
+    "id": 42,
+    "user_id": 1,
+    "status": "paused",
+    "total_steps": 10,
+    "completed_steps": 3,
+    "last_activity_at": "2026-06-01T10:00:00Z"
   },
-  "last_extracted_msg_index": 42,
-  "created_at": "2026-06-01T08:00:00",
-  "updated_at": "2026-06-06T12:00:00"
-}
-```
-
-> `profile_dict` 是自由格式 JSON，具体结构由 AI 端定义和维护。`last_extracted_msg_index` 用于增量画像提取的断点续传。
-
----
-
-### `PUT /api/profiles/{user_id}`
-
-全量写入/覆盖画像（upsert 语义）。
-
-**请求体**：
-```json
-{
-  "profile_dict": { "knowledge": {...}, "style": "visual", ... },
-  "last_extracted_msg_index": 42
-}
-```
-
-**响应 data**：更新后的完整 profile 对象
-
----
-
-### `POST /api/profiles/{user_id}`
-
-部分更新画像字段。
-
-**请求体**（全部可选）：
-```json
-{
-  "profile_dict": { "knowledge": {...} },
-  "last_extracted_msg_index": 50
-}
-```
-
-**响应 data**：更新后的完整 profile 对象
-
----
-
-## 4. LearningPlan（学习计划）+ PlanStep（计划步骤）
-
-### `POST /api/plans`
-
-创建学习计划（含步骤列表，一个事务内完成）。
-
-**请求体**：
-```json
-{
-  "user_id": 1,
-  "course_id": "calculus_101",
-  "title": "微积分学习计划",
   "steps": [
     {
-      "node_id": "node_01",
-      "topic": "函数与极限",
-      "order": 0,
-      "status": "pending",
-      "node_type": "learn",
-      "depth": 0
+      "id": 100, "step_order": 1, "topic": "AI概述",
+      "knowledge_node_id": "ai_overview", "status": "completed",
+      "topic_difficulty": 3, "mastery_current": 0.85, "review_count": 2
     },
-    {
-      "node_id": "node_02",
-      "topic": "导数定义",
-      "order": 1,
-      "status": "locked",
-      "node_type": "learn",
-      "depth": 0
-    }
+    ...
   ]
 }
 ```
 
-**step 字段说明**：
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `node_id` | string | 知识图谱节点 ID |
-| `topic` | string | 知识点名称 |
-| `order` | int | 排序序号（从 0 开始） |
-| `status` | string | pending / in_progress / completed / locked |
-| `node_type` | string | learn / practice / review |
-| `depth` | int | 在知识图谱中的深度层级 |
-
-**响应 data**：
-```json
-{
-  "id": 200,
-  "user_id": 1,
-  "course_id": "calculus_101",
-  "title": "微积分学习计划",
-  "status": "in_progress",
-  "total_steps": 2,
-  "completed_steps": 0,
-  "steps": [ ... ]
-}
-```
+**响应**：含 `soft_landing`（软着陆策略）、`days_idle`、每个 step 的 `decayed_mastery`。
 
 ---
 
-### `GET /api/plans/{plan_id}?user_id=1`
+### 17. POST /internal/plans/{plan_id}/regression-check
 
-获取计划详情（含步骤列表）。
-
-**响应 data**：同上格式
-
----
-
-### `PUT /api/plans/{plan_id}`
-
-更新计划（标题、状态等）。
-
-**请求体**（全部可选）：
+**阶段 1 — 出题**（无 answers）：
 ```json
-{
-  "title": "新标题",
-  "status": "paused"
-}
-```
-
----
-
-### `GET /api/plans/{plan_id}/steps`
-
-获取计划的所有步骤（按 order 排序）。
-
-**响应 data**（数组）：
-```json
-[
-  {
-    "id": 1001,
-    "plan_id": 200,
-    "node_id": "node_01",
-    "topic": "函数与极限",
-    "order": 0,
-    "status": "completed",
-    "node_type": "learn",
-    "depth": 0
-  }
-]
-```
-
----
-
-### `POST /api/plans/{plan_id}/steps`
-
-在指定位置插入新步骤（并自动调整后续步骤的 order）。
-
-**请求体**：
-```json
-{
-  "node_id": "node_03",
-  "topic": "导数应用",
-  "order": 2,
-  "status": "locked",
-  "node_type": "learn",
-  "depth": 0
-}
-```
-
----
-
-### `PUT /api/plan-steps/{step_id}`
-
-更新单个步骤。
-
-**请求体**（全部可选）：
-```json
-{
-  "status": "completed",
-  "order": 1
-}
-```
-
----
-
-### `POST /api/plans/{plan_id}/steps/shift`
-
-将指定 order 之后的所有步骤 order +1（用于在中间插入步骤时腾出位置）。
-
-**请求体**：
-```json
-{
-  "after_order": 1
-}
-```
-
----
-
-### `POST /api/plans/{plan_id}/steps/lock-successors`
-
-锁定指定 node 的所有后继步骤。Java 端需根据知识图谱依赖关系查找后继节点。
-
-**请求体**：
-```json
-{
-  "node_id": "node_05"
-}
-```
-
-**响应 data**：
-```json
-{
-  "locked_ids": [1003, 1004, 1005]
-}
-```
-
----
-
-### `POST /api/plans/node-status-change`
-
-处理节点状态变更的复杂事务（Java 端需原子执行以下操作）：
-
-1. 查找用户当前 `in_progress` 状态的学习计划
-2. 查找该 node_id 对应的 PlanStep
-3. 遍历图骨架找后继节点
-4. 更新后继节点步骤为 `locked`
-5. 将当前步骤之后的步骤 order+1 腾出空位
-6. 插入一条复习步骤（review 类型）
-7. 更新计划总步骤数 +1
-
-**请求体**：
-```json
+// 请求
 {
   "user_id": 1,
-  "node_id": "node_05",
-  "old_status": "in_progress",
-  "new_status": "completed",
-  "plan_id": 200
+  "plan": {...},
+  "steps": [...],
+  "days_idle": 10,
+  "answers": null
 }
+// 响应：{ "strategy": "warmup", "questions": [...] }
 ```
 
-**响应 data**：
+**阶段 2 — 判分+重排**（有 answers）：
 ```json
-{
-  "plan_id": 200,
-  "updated_step_id": 1005,
-  "locked_step_ids": [1006, 1007],
-  "new_review_step_id": 1008
-}
-```
-
----
-
-## 5. NodeMastery（节点掌握度）
-
-### `GET /api/node-masteries?user_id=1&course_id=calculus_101`
-
-获取用户在指定课程的所有节点掌握度。
-
-**响应 data**（数组）：
-```json
-[
-  { "node_id": "node_01", "mastery": 0.85, "review_count": 3, "last_review_at": "2026-06-05T14:00:00" },
-  { "node_id": "node_02", "mastery": 0.40, "review_count": 1, "last_review_at": "2026-06-03T10:00:00" }
-]
-```
-
----
-
-### `GET /api/node-masteries/{node_id}?user_id=1`
-
-获取单个节点的掌握度详情。
-
-**响应 data**：
-```json
-{
-  "node_id": "node_01",
-  "user_id": 1,
-  "course_id": "calculus_101",
-  "mastery": 0.85,
-  "review_count": 3,
-  "last_review_at": "2026-06-05T14:00:00"
-}
-```
-
----
-
-### `PUT /api/node-masteries/{node_id}`
-
-写入/更新节点掌握度（upsert 语义）。
-
-**请求体**：
-```json
+// 请求
 {
   "user_id": 1,
-  "course_id": "calculus_101",
-  "mastery": 0.85,
-  "review_count": 3
-}
-```
-
----
-
-### `GET /api/node-masteries/distribution?user_id=1&course_id=calculus_101`
-
-获取掌握度分布统计。
-
-**响应 data**：
-```json
-{
-  "mastered": 12,
-  "in_progress": 8,
-  "weak": 5,
-  "overall_pct": 0.62
-}
-```
-
----
-
-## 6. LearningActivity（学习活动记录）
-
-### `POST /api/learning-activities`
-
-创建一条学习活动记录。
-
-**请求体**：
-```json
-{
-  "user_id": 1,
-  "plan_id": 200,
-  "step_id": 1005,
-  "activity_type": "exercise",
-  "duration_minutes": 15,
-  "score": 0.9
-}
-```
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `user_id` | int | 是 | 用户 ID |
-| `plan_id` | int | 是 | 所属学习计划 ID |
-| `step_id` | int | 是 | 所属步骤 ID |
-| `activity_type` | string | 是 | exercise / review / study |
-| `duration_minutes` | int | 否 | 耗时（分钟），默认 0 |
-| `score` | float | 否 | 得分 (0.0-1.0) |
-
----
-
-### `GET /api/learning-activities?user_id=1&limit=20`
-
-获取最近的学习活动记录列表。
-
-**响应 data**（数组）：
-```json
-[
-  {
-    "id": 1,
-    "user_id": 1,
-    "plan_id": 200,
-    "step_id": 1005,
-    "activity_type": "exercise",
-    "duration_minutes": 15,
-    "score": 0.9,
-    "topic": "导数定义",
-    "created_at": "2026-06-06T15:00:00"
-  }
-]
-```
-
-> `topic` 字段来自 PlanStep 的 JOIN，Java 端需关联查询。
-
----
-
-### `GET /api/learning-activities/stats?user_id=1`
-
-获取用户学习活动统计摘要。
-
-**响应 data**：
-```json
-{
-  "total_sessions": 42,
-  "total_minutes": 630,
-  "first_date": "2026-05-01",
-  "last_date": "2026-06-06"
-}
-```
-
----
-
-### `GET /api/learning-activities/score-trend?user_id=1&days=30`
-
-获取用户得分趋势（按日期聚合）。
-
-**响应 data**（数组）：
-```json
-[
-  { "date": "2026-06-01", "avg_score": 0.75, "count": 3 },
-  { "date": "2026-06-02", "avg_score": 0.82, "count": 2 }
-]
-```
-
----
-
-### `GET /api/learning-activities/count-exercises?user_id=1`
-
-获取用户总练习次数。
-
-**响应 data**：
-```json
-{
-  "count": 128
-}
-```
-
----
-
-## 7. Resource（学习资源）
-
-### `POST /api/resources`
-
-创建一条学习资源。
-
-**请求体**：
-```json
-{
-  "user_id": 1,
-  "type": "path_step",
-  "topic": "导数定义",
-  "title": "导数定义",
-  "content_json": {
-    "order": 0,
-    "status": "pending",
-    "preview": "导数的基本定义与几何意义"
-  }
-}
-```
-
-**响应 data**：
-```json
-{
-  "id": 500
-}
-```
-
----
-
-### `POST /api/resources/batch`
-
-批量创建资源（可选优化端点，减少网络往返）。
-
-**请求体**：
-```json
-{
-  "resources": [
-    { "user_id": 1, "type": "flash_text", "topic": "导数", "title": "导数闪卡1", "content_json": {...} },
-    { "user_id": 1, "type": "flash_text", "topic": "导数", "title": "导数闪卡2", "content_json": {...} }
+  "plan": {...},
+  "steps": [...],
+  "days_idle": 10,
+  "answers": [
+    {"topic": "AI概述", "question_type": "choice", "user_answer": "A", "correct_answer": "A", "choices": ["A","B","C","D"]}
   ]
 }
+// 响应：{ "strategy": "regression_check", "mastery_updates": {...}, "reordered_steps": [...] }
 ```
 
-**响应 data**：
-```json
-{
-  "ids": [501, 502]
-}
-```
+Java 根据 `mastery_updates` 和 `reordered_steps` 自行更新 DB。
 
 ---
 
-## 8. LearningRecord（学习记录）
-
-### `POST /api/learning-records`
-
-创建一条学习进度记录。
+### 18. POST /internal/plans/{plan_id}/review-schedule
 
 **请求体**：
 ```json
 {
-  "user_id": 1,
-  "resource_id": 500,
-  "progress": 0.0
+  "steps": [
+    {"id": 100, "status": "completed", "topic": "AI概述", "topic_difficulty": 3,
+     "review_count": 1, "mastery_current": 0.85, "last_review_at": "2026-06-01T10:00:00Z",
+     "knowledge_node_id": "ai_overview"}
+  ],
+  "days_ahead": 7
 }
 ```
 
-**响应 data**：
+**响应**：复习日程列表，含 `urgency` 等级。
+
+---
+
+### 19. POST /internal/api/chat
+
+统一对话入口，双层模式策略。
+
+**请求体**：
 ```json
 {
-  "id": 600
+  "message": "帮我出几道Transformer的题",
+  "user_id": 1,
+  "mode": "auto",
+  "conversation_id": 42,
+  "style": "standard",
+  "messages": [                               // ← Java 传入历史消息
+    {"role": "user", "content": "你好"},
+    {"role": "assistant", "content": "你好！有什么可以帮你的？"}
+  ],
+  "student_profile": {...}                    // ← Java 传入画像
+}
+```
+
+**响应**：SSE 流，按 mode 分发到不同子模式。done event 含 `profile_delta` + `conversation_id`。
+
+---
+
+### 20. POST /internal/inquiry/resolve
+
+**请求体**：
+```json
+{
+  "original_message": "我想学AI",
+  "answers": ["想做NLP方向", "有Python基础"],
+  "user_id": 1,
+  "student_profile": {...},
+  "questions": [...],
+  "suggested_types": ["content", "exercise"],
+  "clarified_topic": "NLP入门"
+}
+```
+
+**响应**：SSE 流，done event 含 `content_blocks` + `questions`。
+
+---
+
+### 21. POST /internal/conversations/{conversation_id}/summary
+
+**请求体**：
+```json
+{
+  "messages": [
+    {"role": "user", "content": "什么是反向传播？"},
+    {"role": "assistant", "content": "反向传播是..."},
+    ...
+  ],
+  "course_id": "ai_intro"
+}
+```
+
+**响应**：
+```json
+{
+  "success": true,
+  "data": {
+    "conversation_id": 42,
+    "summary": "本次对话讨论了反向传播算法..."
+  }
 }
 ```
 
 ---
 
-## 9. 聚合查询
+## Java 需自行实现的功能
 
-### `GET /api/aggregations/topic-mastery?user_id=1`
+以下功能原在 Python 端，现改为 Java 端负责：
 
-按 topic 聚合用户掌握度（JOIN PlanStep + LearningPlan，用于 Dashboard 图表）。
-
-**响应 data**（数组）：
-```json
-[
-  { "topic": "函数与极限", "mastery_avg": 0.85, "step_count": 3 },
-  { "topic": "导数定义", "mastery_avg": 0.60, "step_count": 2 }
-]
-```
-
----
-
-## 附录 A：环境变量
-
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `JAVA_API_BASE_URL` | Java 后端 API 基地址 | `http://localhost:8080/api` |
-
-Python 端 `JavaApiClient` 类从该环境变量读取地址，并在每个 HTTP 请求头中设置 `Content-Type: application/json`，超时时间 10 秒。
-
----
-
-## 附录 B：错误码约定
-
-| code | 含义 |
+| 功能 | 说明 |
 |------|------|
-| 0 | 成功 |
-| 400 | 请求参数错误 |
-| 404 | 资源不存在 |
-| 500 | 服务器内部错误 |
-
-> Python 端对 HTTP 4xx/5xx 和超时均做降级处理（返回安全默认值如空列表/None/0），不阻塞主流程，但会记录 warning 日志。
+| Plan CRUD | 创建/更新/删除计划，更新步骤状态（原 `/plans/create`、`/plans/{id}/progress`、`/plans/{id}/resume`） |
+| Node status change | 知识图谱节点状态变化 → 计划重排（原 `/plans/{id}/node-status-change`） |
+| Dashboard | 仪表盘数据聚合（原 `/user/dashboard`） |
+| Conversation end | 会话结束处理（原 `/conversations/{id}/end`） |
+| Profile update | 从 Python 响应中的 `profile_delta` 提取并持久化 |
+| Resource persist | 从 Python done event 中的 `content_blocks`/`questions` 提取并持久化 |
+| Message save | 从 Python SSE token 流 + done event 拼接完整回复并持久化 |
+| Conversation summary | 可调 Python `/conversations/{id}/summary` 获取 LLM 总结后持久化 |
 
 ---
 
-## 附录 C：数据库表字段参考
+## 变更摘要（相对于 Architecture #1）
 
-以下为 10 张表的完整字段定义，供 Java 端设计 Entity 时参考：
-
-### conversations
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | BIGINT PK | 自增主键 |
-| user_id | BIGINT | 用户 ID |
-| title | VARCHAR(255) | 对话标题 |
-| status | VARCHAR(20) | active / archived |
-| summary | TEXT | AI 生成的对话摘要 |
-| created_at | DATETIME | 创建时间 |
-| updated_at | DATETIME | 更新时间 |
-
-### messages
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | BIGINT PK | 自增主键 |
-| conversation_id | BIGINT FK | 所属会话 |
-| role | VARCHAR(20) | user / assistant |
-| content | TEXT | 消息内容 |
-| mode | VARCHAR(20) | tutor / path / resource 等 |
-| created_at | DATETIME | 创建时间 |
-
-### student_profiles
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| user_id | BIGINT PK | 用户 ID |
-| profile_dict | JSON | 画像数据（自由格式） |
-| last_extracted_msg_index | INT | 最后提取的消息索引 |
-| created_at | DATETIME | 创建时间 |
-| updated_at | DATETIME | 更新时间 |
-
-### learning_plans
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | BIGINT PK | 自增主键 |
-| user_id | BIGINT | 用户 ID |
-| course_id | VARCHAR(100) | 课程 ID |
-| title | VARCHAR(255) | 计划标题 |
-| status | VARCHAR(20) | in_progress / completed / paused |
-| total_steps | INT | 总步骤数 |
-| completed_steps | INT | 已完成步骤数 |
-| created_at | DATETIME | 创建时间 |
-| updated_at | DATETIME | 更新时间 |
-
-### plan_steps
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | BIGINT PK | 自增主键 |
-| plan_id | BIGINT FK | 所属计划 |
-| node_id | VARCHAR(100) | 知识图谱节点 ID |
-| topic | VARCHAR(255) | 知识点名称 |
-| order | INT | 排序序号 |
-| status | VARCHAR(20) | pending / in_progress / completed / locked |
-| node_type | VARCHAR(20) | learn / practice / review |
-| depth | INT | 图谱深度层级 |
-| created_at | DATETIME | 创建时间 |
-| updated_at | DATETIME | 更新时间 |
-
-### node_masteries
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | BIGINT PK | 自增主键 |
-| user_id | BIGINT | 用户 ID |
-| node_id | VARCHAR(100) | 知识图谱节点 ID |
-| course_id | VARCHAR(100) | 课程 ID |
-| mastery | FLOAT | 掌握度 (0.0-1.0) |
-| review_count | INT | 复习次数 |
-| last_review_at | DATETIME | 最近复习时间 |
-| created_at | DATETIME | 创建时间 |
-| updated_at | DATETIME | 更新时间 |
-
-### learning_activities
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | BIGINT PK | 自增主键 |
-| user_id | BIGINT | 用户 ID |
-| plan_id | BIGINT | 所属计划 ID |
-| step_id | BIGINT | 所属步骤 ID |
-| activity_type | VARCHAR(20) | exercise / review / study |
-| duration_minutes | INT | 耗时（分钟） |
-| score | FLOAT | 得分 |
-| created_at | DATETIME | 创建时间 |
-
-### resources
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | BIGINT PK | 自增主键 |
-| user_id | BIGINT | 用户 ID |
-| type | VARCHAR(50) | flash_text / flash_image / path_step 等 |
-| topic | VARCHAR(255) | 知识点名称 |
-| title | VARCHAR(255) | 资源标题 |
-| content_json | JSON | 资源内容（自由格式） |
-| created_at | DATETIME | 创建时间 |
-
-### learning_records
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | BIGINT PK | 自增主键 |
-| user_id | BIGINT | 用户 ID |
-| resource_id | BIGINT FK | 关联资源 |
-| progress | FLOAT | 学习进度 (0.0-1.0) |
-| created_at | DATETIME | 创建时间 |
-| updated_at | DATETIME | 更新时间 |
+| 变更类型 | 数量 | 说明 |
+|----------|------|------|
+| 删除的端点 | 7 | Java 自行处理 |
+| GET→POST | 6 | 需传请求体（Java 传入数据） |
+| 签名变更 | 13 | 请求体增加字段（profile, messages, steps 等） |
+| 移除的依赖 | 6 | java_api_client, conversation_service, profile_service, dashboard_service, summary_service, evaluation_report |
+| 新增工具模块 | 1 | `app/utils/conversation_compress.py`（LLM 摘要压缩，供 Java 按需调用） |

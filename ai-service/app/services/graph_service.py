@@ -8,8 +8,6 @@ import threading
 from collections import deque
 from typing import Optional
 
-from app.services.java_api_client import get_java_client
-
 logger = logging.getLogger(__name__)
 
 SKELETON_PATH = os.path.join(
@@ -87,11 +85,10 @@ _MOCK_SUB_CONCEPTS: dict[str, list[dict]] = {
 
 
 class GraphService:
-    """知识图谱服务 — 骨架加载、规则补边、掌握度注入、颜色映射"""
+    """知识图谱服务 — 骨架加载、规则补边、掌握度注入、颜色映射（纯算法）"""
 
     def __init__(self):
         self._skeleton_cache: Optional[dict] = None
-        self._client = get_java_client()
 
     def load_skeleton(self) -> dict:
         if self._skeleton_cache is not None:
@@ -158,11 +155,12 @@ class GraphService:
             logger.info("Auto-added %d parallel edges", added)
         return graph
 
-    async def get_graph(self, user_id: int, course_id: str) -> dict:
+    async def get_graph(self, masteries: dict[str, float] | None = None) -> dict:
+        """构建完整知识图谱。masteries 由 Java 传入。"""
         graph = copy.deepcopy(self.load_skeleton())
         graph = self.auto_add_parallel_edges(graph)
 
-        masteries = await self._get_user_masteries(user_id, course_id)
+        masteries = masteries or {}
         for node in graph["nodes"]:
             m = masteries.get(node["id"], 0.0)
             status = self._mastery_to_status(m)
@@ -172,7 +170,11 @@ class GraphService:
 
         return graph
 
-    async def get_node_card(self, user_id: int, course_id: str, node_id: str) -> dict:
+    async def get_node_card(self, node_id: str,
+                            masteries: dict[str, float] | None = None,
+                            total_exercises: int = 0,
+                            last_practiced: str | None = None) -> dict:
+        """获取节点卡片详情。所有数据由 Java 传入。"""
         skeleton = self.load_skeleton()
 
         node = None
@@ -183,7 +185,7 @@ class GraphService:
         if node is None:
             raise ValueError(f"节点 '{node_id}' 不存在")
 
-        masteries = await self._get_user_masteries(user_id, course_id)
+        masteries = masteries or {}
         mastery = masteries.get(node_id, 0.0)
         status = self._mastery_to_status(mastery)
         node["mastery"] = mastery
@@ -220,13 +222,9 @@ class GraphService:
 
         perf = {
             "sub_concepts": sub_concepts,
-            "total_exercises": await self._count_exercises(user_id),
-            "last_practiced": None,
+            "total_exercises": total_exercises,
+            "last_practiced": last_practiced,
         }
-        if node_mastery_val is not None:
-            detail = await self._client.get_node_mastery_detail(user_id, node_id)
-            if detail and detail.get("last_review_at"):
-                perf["last_practiced"] = detail["last_review_at"]
 
         actions = self._build_actions(mastery, status)
 
@@ -240,19 +238,6 @@ class GraphService:
             },
             "actions": actions,
         }
-
-    async def _count_exercises(self, user_id: int) -> int:
-        try:
-            return await self._client.count_exercises(user_id)
-        except Exception:
-            return 0
-
-    async def _get_user_masteries(self, user_id: int, course_id: str) -> dict[str, float]:
-        try:
-            return await self._client.get_node_masteries(user_id, course_id)
-        except Exception as e:
-            logger.error("Failed to load masteries for user %d, course %s: %s", user_id, course_id, e)
-            return {}
 
     @staticmethod
     def _mastery_to_status(mastery: float) -> str:

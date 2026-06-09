@@ -5,12 +5,11 @@ LearningPathWorkflow — 学习路径规划 + 资源匹配编排工作流
   Stage 1: 画像读取 → PathAgent.draft → steps + concept_graph
   Stage 2: PathAgent.revise → 审查修正（借鉴 DeepTutor repair sub-loop）
   Stage 3: 资源匹配 → 为每个 step 调 ContentAgent 生成匹配资源
-           → resource_id 回填到 steps
-           → 持久化 Resource + LearningRecord
+
+Architecture #2: 纯 AI 生成。不再持久化（Java 从响应中提取结果后自行保存）。
 """
 
 import asyncio
-import json
 import logging
 from typing import TypedDict
 
@@ -18,7 +17,6 @@ from langgraph.graph import StateGraph, END
 
 from app.agents.path_agent import PathAgent
 from app.agents.content_agent import ContentAgent
-from app.services.java_api_client import get_java_client
 from app.workflows.base_workflow import BaseWorkflow
 
 logger = logging.getLogger(__name__)
@@ -49,13 +47,13 @@ class LearningPathWorkflow(BaseWorkflow):
         graph.add_node("draft", self._draft_node)
         graph.add_node("revise", self._revise_node)
         graph.add_node("match_resources", self._match_resources_node)
-        graph.add_node("persist", self._persist_node)
+        graph.add_node("finalize", self._finalize_node)
 
         graph.set_entry_point("draft")
         graph.add_edge("draft", "revise")
         graph.add_edge("revise", "match_resources")
-        graph.add_edge("match_resources", "persist")
-        graph.add_edge("persist", END)
+        graph.add_edge("match_resources", "finalize")
+        graph.add_edge("finalize", END)
 
         return graph.compile()
 
@@ -110,53 +108,14 @@ class LearningPathWorkflow(BaseWorkflow):
         matched_steps = list(await asyncio.gather(*tasks))
         return {"steps": matched_steps}
 
-    async def _persist_node(self, state: LearningPathState) -> dict:
-        """Stage 4: 持久化路径步骤 + 对应资源（通过 Java API）"""
-        user_id = state.get("user_id", 1)
+    async def _finalize_node(self, state: LearningPathState) -> dict:
+        """Stage 4: 聚合结果（不持久化，Java 从响应中提取）"""
         steps = state.get("steps", [])
-        resource_ids = []
-        client = get_java_client()
-
-        try:
-            for idx, step in enumerate(steps):
-                topic = step.get("topic", "")
-                preview = step.get("preview", "")
-
-                rid = await client.create_resource(
-                    user_id=user_id,
-                    resource_type="path_step",
-                    topic=topic,
-                    title=topic,
-                    content_json={
-                        "order": step.get("order", 0),
-                        "status": step.get("status", "pending"),
-                        "preview": preview,
-                    },
-                )
-                if rid:
-                    await client.create_learning_record(
-                        user_id=user_id, resource_id=rid, progress=0.0,
-                    )
-                    resource_ids.append(rid)
-                    step = {**step, "resource_id": rid}
-                    steps[idx] = step
-
-            logger.info(f"Persisted path with {len(resource_ids)} steps for user {user_id}")
-        except Exception as e:
-            logger.error(f"Failed to persist learning path: {e}")
-            return {
-                "steps": steps,
-                "resource_ids": [],
-                "error": f"持久化失败: {e}",
-                "response": "路径规划成功，但保存失败，请稍后重试。",
-                "concept_graph": state.get("concept_graph", {}),
-                "version": state.get("version", 1),
-            }
 
         response = f"已为您规划 {len(steps)} 步学习路径，并匹配了对应资源。"
         return {
             "steps": steps,
-            "resource_ids": resource_ids,
+            "resource_ids": [],
             "response": response,
             "concept_graph": state.get("concept_graph", {}),
             "version": state.get("version", 1),

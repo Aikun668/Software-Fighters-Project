@@ -8,6 +8,9 @@ ProfileAgent — 对话式学习画像构建智能体
   - 硬上限裁剪：每维度最多 N 个条目
 
 5 节点 StateGraph：extract → merge → audit → response
+
+Architecture #2: 纯内存计算。Java 传入 profile dict，Python 返回更新结果，
+不调 Java API，不持久化。
 """
 
 import json
@@ -18,7 +21,6 @@ from typing import TypedDict
 from langgraph.graph import END, StateGraph
 
 from app.agents.base_agent import BaseAgent
-from app.services.java_api_client import get_java_client
 from app.services.llm_service import create_llm
 from app.utils.prompt_loader import interpolate_variables
 
@@ -76,7 +78,7 @@ class ProfileState(TypedDict, total=False):
 
 
 class ProfileAgent(BaseAgent):
-    """对话式学习画像构建智能体"""
+    """对话式学习画像构建智能体 — 纯内存计算"""
 
     def __init__(self, config=None, use_mock_llm: bool = False):
         super().__init__(
@@ -87,7 +89,6 @@ class ProfileAgent(BaseAgent):
             use_mock_llm=use_mock_llm,
         )
         self.use_mock_llm = use_mock_llm
-        self._client = get_java_client()
 
         self.extract_system_template = self._load_prompt(filename="extract.yaml", key="system")
         self.extract_user_template = self._load_prompt(filename="extract.yaml", key="user")
@@ -116,11 +117,11 @@ class ProfileAgent(BaseAgent):
 
     async def _extract_node(self, state: ProfileState) -> dict:
         messages = state.get("messages", [])
-        user_id = state.get("user_id", 1)
+        current_profile = state.get("current_profile", {})
         last_idx = state.get("last_extracted_msg_index")
 
         if last_idx is None:
-            last_idx = await self._load_last_extracted_index(user_id)
+            last_idx = current_profile.get("last_extracted_msg_index") or 0
 
         new_start = min(last_idx, len(messages))
         new_messages = messages[new_start:]
@@ -132,7 +133,6 @@ class ProfileAgent(BaseAgent):
             new_messages = new_messages[-MAX_EXTRACT_TURNS:]
             new_start = len(messages) - len(new_messages)
 
-        current_profile = state.get("current_profile", {})
         entries = current_profile.get("entries", {})
         entries_summary = self._format_entries_for_extract(entries)
 
@@ -160,7 +160,6 @@ class ProfileAgent(BaseAgent):
     # ── merge ────────────────────────────────────────────────────────
 
     async def _merge_node(self, state: ProfileState) -> dict:
-        user_id = state.get("user_id", 1)
         fragment = state.get("extracted_fragment", {})
 
         if not fragment:
@@ -169,45 +168,34 @@ class ProfileAgent(BaseAgent):
                 "profile_changed": False,
             }
 
-        try:
-            profile = await self._load_profile_dict(user_id)
-            is_new = not profile
-            if is_new:
-                profile = {"user_id": user_id}
+        profile = state.get("current_profile", {})
+        if not profile:
+            profile = {}
 
-            new_last_idx = state.get("last_extracted_msg_index", 0)
-            if new_last_idx > (profile.get("last_extracted_msg_index") or 0):
-                profile["last_extracted_msg_index"] = new_last_idx
+        new_last_idx = state.get("last_extracted_msg_index", 0)
+        if new_last_idx > (profile.get("last_extracted_msg_index") or 0):
+            profile["last_extracted_msg_index"] = new_last_idx
 
-            profile, changed = self._apply_merge_in_memory(profile, fragment)
+        profile, changed = self._apply_merge_in_memory(profile, fragment)
 
-            profile["raw_profile_json"] = {
-                d: profile.get(d) for d in DIMENSIONS
-            }
-            profile["raw_profile_json"]["entries"] = profile.get("entries")
-            profile["raw_profile_json"]["tag_weights"] = profile.get("tag_weights")
-            profile["raw_profile_json"]["stability_counter"] = profile.get("stability_counter")
+        profile["raw_profile_json"] = {
+            d: profile.get(d) for d in DIMENSIONS
+        }
+        profile["raw_profile_json"]["entries"] = profile.get("entries")
+        profile["raw_profile_json"]["tag_weights"] = profile.get("tag_weights")
+        profile["raw_profile_json"]["stability_counter"] = profile.get("stability_counter")
 
-            profile["audit_counter"] = (profile.get("audit_counter") or 0) + 1
+        profile["audit_counter"] = (profile.get("audit_counter") or 0) + 1
 
-            if is_new:
-                await self._client.upsert_profile(user_id, profile)
-            elif changed:
-                await self._client.update_profile(user_id, profile)
-
-            current_profile = {
-                d: profile.get(d) for d in DIMENSIONS
-            }
-            current_profile["entries"] = profile.get("entries")
-            current_profile["tag_weights"] = profile.get("tag_weights")
-            current_profile["stability_counter"] = profile.get("stability_counter")
-            current_profile["audit_counter"] = profile.get("audit_counter")
-            return {"current_profile": current_profile, "profile_changed": changed}
-        except Exception as e:
-            logger.warning(f"Profile merge failed: {e}, using in-memory merge")
-            old = state.get("current_profile", {})
-            merged, changed = self._merge_in_memory(old, fragment)
-            return {"current_profile": merged, "profile_changed": changed}
+        current_profile = {
+            d: profile.get(d) for d in DIMENSIONS
+        }
+        current_profile["entries"] = profile.get("entries")
+        current_profile["tag_weights"] = profile.get("tag_weights")
+        current_profile["stability_counter"] = profile.get("stability_counter")
+        current_profile["audit_counter"] = profile.get("audit_counter")
+        current_profile["last_extracted_msg_index"] = profile.get("last_extracted_msg_index")
+        return {"current_profile": current_profile, "profile_changed": changed}
 
     # ── audit ────────────────────────────────────────────────────────
 
@@ -228,30 +216,23 @@ class ProfileAgent(BaseAgent):
 
         result = await self._run_audit(all_entries, recent_summary)
         if result:
-            try:
-                db_entries = dict(entries)
-                for dim in ARRAY_DIMENSIONS:
-                    dim_entries = [
-                        e for e in db_entries.get(dim, [])
-                        if e.get("text", "") not in result.get("delete_texts", set())
-                    ]
-                    for update in result.get("updates", []):
-                        for i, e in enumerate(dim_entries):
-                            if e.get("text") == update.get("old_text"):
-                                dim_entries[i] = {**e, "text": update.get("new_text", e.get("text")), "updated_at": _now_iso()}
-                    db_entries[dim] = dim_entries
+            db_entries = dict(entries)
+            for dim in ARRAY_DIMENSIONS:
+                dim_entries = [
+                    e for e in db_entries.get(dim, [])
+                    if e.get("text", "") not in result.get("delete_texts", set())
+                ]
+                for update in result.get("updates", []):
+                    for i, e in enumerate(dim_entries):
+                        if e.get("text") == update.get("old_text"):
+                            dim_entries[i] = {**e, "text": update.get("new_text", e.get("text")), "updated_at": _now_iso()}
+                db_entries[dim] = dim_entries
 
-                new_profile = dict(profile)
-                new_profile["entries"] = db_entries
-                new_profile["audit_counter"] = 0
+            new_profile = dict(profile)
+            new_profile["entries"] = db_entries
+            new_profile["audit_counter"] = 0
 
-                await self._client.update_profile(
-                    state.get("user_id", 1),
-                    {"entries": db_entries, "audit_counter": 0},
-                )
-                return {"current_profile": new_profile, "profile_changed": True}
-            except Exception as e:
-                logger.warning(f"Audit update failed: {e}")
+            return {"current_profile": new_profile, "profile_changed": True}
 
         return {}
 
@@ -388,61 +369,8 @@ class ProfileAgent(BaseAgent):
         return new_profile, changed
 
     def _merge_in_memory(self, old: dict, fragment: dict) -> tuple[dict, bool]:
-        """纯内存合并（网络不可用时的降级）"""
-        merged = dict(old)
-        changed = False
-
-        entries = dict(old.get("entries", {}))
-
-        for dim in ARRAY_DIMENSIONS:
-            new_items = fragment.get(dim)
-            if not new_items or not isinstance(new_items, list):
-                continue
-
-            entries, legacy, dim_changed = self._merge_array_dimension(
-                entries, dim, new_items,
-            )
-            if dim_changed:
-                changed = True
-            if legacy != merged.get(dim):
-                merged[dim] = legacy
-
-        if entries != old.get("entries", {}):
-            merged["entries"] = entries
-
-        for dim in NUMBER_DIMENSIONS:
-            new_val = fragment.get(dim)
-            if new_val is None:
-                continue
-            try:
-                new_num = float(new_val)
-            except (TypeError, ValueError):
-                continue
-            old_val = merged.get(dim)
-            merged[dim] = int(old_val * 0.7 + new_num * 0.3) if old_val is not None else int(new_num)
-            if merged[dim] != old_val:
-                changed = True
-
-        inmem_stability = dict(old.get("stability_counter", {}))
-        for dim in REPLACE_DIMENSIONS:
-            new_val = fragment.get(dim)
-            if new_val is None:
-                continue
-            sc = dict(inmem_stability.get(dim, {"value": None, "count": 0}))
-            if sc["value"] == new_val:
-                sc["count"] += 1
-            else:
-                sc = {"value": new_val, "count": 1}
-            inmem_stability[dim] = sc
-            if sc["count"] >= STABILITY_N and new_val != merged.get(dim):
-                merged[dim] = new_val
-                changed = True
-                inmem_stability[dim] = {"value": new_val, "count": 0}
-
-        if inmem_stability != old.get("stability_counter", {}):
-            merged["stability_counter"] = inmem_stability
-
-        return merged, changed
+        """纯内存合并（兼容旧接口）"""
+        return self._apply_merge_in_memory(old, fragment)
 
     # ── audit logic ──────────────────────────────────────────────────
 
@@ -467,8 +395,8 @@ class ProfileAgent(BaseAgent):
             delete_texts = set(data.get("delete", []))
             updates = data.get("update", [])
             return {"delete_texts": delete_texts, "updates": updates}
-        except Exception as e:
-            logger.warning(f"Audit LLM failed: {e}")
+        except (RuntimeError, ConnectionError, ValueError) as e:
+            logger.warning("Audit LLM failed: %s", e)
             return None
 
     # ── formatters ───────────────────────────────────────────────────
@@ -566,13 +494,6 @@ class ProfileAgent(BaseAgent):
 
     # ── parsing ──────────────────────────────────────────────────────
 
-    async def _load_last_extracted_index(self, user_id: int) -> int:
-        try:
-            profile = await self._client.get_profile(user_id)
-            return (profile.get("last_extracted_msg_index") or 0) if profile else 0
-        except Exception:
-            return 0
-
     def _parse_extract_result(self, text: str) -> dict:
         from app.utils.json_parser import parse_llm_json
 
@@ -582,38 +503,24 @@ class ProfileAgent(BaseAgent):
         updates = data.get("updates", data)
         return {k: v for k, v in updates.items() if k in DIMENSIONS}
 
-    async def _load_profile_dict(self, user_id: int) -> dict:
-        try:
-            profile = await self._client.get_profile(user_id)
-            if profile:
-                p = {d: profile.get(d) for d in DIMENSIONS}
-                p["entries"] = profile.get("entries")
-                p["tag_weights"] = profile.get("tag_weights")
-                p["stability_counter"] = profile.get("stability_counter")
-                p["audit_counter"] = profile.get("audit_counter")
-                p["last_extracted_msg_index"] = profile.get("last_extracted_msg_index")
-                return p
-        except Exception:
-            pass
-        return {}
-
     # ── 公开方法：供 tutor/unified chat 后台调用 ───────────────────
 
     async def extract_and_merge(
-        self, user_id: int, messages: list[dict], current_profile: dict | None = None,
+        self, profile_dict: dict, messages: list[dict],
     ) -> dict:
-        """后台增量画像提取 + 合并"""
+        """后台增量画像提取 + 合并。profile_dict 由 Java 传入，纯内存计算。
+
+        Returns:
+            {"changed": bool, "profile": dict}
+        """
         if not messages:
-            return {"changed": False, "profile": current_profile or {}}
+            return {"changed": False, "profile": profile_dict}
 
-        if current_profile is None:
-            current_profile = await self._load_profile_dict(user_id)
-
-        last_idx = await self._load_last_extracted_index(user_id)
+        current_profile = dict(profile_dict) if profile_dict else {}
+        last_idx = current_profile.get("last_extracted_msg_index") or 0
 
         state: ProfileState = {
             "messages": messages,
-            "user_id": user_id,
             "current_profile": current_profile,
             "last_extracted_msg_index": last_idx,
         }
@@ -625,7 +532,6 @@ class ProfileAgent(BaseAgent):
 
         merge_state: ProfileState = {
             "messages": messages,
-            "user_id": user_id,
             "current_profile": current_profile,
             "extracted_fragment": fragment,
             "last_extracted_msg_index": extract_result.get("last_extracted_msg_index", last_idx),
@@ -637,8 +543,7 @@ class ProfileAgent(BaseAgent):
 
         if changed:
             logger.info(
-                "Background profile update: user_id=%d, dimensions=%s",
-                user_id,
+                "Background profile update: dimensions=%s",
                 [k for k, v in fragment.items() if v],
             )
 
