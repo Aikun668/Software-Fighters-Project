@@ -47,6 +47,11 @@ const router = createRouter({
           path: 'exercise',
           name: 'ExercisePage',
           component: () => import('../views/ExercisePage.vue')
+        },
+        {
+          path: 'learning-resource-network',
+          name: 'LearningResourceNetwork',
+          component: () => import('../views/LearningResourceNetwork.vue')
         }
       ]
     },
