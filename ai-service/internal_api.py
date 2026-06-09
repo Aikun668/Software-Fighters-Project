@@ -8,11 +8,10 @@ import time
 
 from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse, FileResponse
-from sqlalchemy import select
 
 from app.utils.sse_heartbeat import sse_heartbeat_generator
 from app.api.errors import ErrorCode, api_error, api_success
-from app.db.database import get_db
+from app.services.java_api_client import get_java_client
 from app.api.models import (
     ProfileChatRequest,
     ResourceGenRequest,
@@ -349,7 +348,7 @@ async def tutor_chat(body: TutorChatRequest):
     if content is not None and content.strip():
         conv_service = get_conversation_service()
         conv = await conv_service.get_or_create_conversation(user_id, conversation_id)
-        history = await conv_service.load_history(conv.id)
+        history = await conv_service.load_history(conv["id"])
         messages = history + [{"role": "user", "content": content.strip()}]
         is_new_api = True
     # ── 旧 API：完整 messages 数组（向后兼容）──
@@ -365,7 +364,7 @@ async def tutor_chat(body: TutorChatRequest):
 
     async def event_stream():
         user_conversation_id = (
-            conv.id if is_new_api else None
+            conv["id"] if is_new_api else None
         )
         try:
             state = await agent.run({
@@ -414,7 +413,7 @@ async def tutor_chat(body: TutorChatRequest):
                         logger.warning(f"Background compress_history failed: {exc}")
 
                 compress_task = _asyncio.ensure_future(
-                    conv_service.compress_history(user_conversation_id)
+                    conv_service.compress_history(user_conversation_id, user_id)
                 )
                 compress_task.add_done_callback(_log_compress_error)
 
@@ -733,8 +732,6 @@ async def get_node_card(course_id: str, node_id: str, user_id: int = Query(defau
 @router.post("/plans/create")
 async def create_plan(body: PlanCreateRequest):
     """从路径规划结果创建学习计划"""
-    from app.models.learning_plan import LearningPlan, PlanStep
-
     try:
         user_id = body.user_id
         course_id = body.course_id
@@ -746,35 +743,29 @@ async def create_plan(body: PlanCreateRequest):
             node_map[node.get("name", "")] = node.get("id", "")
             node_map[node.get("label", "")] = node.get("id", "")
 
-        async with get_db() as session:
-            plan = LearningPlan(
-                user_id=user_id,
-                course_id=course_id,
-                title=f"学习计划 - {course_id}",
-                status="in_progress",
-                total_steps=len(steps),
-                completed_steps=0,
-            )
-            session.add(plan)
-            await session.flush()
+        client = get_java_client()
+        plan_steps = []
+        for i, step in enumerate(steps):
+            topic = step.get("topic", "")
+            knowledge_node_id = node_map.get(topic, "")
+            plan_steps.append({
+                "step_order": i + 1,
+                "topic": topic,
+                "knowledge_node_id": knowledge_node_id,
+                "status": step.get("status", "pending"),
+                "estimated_days": step.get("estimated_days", 1),
+                "topic_difficulty": 3,
+            })
 
-            for i, step in enumerate(steps):
-                topic = step.get("topic", "")
-                knowledge_node_id = node_map.get(topic, "")
-
-                plan_step = PlanStep(
-                    plan_id=plan.id,
-                    step_order=i + 1,
-                    topic=topic,
-                    knowledge_node_id=knowledge_node_id,
-                    status=step.get("status", "pending"),
-                    estimated_days=step.get("estimated_days", 1),
-                    topic_difficulty=3,
-                )
-                session.add(plan_step)
-
-            await session.commit()
-            return api_success({"plan_id": plan.id, "total_steps": len(steps)})
+        result = await client.create_plan(
+            user_id=user_id,
+            course_id=course_id,
+            title=f"学习计划 - {course_id}",
+            steps=plan_steps,
+        )
+        if result:
+            return api_success({"plan_id": result.get("id"), "total_steps": len(steps)})
+        return api_error(ErrorCode.PERSIST_FAILED, "创建计划失败", status_code=500)
     except Exception as e:
         logger.error(f"Failed to create plan: {e}")
         return api_error(ErrorCode.PERSIST_FAILED, f"创建计划失败: {e}", status_code=500)
@@ -789,8 +780,6 @@ async def create_plan_from_path(body: CreatePlanFromPathRequest):
       2. POST /plans/create → 手动创建计划
     为单次调用：前端只需点一次"生成学习计划"。
     """
-    from app.models.learning_plan import LearningPlan, PlanStep
-
     try:
         user_id = body.user_id
         course_id = body.course_id
@@ -817,50 +806,42 @@ async def create_plan_from_path(body: CreatePlanFromPathRequest):
             node_map[node.get("name", "")] = node.get("id", "")
             node_map[node.get("label", "")] = node.get("id", "")
 
-        async with get_db() as session:
-            plan = LearningPlan(
-                user_id=user_id,
-                course_id=course_id,
-                title=f"学习计划 - {course_id}",
-                status="in_progress",
-                total_steps=len(steps),
-                completed_steps=0,
-            )
-            session.add(plan)
-            await session.flush()
-
-            plan_steps = []
-            for i, step in enumerate(steps):
-                topic = step.get("topic", "")
-                knowledge_node_id = node_map.get(topic, "")
-
-                plan_step = PlanStep(
-                    plan_id=plan.id,
-                    step_order=i + 1,
-                    topic=topic,
-                    knowledge_node_id=knowledge_node_id,
-                    status=step.get("status", "pending"),
-                    estimated_days=step.get("estimated_days", 1),
-                    topic_difficulty=3,
-                )
-                session.add(plan_step)
-                plan_steps.append({
-                    "step_order": i + 1,
-                    "topic": topic,
-                    "knowledge_node_id": knowledge_node_id,
-                    "estimated_days": step.get("estimated_days", 1),
-                    "status": step.get("status", "pending"),
-                })
-
-            await session.commit()
-
-            return api_success({
-                "plan_id": plan.id,
-                "total_steps": len(steps),
-                "steps": plan_steps,
-                "concept_graph": concept_graph,
-                "summary": path_state.get("response", ""),
+        client = get_java_client()
+        plan_steps = []
+        for i, step in enumerate(steps):
+            topic = step.get("topic", "")
+            knowledge_node_id = node_map.get(topic, "")
+            plan_steps.append({
+                "step_order": i + 1,
+                "topic": topic,
+                "knowledge_node_id": knowledge_node_id,
+                "status": step.get("status", "pending"),
+                "estimated_days": step.get("estimated_days", 1),
+                "topic_difficulty": 3,
             })
+
+        result = await client.create_plan(
+            user_id=user_id,
+            course_id=course_id,
+            title=f"学习计划 - {course_id}",
+            steps=plan_steps,
+        )
+        if not result:
+            return api_error(ErrorCode.PERSIST_FAILED, "创建计划失败", status_code=500)
+
+        return api_success({
+            "plan_id": result.get("id"),
+            "total_steps": len(steps),
+            "steps": [
+                {"step_order": s["step_order"], "topic": s["topic"],
+                 "knowledge_node_id": s["knowledge_node_id"],
+                 "estimated_days": s.get("estimated_days", 1),
+                 "status": s.get("status", "pending")}
+                for s in plan_steps
+            ],
+            "concept_graph": concept_graph,
+            "summary": path_state.get("response", ""),
+        })
     except Exception as e:
         logger.error(f"Failed to create plan from path: {e}", exc_info=True)
         return api_error(ErrorCode.INTERNAL_ERROR, f"创建学习计划失败: {e}", status_code=500)
@@ -870,79 +851,72 @@ async def create_plan_from_path(body: CreatePlanFromPathRequest):
 async def get_plan_status(plan_id: int, user_id: int = Query(default=1)):
     """查询计划状态（含软着陆触发检测）"""
     from datetime import datetime, timezone
-    from app.models.learning_plan import LearningPlan, PlanStep
 
     try:
-        async with get_db() as session:
-            result = await session.execute(
-                select(LearningPlan).where(
-                    LearningPlan.id == plan_id,
-                    LearningPlan.user_id == user_id,
-                )
-            )
-            plan = result.scalar_one_or_none()
-            if not plan:
-                return api_error(ErrorCode.NOT_FOUND, "计划不存在", status_code=404)
+        client = get_java_client()
+        plan = await client.get_plan(plan_id, user_id)
+        if not plan:
+            return api_error(ErrorCode.NOT_FOUND, "计划不存在", status_code=404)
 
-            steps_result = await session.execute(
-                select(PlanStep)
-                .where(PlanStep.plan_id == plan_id)
-                .order_by(PlanStep.step_order)
-            )
-            steps = steps_result.scalars().all()
+        steps = await client.get_plan_steps(plan_id)
 
-            days_idle = 0
-            if plan.last_activity_at:
-                now = datetime.now(timezone.utc)
-                delta = now - plan.last_activity_at.replace(tzinfo=timezone.utc)
+        days_idle = 0
+        last_activity = plan.get("last_activity_at")
+        if last_activity:
+            now = datetime.now(timezone.utc)
+            try:
+                dt = datetime.fromisoformat(last_activity.replace("Z", "+00:00"))
+                delta = now - dt
                 days_idle = delta.days
+            except (ValueError, TypeError):
+                pass
 
-            plan_service = get_plan_service()
+        plan_service = get_plan_service()
 
-            paused_steps = [s for s in steps if s.status in ("paused", "in_progress")]
-            soft_landing = None
-            if plan.status == "paused" and days_idle > 0:
-                paused_dicts = [
-                    {
-                        "topic": s.topic,
-                        "mastery_current": s.mastery_current or 0,
-                        "topic_difficulty": s.topic_difficulty or 3,
-                        "review_count": s.review_count or 0,
-                    }
-                    for s in paused_steps
-                ]
-                soft_landing = plan_service.soft_landing(paused_dicts, days_idle)
-                soft_landing["days_idle"] = days_idle
-
-            steps_data = []
-            for s in steps:
-                step_dict = {
-                    "id": s.id,
-                    "step_order": s.step_order,
-                    "topic": s.topic,
-                    "knowledge_node_id": s.knowledge_node_id,
-                    "status": s.status,
-                    "topic_difficulty": s.topic_difficulty,
-                    "mastery_current": s.mastery_current,
+        paused_steps = [s for s in steps if s.get("status") in ("paused", "in_progress")]
+        soft_landing = None
+        if plan.get("status") == "paused" and days_idle > 0:
+            paused_dicts = [
+                {
+                    "topic": s.get("topic"),
+                    "mastery_current": s.get("mastery_current") or 0,
+                    "topic_difficulty": s.get("topic_difficulty") or 3,
+                    "review_count": s.get("review_count") or 0,
                 }
-                if s.status in ("paused", "in_progress") and days_idle > 0:
-                    decayed = plan_service.estimate_decay(
-                        s.mastery_current or 0, days_idle,
-                        s.topic_difficulty or 3, s.review_count or 0,
-                    )
-                    step_dict["decayed_mastery"] = decayed
-                steps_data.append(step_dict)
+                for s in paused_steps
+            ]
+            soft_landing = plan_service.soft_landing(paused_dicts, days_idle)
+            soft_landing["days_idle"] = days_idle
 
-            return api_success({
-                "plan_id": plan.id,
-                "user_id": plan.user_id,
-                "status": plan.status,
-                "total_steps": plan.total_steps,
-                "completed_steps": plan.completed_steps,
-                "days_idle": days_idle,
-                "soft_landing": soft_landing,
-                "steps": steps_data,
-            })
+        steps_data = []
+        for s in steps:
+            step_dict = {
+                "id": s.get("id"),
+                "step_order": s.get("step_order"),
+                "topic": s.get("topic"),
+                "knowledge_node_id": s.get("knowledge_node_id"),
+                "status": s.get("status"),
+                "topic_difficulty": s.get("topic_difficulty"),
+                "mastery_current": s.get("mastery_current"),
+            }
+            if s.get("status") in ("paused", "in_progress") and days_idle > 0:
+                decayed = plan_service.estimate_decay(
+                    s.get("mastery_current") or 0, days_idle,
+                    s.get("topic_difficulty") or 3, s.get("review_count") or 0,
+                )
+                step_dict["decayed_mastery"] = decayed
+            steps_data.append(step_dict)
+
+        return api_success({
+            "plan_id": plan.get("id"),
+            "user_id": plan.get("user_id"),
+            "status": plan.get("status"),
+            "total_steps": plan.get("total_steps"),
+            "completed_steps": plan.get("completed_steps"),
+            "days_idle": days_idle,
+            "soft_landing": soft_landing,
+            "steps": steps_data,
+        })
     except Exception as e:
         logger.error(f"Failed to get plan status: {e}")
         return api_error(ErrorCode.INTERNAL_ERROR, "查询计划状态失败", status_code=500)
@@ -952,110 +926,77 @@ async def get_plan_status(plan_id: int, user_id: int = Query(default=1)):
 async def update_plan_progress(plan_id: int, body: PlanProgressRequest):
     """更新步骤进度 + 触发掌握度更新"""
     from datetime import datetime, timezone
-    from app.models.learning_plan import LearningPlan, PlanStep
-    from app.models.learning_activity import LearningActivity
-    from app.models.node_mastery import NodeMastery
 
     try:
         user_id = body.user_id
+        client = get_java_client()
 
-        async with get_db() as session:
-            result = await session.execute(
-                select(LearningPlan).where(
-                    LearningPlan.id == plan_id,
-                    LearningPlan.user_id == user_id,
-                )
-            )
-            plan = result.scalar_one_or_none()
-            if not plan:
-                return api_error(ErrorCode.NOT_FOUND, "计划不存在", status_code=404)
+        plan = await client.get_plan(plan_id, user_id)
+        if not plan:
+            return api_error(ErrorCode.NOT_FOUND, "计划不存在", status_code=404)
 
-            plan.last_activity_at = datetime.now(timezone.utc)
+        steps = await client.get_plan_steps(plan_id)
+        step = next((s for s in steps if s.get("id") == body.step_id), None)
+        if not step:
+            return api_error(ErrorCode.NOT_FOUND, "步骤不存在", status_code=404)
 
-            step_result = await session.execute(
-                select(PlanStep).where(
-                    PlanStep.id == body.step_id,
-                    PlanStep.plan_id == plan_id,
-                )
-            )
-            step = step_result.scalar_one_or_none()
-            if not step:
-                return api_error(ErrorCode.NOT_FOUND, "步骤不存在", status_code=404)
+        plan_service = get_plan_service()
 
-            plan_service = get_plan_service()
+        current_mastery = step.get("mastery_current") or 0
+        activity_type = body.activity_type or "study"
+        new_status = body.status or step.get("status")
 
-            if body.status:
-                step.status = body.status
-
-            current_mastery = step.mastery_current or 0
-            activity_type = body.activity_type or "study"
-
-            if activity_type in ("exercise", "quiz") and body.score is not None:
-                if body.score >= 0.6:
-                    new_mastery = plan_service.update_mastery(current_mastery, "exercise_done", body.score)
-                else:
-                    new_mastery = plan_service.update_mastery(current_mastery, "exercise_failed")
-            elif activity_type in ("exercise", "quiz") and body.score is None:
-                new_mastery = current_mastery
-                logger.warning("exercise/quiz activity without score for step %s — mastery unchanged", body.step_id)
+        if activity_type in ("exercise", "quiz") and body.score is not None:
+            if body.score >= 0.6:
+                new_mastery = plan_service.update_mastery(current_mastery, "exercise_done", body.score)
             else:
-                new_mastery = plan_service.update_mastery(current_mastery, activity_type, body.score)
+                new_mastery = plan_service.update_mastery(current_mastery, "exercise_failed")
+        elif activity_type in ("exercise", "quiz") and body.score is None:
+            new_mastery = current_mastery
+            logger.warning("exercise/quiz activity without score for step %s — mastery unchanged", body.step_id)
+        else:
+            new_mastery = plan_service.update_mastery(current_mastery, activity_type, body.score)
 
-            step.mastery_after = new_mastery
-            step.mastery_current = new_mastery
-            step.review_count = (step.review_count or 0) + 1
-            step.last_review_at = datetime.now(timezone.utc)
+        completed_steps = (plan.get("completed_steps") or 0)
+        if new_status == "completed":
+            completed_steps += 1
 
-            if body.status == "completed":
-                step.completed_at = datetime.now(timezone.utc)
-                plan.completed_steps = min(
-                    plan.completed_steps + 1, plan.total_steps or 0
-                )
+        await client.update_plan_step(body.step_id, {
+            "status": new_status,
+            "mastery_current": new_mastery,
+            "mastery_after": new_mastery,
+            "review_count": (step.get("review_count") or 0) + 1,
+            "last_review_at": datetime.now(timezone.utc).isoformat(),
+        })
 
-            activity = LearningActivity(
+        await client.update_plan(plan_id, {
+            "last_activity_at": datetime.now(timezone.utc).isoformat(),
+            "completed_steps": completed_steps,
+        })
+
+        await client.create_activity(
+            user_id=user_id, plan_id=plan_id, step_id=body.step_id,
+            activity_type=body.activity_type,
+            duration_minutes=body.duration_minutes or 0,
+            score=body.score,
+        )
+
+        knowledge_node_id = step.get("knowledge_node_id")
+        if knowledge_node_id:
+            await client.upsert_node_mastery(
                 user_id=user_id,
-                plan_id=plan_id,
-                step_id=body.step_id,
-                activity_type=body.activity_type,
-                duration_minutes=body.duration_minutes,
-                score=body.score,
+                node_id=knowledge_node_id,
+                course_id=plan.get("course_id") or "ai_intro",
+                mastery=new_mastery,
+                review_count=(step.get("review_count") or 0) + 1,
             )
-            session.add(activity)
 
-            if step.knowledge_node_id:
-                mastery_stmt = select(NodeMastery).where(
-                    NodeMastery.user_id == user_id,
-                    NodeMastery.node_id == step.knowledge_node_id,
-                )
-                mastery_result = await session.execute(mastery_stmt)
-                mastery = mastery_result.scalar_one_or_none()
-
-                if mastery is None:
-                    mastery = NodeMastery(
-                        user_id=user_id,
-                        node_id=step.knowledge_node_id,
-                        course_id=plan.course_id or "ai_intro",
-                        mastery=new_mastery,
-                        review_count=1,
-                        last_review_at=datetime.now(timezone.utc),
-                    )
-                    session.add(mastery)
-                else:
-                    prev_mastery = mastery.mastery or 0
-                    mastery.mastery = plan_service.update_mastery(
-                        prev_mastery, activity_type, body.score
-                    )
-                    mastery.review_count = (mastery.review_count or 0) + 1
-                    mastery.last_review_at = datetime.now(timezone.utc)
-
-            await session.commit()
-
-            return api_success({
-                "plan_id": plan_id,
-                "step_id": body.step_id,
-                "status": step.status,
-                "completed_steps": plan.completed_steps,
-            })
+        return api_success({
+            "plan_id": plan_id,
+            "step_id": body.step_id,
+            "status": new_status,
+            "completed_steps": completed_steps,
+        })
     except Exception as e:
         logger.error(f"Failed to update progress: {e}", exc_info=True)
         return api_error(ErrorCode.PERSIST_FAILED, "更新进度失败，请稍后重试", status_code=500)
@@ -1065,31 +1006,24 @@ async def update_plan_progress(plan_id: int, body: PlanProgressRequest):
 async def resume_plan(plan_id: int, body: PlanResumeRequest):
     """中断后回归，触发软着陆检查"""
     from datetime import datetime, timezone
-    from app.models.learning_plan import LearningPlan
 
     try:
-        async with get_db() as session:
-            result = await session.execute(
-                select(LearningPlan).where(
-                    LearningPlan.id == plan_id,
-                    LearningPlan.user_id == body.user_id,
-                )
-            )
-            plan = result.scalar_one_or_none()
-            if not plan:
-                return api_error(ErrorCode.NOT_FOUND, "计划不存在", status_code=404)
+        client = get_java_client()
+        plan = await client.get_plan(plan_id, body.user_id)
+        if not plan:
+            return api_error(ErrorCode.NOT_FOUND, "计划不存在", status_code=404)
 
-            plan.status = "in_progress"
-            plan.paused_at = None
-            plan.last_activity_at = datetime.now(timezone.utc)
+        await client.update_plan(plan_id, {
+            "status": "in_progress",
+            "paused_at": None,
+            "last_activity_at": datetime.now(timezone.utc).isoformat(),
+        })
 
-            await session.commit()
-
-            return api_success({
-                "plan_id": plan.id,
-                "status": plan.status,
-                "message": "已恢复计划",
-            })
+        return api_success({
+            "plan_id": plan.get("id"),
+            "status": "in_progress",
+            "message": "已恢复计划",
+        })
     except Exception as e:
         logger.error(f"Failed to resume plan: {e}", exc_info=True)
         return api_error(ErrorCode.INTERNAL_ERROR, "恢复计划失败，请稍后重试", status_code=500)
@@ -1102,36 +1036,28 @@ async def resume_plan(plan_id: int, body: PlanResumeRequest):
 async def regression_check(plan_id: int, body: RegressionCheckRequest):
     """回归检测管线：出题 → 判分 → 重排"""
     from datetime import datetime, timezone
-    from app.models.learning_plan import LearningPlan, PlanStep
 
     try:
         plan_service = get_plan_service()
+        client = get_java_client()
 
-        async with get_db() as session:
-            result = await session.execute(
-                select(LearningPlan).where(
-                    LearningPlan.id == plan_id,
-                    LearningPlan.user_id == body.user_id,
-                )
-            )
-            plan = result.scalar_one_or_none()
-            if not plan:
-                return api_error(ErrorCode.NOT_FOUND, "计划不存在", status_code=404)
+        plan = await client.get_plan(plan_id, body.user_id)
+        if not plan:
+            return api_error(ErrorCode.NOT_FOUND, "计划不存在", status_code=404)
 
-            steps_result = await session.execute(
-                select(PlanStep)
-                .where(PlanStep.plan_id == plan_id)
-                .order_by(PlanStep.step_order)
-            )
-            steps = list(steps_result.scalars().all())
+        steps = await client.get_plan_steps(plan_id)
 
-            days_idle = 0
-            if plan.last_activity_at:
-                now = datetime.now(timezone.utc)
-                delta = now - plan.last_activity_at.replace(tzinfo=timezone.utc)
-                days_idle = delta.days
+        days_idle = 0
+        last_activity = plan.get("last_activity_at")
+        if last_activity:
+            now = datetime.now(timezone.utc)
+            try:
+                dt = datetime.fromisoformat(last_activity.replace("Z", "+00:00"))
+                days_idle = (now - dt).days
+            except (ValueError, TypeError):
+                pass
 
-            paused_steps = [s for s in steps if s.status in ("paused", "in_progress")]
+        paused_steps = [s for s in steps if s.get("status") in ("paused", "in_progress")]
 
         # ── 阶段 1: 无 answers → 出题 ──
         if not body.answers:
@@ -1145,10 +1071,10 @@ async def regression_check(plan_id: int, body: RegressionCheckRequest):
 
             paused_dicts = [
                 {
-                    "topic": s.topic,
-                    "mastery_current": s.mastery_current or 0,
-                    "topic_difficulty": s.topic_difficulty or 3,
-                    "review_count": s.review_count or 0,
+                    "topic": s.get("topic"),
+                    "mastery_current": s.get("mastery_current") or 0,
+                    "topic_difficulty": s.get("topic_difficulty") or 3,
+                    "review_count": s.get("review_count") or 0,
                 }
                 for s in paused_steps
             ]
@@ -1185,102 +1111,99 @@ async def regression_check(plan_id: int, body: RegressionCheckRequest):
         # ── 阶段 2: 有 answers → 判分 + 重排 ──
         from app.services.evaluation_service import grade_choice, grade_short_answer
 
-        async with get_db() as session:
-            steps_result2 = await session.execute(
-                select(PlanStep)
-                .where(PlanStep.plan_id == plan_id)
-                .order_by(PlanStep.step_order)
-            )
-            steps = list(steps_result2.scalars().all())
-
-            decay_results = {}
-            for step in steps:
-                if step.status in ("paused", "in_progress"):
-                    decayed = plan_service.estimate_decay(
-                        step.mastery_current or 0, days_idle,
-                        step.topic_difficulty or 3, step.review_count or 0,
-                    )
-                    if decayed < 0.6:
-                        decay_results[step.topic] = "review" if decayed < 0.3 else "review_light"
-
-            answers_by_topic = {}
-            for ans in body.answers:
-                topic = ans.get("topic", "")
-                answers_by_topic.setdefault(topic, []).append(ans)
-
-            for topic, topic_answers in answers_by_topic.items():
-                total_score = 0
-                for ans in topic_answers:
-                    q_type = ans.get("question_type", "choice")
-                    user_answer = ans.get("user_answer", "")
-                    correct_answer = ans.get("correct_answer", "")
-                    if q_type == "choice":
-                        grade_result = grade_choice(user_answer, correct_answer, ans.get("choices", []))
-                    else:
-                        grade_result = await grade_short_answer(user_answer, correct_answer)
-                    total_score += grade_result.get("earned", 0)
-
-                avg_score = total_score / len(topic_answers) if topic_answers else 0
-                matched = [s for s in steps if s.topic == topic]
-                for step in matched:
-                    prev_mastery = step.mastery_current or 0
-                    if avg_score >= 0.6:
-                        step.mastery_current = plan_service.update_mastery(prev_mastery, "exercise_done", avg_score)
-                    else:
-                        step.mastery_current = plan_service.update_mastery(prev_mastery, "exercise_failed")
-                    step.review_count = (step.review_count or 0) + 1
-                    step.last_review_at = datetime.now(timezone.utc)
-
-            if decay_results:
-                current_node = steps[0].knowledge_node_id if steps else ""
-                goal_node = steps[-1].knowledge_node_id if steps else ""
-                step_dicts = [
-                    {"topic": s.topic, "status": s.status, "step_order": s.step_order,
-                     "knowledge_node_id": s.knowledge_node_id or "",
-                     "mastery_current": s.mastery_current, "topic_difficulty": s.topic_difficulty}
-                    for s in steps
-                ]
-                reordered = plan_service.reorder_plan(
-                    step_dicts, decay_results, days_idle,
-                    current_topic=current_node, goal_topic=goal_node,
+        decay_results = {}
+        for step in steps:
+            if step.get("status") in ("paused", "in_progress"):
+                decayed = plan_service.estimate_decay(
+                    step.get("mastery_current") or 0, days_idle,
+                    step.get("topic_difficulty") or 3, step.get("review_count") or 0,
                 )
+                if decayed < 0.6:
+                    decay_results[step.get("topic")] = "review" if decayed < 0.3 else "review_light"
 
-                topic_to_step = {s.topic: s for s in steps}
-                new_order = 1
-                for item in reordered:
-                    topic = item.get("topic", "")
-                    if topic in topic_to_step:
-                        topic_to_step[topic].step_order = new_order
-                        topic_to_step[topic].status = item.get("status", topic_to_step[topic].status)
+        answers_by_topic = {}
+        for ans in body.answers:
+            topic = ans.get("topic", "")
+            answers_by_topic.setdefault(topic, []).append(ans)
+
+        for topic, topic_answers in answers_by_topic.items():
+            total_score = 0
+            for ans in topic_answers:
+                q_type = ans.get("question_type", "choice")
+                user_answer = ans.get("user_answer", "")
+                correct_answer = ans.get("correct_answer", "")
+                if q_type == "choice":
+                    grade_result = grade_choice(user_answer, correct_answer, ans.get("choices", []))
+                else:
+                    grade_result = await grade_short_answer(user_answer, correct_answer)
+                total_score += grade_result.get("earned", 0)
+
+            avg_score = total_score / len(topic_answers) if topic_answers else 0
+            for step in steps:
+                if step.get("topic") == topic:
+                    prev_mastery = step.get("mastery_current") or 0
+                    if avg_score >= 0.6:
+                        new_m = plan_service.update_mastery(prev_mastery, "exercise_done", avg_score)
                     else:
-                        new_step = PlanStep(
-                            plan_id=plan_id,
-                            step_order=new_order,
-                            topic=topic,
-                            knowledge_node_id=item.get("knowledge_node_id", ""),
-                            status=item.get("status", "review"),
-                            topic_difficulty=3,
-                            mastery_current=0.0,
-                        )
-                        session.add(new_step)
-                        steps.append(new_step)
-                    new_order += 1
+                        new_m = plan_service.update_mastery(prev_mastery, "exercise_failed")
+                    await client.update_plan_step(step.get("id"), {
+                        "mastery_current": new_m,
+                        "review_count": (step.get("review_count") or 0) + 1,
+                        "last_review_at": datetime.now(timezone.utc).isoformat(),
+                    })
 
-                plan.total_steps = len(reordered)
+        if decay_results:
+            current_node = steps[0].get("knowledge_node_id", "") if steps else ""
+            goal_node = steps[-1].get("knowledge_node_id", "") if steps else ""
+            step_dicts = [
+                {"topic": s.get("topic"), "status": s.get("status"), "step_order": s.get("step_order"),
+                 "knowledge_node_id": s.get("knowledge_node_id") or "",
+                 "mastery_current": s.get("mastery_current"), "topic_difficulty": s.get("topic_difficulty")}
+                for s in steps
+            ]
+            reordered = plan_service.reorder_plan(
+                step_dicts, decay_results, days_idle,
+                current_topic=current_node, goal_topic=goal_node,
+            )
 
-            plan.status = "in_progress"
-            plan.last_activity_at = datetime.now(timezone.utc)
-            await session.commit()
+            topic_to_step = {s.get("topic"): s for s in steps}
+            new_order = 1
+            for item in reordered:
+                topic = item.get("topic", "")
+                if topic in topic_to_step:
+                    await client.update_plan_step(topic_to_step[topic].get("id"), {
+                        "step_order": new_order,
+                        "status": item.get("status", topic_to_step[topic].get("status")),
+                    })
+                else:
+                    await client.insert_plan_step(plan_id, {
+                        "step_order": new_order,
+                        "topic": topic,
+                        "knowledge_node_id": item.get("knowledge_node_id", ""),
+                        "status": item.get("status", "review"),
+                        "topic_difficulty": 3,
+                        "mastery_current": 0.0,
+                    })
+                new_order += 1
 
-        reordered_steps = sorted(steps, key=lambda s: s.step_order)
+            await client.update_plan(plan_id, {"total_steps": len(reordered)})
+
+        await client.update_plan(plan_id, {
+            "status": "in_progress",
+            "last_activity_at": datetime.now(timezone.utc).isoformat(),
+        })
+
+        # Re-fetch steps in new order
+        steps = await client.get_plan_steps(plan_id)
+        reordered_steps = sorted(steps, key=lambda s: s.get("step_order", 0))
         return api_success({
             "plan_id": plan_id,
             "strategy": "regression_check",
             "message": RETURN_MESSAGES["after_pass"] if not decay_results else RETURN_MESSAGES["after_fail"],
             "questions": [],
             "reordered_steps": [
-                {"step_order": s.step_order, "topic": s.topic, "status": s.status,
-                 "mastery_current": s.mastery_current}
+                {"step_order": s.get("step_order"), "topic": s.get("topic"), "status": s.get("status"),
+                 "mastery_current": s.get("mastery_current")}
                 for s in reordered_steps
             ],
         })
@@ -1297,29 +1220,39 @@ async def regression_check(plan_id: int, body: RegressionCheckRequest):
 async def get_review_schedule(plan_id: int, user_id: int = Query(default=1),
                                days_ahead: int = Query(default=7, ge=1, le=30)):
     """获取未来 N 天的复习日程（间隔重复提醒）"""
-    from app.models.learning_plan import LearningPlan, PlanStep
 
     try:
-        async with get_db() as session:
-            result = await session.execute(
-                select(LearningPlan).where(
-                    LearningPlan.id == plan_id,
-                    LearningPlan.user_id == user_id,
-                )
-            )
-            plan = result.scalar_one_or_none()
-            if not plan:
-                return api_error(ErrorCode.NOT_FOUND, "计划不存在", status_code=404)
+        client = get_java_client()
+        plan = await client.get_plan(plan_id, user_id)
+        if not plan:
+            return api_error(ErrorCode.NOT_FOUND, "计划不存在", status_code=404)
 
-            steps_result = await session.execute(
-                select(PlanStep)
-                .where(PlanStep.plan_id == plan_id)
-                .order_by(PlanStep.step_order)
-            )
-            steps = steps_result.scalars().all()
+        steps = await client.get_plan_steps(plan_id)
+
+        # Convert dict steps to objects for get_review_schedule compatibility
+        from dataclasses import dataclass
+
+        @dataclass
+        class StepProxy:
+            id: int; status: str; topic: str; topic_difficulty: int
+            review_count: int; mastery_current: float; last_review_at: str | None
+            knowledge_node_id: str
+
+        step_proxies = []
+        for s in steps:
+            step_proxies.append(StepProxy(
+                id=s.get("id", 0),
+                status=s.get("status", ""),
+                topic=s.get("topic", ""),
+                topic_difficulty=s.get("topic_difficulty") or 3,
+                review_count=s.get("review_count") or 0,
+                mastery_current=s.get("mastery_current") or 0,
+                last_review_at=s.get("last_review_at"),
+                knowledge_node_id=s.get("knowledge_node_id", ""),
+            ))
 
         plan_service = get_plan_service()
-        schedule = plan_service.get_review_schedule(steps, days_ahead)
+        schedule = plan_service.get_review_schedule(step_proxies, days_ahead)
 
         high_count = sum(1 for s in schedule if s["urgency"] == "high")
         medium_count = sum(1 for s in schedule if s["urgency"] == "medium")
@@ -1415,7 +1348,7 @@ async def unified_chat(body: UnifiedChatRequest):
     # ── 统一 conversation ──
     conv_service = get_conversation_service()
     conv = await conv_service.get_or_create_conversation(user_id, conversation_id)
-    resolved_conv_id = conv.id
+    resolved_conv_id = conv["id"]
 
     # ── 双层模式策略 ──
     intent_meta: dict | None = None
@@ -1532,7 +1465,7 @@ async def _unified_tutor_chat(
                     conv_service.save_messages(conversation_id, message, response,
                                                user_mode="tutor", assistant_mode=assistant_mode)
                 )
-                _aio.ensure_future(conv_service.compress_history(conversation_id))
+                _aio.ensure_future(conv_service.compress_history(conversation_id, user_id))
 
                 # 后台画像提取
                 async def _bg_extract():
@@ -1835,7 +1768,7 @@ async def end_conversation(
             user_id, conversation_id, course_id,
         )
         conv_service = get_conversation_service()
-        await conv_service.compress_history(conversation_id)
+        await conv_service.compress_history(conversation_id, user_id)
         return api_success({
             "summary": summary,
             "conversation_id": conversation_id,

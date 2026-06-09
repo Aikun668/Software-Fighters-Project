@@ -2,22 +2,30 @@
 
 import logging
 import math
+import threading
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
-from sqlalchemy import select
-
-from app.db.database import get_db
+from app.services.java_api_client import get_java_client
 from app.services.plan_constants import RETURN_MESSAGES
 
 logger = logging.getLogger(__name__)
 
-# ── 难度→基础半衰期映射 ──
 _HALF_LIFE_BASE = {1: 14, 2: 10, 3: 7, 4: 5, 5: 3}
 
 
+def _step_attr(step, name: str, default=None):
+    """安全获取 step 属性/键，兼容 dict 和 object"""
+    if isinstance(step, dict):
+        return step.get(name, default)
+    return getattr(step, name, default)
+
+
 class PlanService:
-    """计划引擎 — 纯算法 + 轻量 DB 查询（不调 LLM）"""
+    """计划引擎 — 纯算法 + Java API 调用（不调 LLM）"""
+
+    def __init__(self):
+        self._client = get_java_client()
 
     # ── 5.4.1 动态半衰期 ──────────────────────────────────────
 
@@ -40,18 +48,16 @@ class PlanService:
     def soft_landing(paused_steps: list, days_idle: int) -> dict:
         if days_idle <= 3:
             return {
-                "strategy": "continue",
-                "message": RETURN_MESSAGES["short"],
-                "review_nodes": [],
-                "decay_results": {},
+                "strategy": "continue", "message": RETURN_MESSAGES["short"],
+                "review_nodes": [], "decay_results": {},
             }
 
         decay_results = {}
         for s in paused_steps:
-            topic_name = s.get("topic", "") if isinstance(s, dict) else getattr(s, "topic", "")
-            mastery = s.get("mastery_current", 0) or 0 if isinstance(s, dict) else (getattr(s, "mastery_current", 0) or 0)
-            difficulty = s.get("topic_difficulty", 3) or 3 if isinstance(s, dict) else (getattr(s, "topic_difficulty", 3) or 3)
-            review_count = s.get("review_count", 0) or 0 if isinstance(s, dict) else (getattr(s, "review_count", 0) or 0)
+            topic_name = _step_attr(s, "topic", "")
+            mastery = _step_attr(s, "mastery_current", 0) or 0
+            difficulty = _step_attr(s, "topic_difficulty", 3) or 3
+            review_count = _step_attr(s, "review_count", 0) or 0
 
             decayed = PlanService.estimate_decay(mastery, days_idle, difficulty, review_count)
             if decayed < 0.6:
@@ -60,19 +66,15 @@ class PlanService:
         if days_idle <= 7:
             key_node = PlanService._find_most_critical(paused_steps)
             return {
-                "strategy": "warmup",
-                "message": RETURN_MESSAGES["medium"],
-                "review_nodes": [key_node],
-                "decay_results": decay_results,
+                "strategy": "warmup", "message": RETURN_MESSAGES["medium"],
+                "review_nodes": [key_node], "decay_results": decay_results,
             }
 
         def _get_step_data(topic_name: str):
             for s in paused_steps:
-                st = s.get("topic", "") if isinstance(s, dict) else getattr(s, "topic", "")
-                if st == topic_name:
-                    m = s.get("mastery_current", 0) or 0 if isinstance(s, dict) else (getattr(s, "mastery_current", 0) or 0)
-                    d = s.get("topic_difficulty", 3) or 3 if isinstance(s, dict) else (getattr(s, "topic_difficulty", 3) or 3)
-                    return m, d
+                if _step_attr(s, "topic", "") == topic_name:
+                    return (_step_attr(s, "mastery_current", 0) or 0,
+                            _step_attr(s, "topic_difficulty", 3) or 3)
             return 0, 3
 
         priority = sorted(
@@ -85,10 +87,8 @@ class PlanService:
         )[:3]
 
         return {
-            "strategy": "regression_check",
-            "message": RETURN_MESSAGES["long"],
-            "review_nodes": priority,
-            "decay_results": decay_results,
+            "strategy": "regression_check", "message": RETURN_MESSAGES["long"],
+            "review_nodes": priority, "decay_results": decay_results,
         }
 
     @staticmethod
@@ -96,11 +96,10 @@ class PlanService:
         best = None
         best_score = -1
         for s in paused_steps:
-            topic = s.get("topic", "") if isinstance(s, dict) else getattr(s, "topic", "")
-            difficulty = s.get("topic_difficulty", 3) or 3 if isinstance(s, dict) else (getattr(s, "topic_difficulty", 3) or 3)
-            score = difficulty
-            if score > best_score:
-                best_score = score
+            topic = _step_attr(s, "topic", "")
+            difficulty = _step_attr(s, "topic_difficulty", 3) or 3
+            if difficulty > best_score:
+                best_score = difficulty
                 best = topic
         return best or ""
 
@@ -110,9 +109,7 @@ class PlanService:
     def reorder_plan(plan_steps: list, decay_results: dict,
                      days_idle: int, user_daily_capacity: int = 5,
                      current_topic: str = "", goal_topic: str = "") -> list:
-        """current_topic/goal_topic 应为 knowledge_node_id（如 ai_overview），用于关键路径提取"""
-        review_needed = [t for t, r in decay_results.items()
-                         if r in ("review", "review_light")]
+        review_needed = [t for t, r in decay_results.items() if r in ("review", "review_light")]
 
         severe = [t for t in review_needed if decay_results[t] == "review"]
         light = [t for t in review_needed if decay_results[t] == "review_light"]
@@ -133,8 +130,8 @@ class PlanService:
                     if critical_path:
                         topic_to_node = {}
                         for s in plan_steps:
-                            node_id = s.get("knowledge_node_id", "") if isinstance(s, dict) else getattr(s, "knowledge_node_id", "")
-                            topic = s.get("topic", "") if isinstance(s, dict) else getattr(s, "topic", "")
+                            node_id = _step_attr(s, "knowledge_node_id", "")
+                            topic = _step_attr(s, "topic", "")
                             if node_id:
                                 topic_to_node[topic] = node_id
 
@@ -211,17 +208,17 @@ class PlanService:
         schedule = []
 
         for step in steps:
-            status = step.status if hasattr(step, "status") else step.get("status", "")
+            status = _step_attr(step, "status", "")
             if status not in ("completed", "review"):
                 continue
 
-            topic = step.topic if hasattr(step, "topic") else step.get("topic", "")
-            difficulty = (step.topic_difficulty or 3) if hasattr(step, "topic_difficulty") else step.get("topic_difficulty", 3) or 3
-            review_count = (step.review_count or 0) if hasattr(step, "review_count") else step.get("review_count", 0) or 0
-            mastery = (step.mastery_current or 0) if hasattr(step, "mastery_current") else step.get("mastery_current", 0) or 0
-            last_review = step.last_review_at if hasattr(step, "last_review_at") else step.get("last_review_at")
-            node_id = step.knowledge_node_id if hasattr(step, "knowledge_node_id") else step.get("knowledge_node_id", "")
-            step_id = step.id if hasattr(step, "id") else step.get("id", 0)
+            topic = _step_attr(step, "topic", "")
+            difficulty = _step_attr(step, "topic_difficulty", 3) or 3
+            review_count = _step_attr(step, "review_count", 0) or 0
+            mastery = _step_attr(step, "mastery_current", 0) or 0
+            last_review = _step_attr(step, "last_review_at")
+            node_id = _step_attr(step, "knowledge_node_id", "")
+            step_id = _step_attr(step, "id", 0)
 
             if last_review and hasattr(last_review, "date"):
                 days_since = (today - last_review.date()).days
@@ -267,110 +264,32 @@ class PlanService:
 
     # ── 6.2 联动机制 ──────────────────────────────────────────
 
-    @staticmethod
-    async def on_node_status_change(user_id: int, node_id: str,
+    async def on_node_status_change(self, user_id: int, node_id: str,
                                      old_status: str, new_status: str,
                                      plan_id: int = None) -> dict:
         if new_status != "forgotten":
             return {"action": "none", "reason": f"status {new_status} 不需要调整计划"}
 
-        from app.models.learning_plan import LearningPlan, PlanStep
-
-        async with get_db() as session:
-            if plan_id:
-                result = await session.execute(
-                    select(LearningPlan).where(
-                        LearningPlan.id == plan_id,
-                        LearningPlan.user_id == user_id,
-                    )
-                )
-            else:
-                result = await session.execute(
-                    select(LearningPlan).where(
-                        LearningPlan.user_id == user_id,
-                        LearningPlan.status == "in_progress",
-                    )
-                )
-            plan = result.scalar_one_or_none()
-            if not plan:
-                return {"action": "none", "reason": "无活跃计划"}
-
-            step_result = await session.execute(
-                select(PlanStep).where(
-                    PlanStep.plan_id == plan.id,
-                    PlanStep.knowledge_node_id == node_id,
-                )
+        try:
+            result = await self._client.on_node_status_change(
+                user_id, node_id, old_status, new_status, plan_id,
             )
-            step = step_result.scalar_one_or_none()
-            if not step:
-                return {"action": "none", "reason": f"计划中无节点 {node_id} 对应步骤"}
+            if result:
+                return result
+            return {"action": "none", "reason": "Java API 返回空"}
+        except Exception as e:
+            logger.error(f"Failed to handle node status change: {e}")
+            return {"action": "none", "reason": f"调用 Java API 失败: {e}"}
 
-            from app.services.graph_service import get_graph_service
-            gs = get_graph_service()
-            skeleton = gs.load_skeleton()
-
-            successors = []
-            for edge in skeleton.get("edges", []):
-                if edge.get("source") == node_id:
-                    successors.append(edge.get("target"))
-
-            locked_ids = []
-            if successors:
-                succ_result = await session.execute(
-                    select(PlanStep).where(
-                        PlanStep.plan_id == plan.id,
-                        PlanStep.knowledge_node_id.in_(successors),
-                        PlanStep.status.notin_(["completed"]),
-                    )
-                )
-                for succ_step in succ_result.scalars().all():
-                    succ_step.status = "locked"
-                    locked_ids.append(succ_step.id)
-
-            from sqlalchemy import update
-
-            await session.execute(
-                update(PlanStep)
-                .where(PlanStep.plan_id == plan.id, PlanStep.step_order > step.step_order)
-                .values(step_order=PlanStep.step_order + 1)
-            )
-
-            review_step = PlanStep(
-                plan_id=plan.id,
-                step_order=step.step_order + 1,
-                topic=step.topic,
-                knowledge_node_id=node_id,
-                status="review",
-                topic_difficulty=step.topic_difficulty,
-                mastery_current=step.mastery_current,
-            )
-            session.add(review_step)
-            await session.flush()
-
-            plan.total_steps = (plan.total_steps or 0) + 1
-
-            await session.commit()
-
-            return {
-                "action": "plan_adjusted",
-                "plan_id": plan.id,
-                "reason": f"知识点'{step.topic}'遗忘，已调整计划",
-                "locked_step_ids": locked_ids,
-                "inserted_review_step": {
-                    "id": review_step.id,
-                    "topic": step.topic,
-                    "step_order": step.step_order + 1,
-                },
-            }
-
-
-# ── 单例工厂 ──────────────────────────────────────────────────
 
 _plan_service_singleton = None
+_plan_service_lock = threading.Lock()
 
 
 def get_plan_service() -> PlanService:
     global _plan_service_singleton
     if _plan_service_singleton is None:
-        _plan_service_singleton = PlanService()
+        with _plan_service_lock:
+            if _plan_service_singleton is None:
+                _plan_service_singleton = PlanService()
     return _plan_service_singleton

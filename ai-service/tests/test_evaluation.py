@@ -473,121 +473,96 @@ class TestGenerateReport:
 
 
 class TestIncrementalUpdate:
-    def _make_mock_profile(self, knowledge_base=50, weak_points=None):
-        from unittest.mock import MagicMock
-        p = MagicMock()
-        p.knowledge_base = knowledge_base
-        p.weak_points = weak_points or []
-        return p
-
     @pytest.mark.asyncio
     async def test_incremental_update_merges_weak_points(self):
-        from unittest.mock import AsyncMock, MagicMock
-        from app.services.profile_service import ProfileService, get_db
-        from app.models.profile import StudentProfile
+        from unittest.mock import AsyncMock
+        from app.services.profile_service import ProfileService
 
         service = ProfileService()
-        mock_profile = self._make_mock_profile(50, ["Python"])
-        mock_session = AsyncMock()
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = mock_profile
-        mock_session.execute = AsyncMock(return_value=mock_result)
-        mock_session.commit = AsyncMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
+        service._client = AsyncMock()
+        service._client.get_profile = AsyncMock(return_value={
+            "knowledge_base": 50, "weak_points": ["Python"], "entries": {},
+        })
+        service._client.update_profile = AsyncMock()
 
-        with patch("app.services.profile_service.get_db", return_value=mock_session):
-            await service.incremental_update(1, {
-                "recommended_weak_points": ["math", "Python"],
-                "overall_score": 80,
-            })
-        assert "math" in mock_profile.weak_points
-        assert "Python" in mock_profile.weak_points
-        mock_session.commit.assert_called_once()
+        await service.incremental_update(1, {
+            "recommended_weak_points": ["math", "Python"],
+            "overall_score": 80,
+        })
+        call_args = service._client.update_profile.call_args
+        updated = call_args[0][1]
+        assert "math" in updated["weak_points"]
+        assert "Python" in updated["weak_points"]
 
     @pytest.mark.asyncio
     async def test_incremental_update_knowledge_base(self):
-        from unittest.mock import AsyncMock, MagicMock
-        from app.services.profile_service import ProfileService, get_db
+        from unittest.mock import AsyncMock
+        from app.services.profile_service import ProfileService
 
         service = ProfileService()
-        mock_profile = self._make_mock_profile(30, [])
-        mock_session = AsyncMock()
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = mock_profile
-        mock_session.execute = AsyncMock(return_value=mock_result)
-        mock_session.commit = AsyncMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
+        service._client = AsyncMock()
+        service._client.get_profile = AsyncMock(return_value={
+            "knowledge_base": 30, "weak_points": [], "entries": {},
+        })
+        service._client.update_profile = AsyncMock()
 
-        with patch("app.services.profile_service.get_db", return_value=mock_session):
-            await service.incremental_update(1, {
-                "recommended_weak_points": [],
-                "overall_score": 70,
-            })
+        await service.incremental_update(1, {
+            "recommended_weak_points": [],
+            "overall_score": 70,
+        })
         expected_kb = int(30 * 0.7 + 70 * 0.3)
-        assert mock_profile.knowledge_base == expected_kb
+        call_args = service._client.update_profile.call_args
+        assert call_args[0][1]["knowledge_base"] == expected_kb
 
     @pytest.mark.asyncio
     async def test_incremental_update_knowledge_base_clamped(self):
-        from unittest.mock import AsyncMock, MagicMock
-        from app.services.profile_service import ProfileService, get_db
+        from unittest.mock import AsyncMock
+        from app.services.profile_service import ProfileService
 
         service = ProfileService()
-        mock_profile = self._make_mock_profile(98, [])
-        mock_session = AsyncMock()
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = mock_profile
-        mock_session.execute = AsyncMock(return_value=mock_result)
-        mock_session.commit = AsyncMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
+        service._client = AsyncMock()
+        service._client.get_profile = AsyncMock(return_value={
+            "knowledge_base": 98, "weak_points": [], "entries": {},
+        })
+        service._client.update_profile = AsyncMock()
 
-        with patch("app.services.profile_service.get_db", return_value=mock_session):
-            await service.incremental_update(1, {
-                "recommended_weak_points": [],
-                "overall_score": 95,
-            })
-        assert mock_profile.knowledge_base <= 100
+        await service.incremental_update(1, {
+            "recommended_weak_points": [],
+            "overall_score": 95,
+        })
+        call_args = service._client.update_profile.call_args
+        assert call_args[0][1]["knowledge_base"] <= 100
 
     @pytest.mark.asyncio
     async def test_incremental_update_no_profile(self):
-        from unittest.mock import AsyncMock, MagicMock
+        from unittest.mock import AsyncMock
         from app.services.profile_service import ProfileService
 
         service = ProfileService()
-        mock_session = AsyncMock()
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = None
-        mock_session.execute = AsyncMock(return_value=mock_result)
-        mock_session.commit = AsyncMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
+        service._client = AsyncMock()
+        service._client.get_profile = AsyncMock(return_value=None)
+        service._client.update_profile = AsyncMock()
 
-        with patch("app.services.profile_service.get_db", return_value=mock_session):
-            await service.incremental_update(999, {
-                "recommended_weak_points": ["math"],
-                "overall_score": 80,
-            })
-        mock_session.commit.assert_not_called()
+        await service.incremental_update(999, {
+            "recommended_weak_points": ["math"],
+            "overall_score": 80,
+        })
+        service._client.update_profile.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_incremental_update_save_failure(self):
-        from unittest.mock import AsyncMock, MagicMock
+        from unittest.mock import AsyncMock
         from app.services.profile_service import ProfileService
 
         service = ProfileService()
-        mock_profile = self._make_mock_profile(50, ["Python"])
-        mock_session = AsyncMock()
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = mock_profile
-        mock_session.execute = AsyncMock(return_value=mock_result)
-        mock_session.commit = AsyncMock(side_effect=Exception("DB error"))
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
+        service._client = AsyncMock()
+        service._client.get_profile = AsyncMock(return_value={
+            "knowledge_base": 50, "weak_points": ["Python"], "entries": {},
+        })
+        service._client.update_profile = AsyncMock(side_effect=Exception("API error"))
 
-        with patch("app.services.profile_service.get_db", return_value=mock_session):
-            await service.incremental_update(1, {
-                "recommended_weak_points": [],
-                "overall_score": 80,
-            })
+        # 不应抛出异常
+        await service.incremental_update(1, {
+            "recommended_weak_points": [],
+            "overall_score": 80,
+        })

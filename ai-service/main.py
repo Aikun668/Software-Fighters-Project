@@ -17,19 +17,10 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # startup
-    from app.db.database import Base, _get_engine
-    engine = _get_engine()
-    try:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        logger.info("Database tables created (if not exist)")
-    except Exception as e:
-        logger.warning(f"Failed to create tables: {e}")
-
+    # startup — Java 后端负责 DB 管理，Python 端无需建表
+    logger.info("AI service started (Java 后端负责数据存储)")
     yield
-
-    # shutdown (预留，可在此关闭数据库连接池)
+    # shutdown
 
 
 app = FastAPI(
@@ -44,7 +35,6 @@ app.include_router(internal_router)
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    """将 Pydantic 422 验证错误转为统一的 400 格式"""
     errors = exc.errors()
     msg = errors[0]["msg"] if errors else "请求参数验证失败"
     loc = errors[0].get("loc", [])
@@ -68,16 +58,18 @@ app.add_middleware(
 
 @app.get("/health")
 async def health():
-    from sqlalchemy import text
-    from app.db.database import _get_engine
-    engine = _get_engine()
     try:
-        async with engine.connect() as conn:
-            await conn.execute(text("SELECT 1"))
-        return {"status": "ok", "db": "connected"}
-    except Exception as e:
-        logger.warning(f"DB health check failed: {e}")
-        return {"status": "degraded", "db": "unreachable"}
+        from app.services.java_api_client import get_java_client
+        client = get_java_client()
+        result = await client._get("/health")
+        java_ok = result is not None
+    except Exception:
+        java_ok = False
+
+    return {
+        "status": "ok" if java_ok else "degraded",
+        "java_api": "connected" if java_ok else "unreachable",
+    }
 
 
 if __name__ == "__main__":

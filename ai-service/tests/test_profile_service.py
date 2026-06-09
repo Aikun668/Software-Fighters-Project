@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
 
 from app.services.profile_service import ProfileService, get_profile_service
 
@@ -7,38 +7,21 @@ from app.services.profile_service import ProfileService, get_profile_service
 class TestProfileService:
     @pytest.fixture
     def service(self):
-        return ProfileService()
-
-    @pytest.fixture
-    def mock_db(self):
-        mock_session = AsyncMock()
-        mock_session.execute = AsyncMock()
-        mock_session.commit = AsyncMock()
-        mock_session.close = AsyncMock()
-        return mock_session
+        svc = ProfileService()
+        svc._client = AsyncMock()
+        return svc
 
     @pytest.mark.asyncio
-    async def test_get_profile_found(self, service, mock_db):
-        mock_profile = MagicMock()
-        mock_profile.knowledge_base = 50
-        mock_profile.cognitive_style = "visual"
-        mock_profile.learning_goal = "掌握深度学习"
-        mock_profile.weak_points = ["数学"]
-        mock_profile.learning_pace = "moderate"
-        mock_profile.interest_direction = ["CV"]
-        mock_profile.tag_weights = {}
-        mock_profile.stability_counter = {}
-        mock_profile.entries = {}
-        mock_profile.audit_counter = 0
+    async def test_get_profile_found(self, service):
+        service._client.get_profile = AsyncMock(return_value={
+            "knowledge_base": 50, "cognitive_style": "visual",
+            "learning_goal": "掌握深度学习", "weak_points": ["数学"],
+            "learning_pace": "moderate", "interest_direction": ["CV"],
+            "tag_weights": {}, "stability_counter": {},
+            "entries": {}, "audit_counter": 0,
+        })
 
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = mock_profile
-        mock_db.execute.return_value = mock_result
-
-        with patch("app.services.profile_service.get_db") as mock_get_db:
-            mock_get_db.return_value.__aenter__ = AsyncMock(return_value=mock_db)
-            mock_get_db.return_value.__aexit__ = AsyncMock(return_value=False)
-            profile = await service.get_profile(1)
+        profile = await service.get_profile(1)
 
         assert profile is not None
         assert profile["knowledge_base"] == 50
@@ -49,80 +32,52 @@ class TestProfileService:
         assert "audit_counter" in profile
 
     @pytest.mark.asyncio
-    async def test_get_profile_not_found(self, service, mock_db):
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = None
-        mock_db.execute.return_value = mock_result
+    async def test_get_profile_not_found(self, service):
+        service._client.get_profile = AsyncMock(return_value=None)
 
-        with patch("app.services.profile_service.get_db") as mock_get_db:
-            mock_get_db.return_value.__aenter__ = AsyncMock(return_value=mock_db)
-            mock_get_db.return_value.__aexit__ = AsyncMock(return_value=False)
-            profile = await service.get_profile(999)
+        profile = await service.get_profile(999)
 
         assert profile is None
 
     @pytest.mark.asyncio
-    async def test_get_profile_db_error(self, service, mock_db):
-        mock_db.execute.side_effect = Exception("DB error")
+    async def test_get_profile_db_error(self, service):
+        service._client.get_profile = AsyncMock(side_effect=Exception("API error"))
 
-        with patch("app.services.profile_service.get_db") as mock_get_db:
-            mock_get_db.return_value.__aenter__ = AsyncMock(return_value=mock_db)
-            mock_get_db.return_value.__aexit__ = AsyncMock(return_value=False)
-            profile = await service.get_profile(1)
+        profile = await service.get_profile(1)
 
         assert profile is None
 
     @pytest.mark.asyncio
-    async def test_save_profile(self, service, mock_db):
-        mock_db.execute = AsyncMock()
-        mock_db.commit = AsyncMock()
+    async def test_save_profile(self, service):
+        service._client.upsert_profile = AsyncMock(return_value={"user_id": 1})
 
-        with patch("app.services.profile_service.get_db") as mock_get_db:
-            mock_get_db.return_value.__aenter__ = AsyncMock(return_value=mock_db)
-            mock_get_db.return_value.__aexit__ = AsyncMock(return_value=False)
-            await service.save_profile(1, {
-                "knowledge_base": 60,
-                "cognitive_style": "visual",
-                "learning_goal": "test",
-                "weak_points": ["math"],
-                "learning_pace": "fast",
-                "interest_direction": ["nlp"],
-            })
+        await service.save_profile(1, {
+            "knowledge_base": 60, "cognitive_style": "visual",
+            "learning_goal": "test", "weak_points": ["math"],
+            "learning_pace": "fast", "interest_direction": ["nlp"],
+        })
 
-        mock_db.execute.assert_called_once()
-        mock_db.commit.assert_called_once()
+        service._client.upsert_profile.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_save_profile_db_error(self, service, mock_db):
-        mock_db.execute.side_effect = Exception("DB error")
+    async def test_save_profile_db_error(self, service):
+        service._client.upsert_profile = AsyncMock(side_effect=Exception("API error"))
 
-        with patch("app.services.profile_service.get_db") as mock_get_db:
-            mock_get_db.return_value.__aenter__ = AsyncMock(return_value=mock_db)
-            mock_get_db.return_value.__aexit__ = AsyncMock(return_value=False)
-            await service.save_profile(1, {"knowledge_base": 50})
+        # 不应抛出异常
+        await service.save_profile(1, {"knowledge_base": 50})
 
     @pytest.mark.asyncio
-    async def test_get_profile_after_save(self, service, mock_db):
-        mock_profile = MagicMock()
-        mock_profile.knowledge_base = 75
-        mock_profile.cognitive_style = "auditory"
-        mock_profile.learning_goal = "test goal"
-        mock_profile.weak_points = ["python"]
-        mock_profile.learning_pace = "slow"
-        mock_profile.interest_direction = ["rl"]
-        mock_profile.tag_weights = {}
-        mock_profile.stability_counter = {}
-        mock_profile.entries = {}
-        mock_profile.audit_counter = 0
+    async def test_get_profile_after_save(self, service):
+        """验证 get_profile 返回正确的画像字典"""
+        service._client.get_profile = AsyncMock(return_value={
+            "knowledge_base": 75, "cognitive_style": "auditory",
+            "learning_goal": "test goal", "weak_points": ["python"],
+            "learning_pace": "slow", "interest_direction": ["rl"],
+            "tag_weights": {}, "stability_counter": {},
+            "entries": {}, "audit_counter": 0,
+        })
 
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = mock_profile
-        mock_db.execute.return_value = mock_result
-
-        with patch("app.services.profile_service.get_db") as mock_get_db:
-            mock_get_db.return_value.__aenter__ = AsyncMock(return_value=mock_db)
-            mock_get_db.return_value.__aexit__ = AsyncMock(return_value=False)
-            profile = await service.get_profile(1)
+        profile = await service.get_profile(1)
 
         assert profile["knowledge_base"] == 75
         assert profile["cognitive_style"] == "auditory"

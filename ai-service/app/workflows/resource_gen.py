@@ -26,8 +26,7 @@ from app.agents.flashcard_agent import FlashCardAgent
 from app.agents.mindmap_agent import MindMapAgent
 from app.agents.reading_agent import ReadingAgent
 from app.agents.code_agent import CodeAgent
-from app.db.database import get_db
-from app.models.resource import Resource
+from app.services.java_api_client import get_java_client
 from app.orchestration.agent_bus import AgentBus
 from app.orchestration.director import Director
 from app.services.llm_service import (
@@ -514,6 +513,7 @@ class ResourceGenWorkflow(BaseWorkflow):
         resource_ids = []
 
         self._emit(state, stage_start("persist", "正在保存资源，请稍后..."))
+        client = get_java_client()
 
         RESOURCE_SPECS = [
             (["section", "callout"], "course_doc", f"{topic} 课程文档"),
@@ -524,39 +524,32 @@ class ResourceGenWorkflow(BaseWorkflow):
         ]
 
         try:
-            async with get_db() as session:
-                for block_types, res_type, title in RESOURCE_SPECS:
-                    filtered = [
-                        b for b in content_blocks
-                        if b.get("type") in block_types
-                    ]
-                    if filtered:
-                        r = Resource(
-                            user_id=user_id, type=res_type,
-                            topic=topic, title=title,
-                            content_json={"blocks": filtered},
-                        )
-                        session.add(r)
-                        await session.flush()
-                        resource_ids.append(r.id)
-
-                if questions:
-                    r = Resource(
-                        user_id=user_id, type="exercises",
-                        topic=topic, title=f"{topic} 练习题",
-                        content_json={"questions": questions},
+            for block_types, res_type, title in RESOURCE_SPECS:
+                filtered = [b for b in content_blocks if b.get("type") in block_types]
+                if filtered:
+                    rid = await client.create_resource(
+                        user_id=user_id, resource_type=res_type,
+                        topic=topic, title=title,
+                        content_json={"blocks": filtered},
                     )
-                    session.add(r)
-                    await session.flush()
-                    resource_ids.append(r.id)
+                    if rid:
+                        resource_ids.append(rid)
 
-                await session.commit()
-                self._emit(state, stage_end("persist",
-                    f"保存完成，共 {len(resource_ids)} 个资源"))
-                logger.info(
-                    f"Persisted {len(resource_ids)} resources "
-                    f"for user {user_id}, topic '{topic}'"
+            if questions:
+                rid = await client.create_resource(
+                    user_id=user_id, resource_type="exercises",
+                    topic=topic, title=f"{topic} 练习题",
+                    content_json={"questions": questions},
                 )
+                if rid:
+                    resource_ids.append(rid)
+
+            self._emit(state, stage_end("persist",
+                f"保存完成，共 {len(resource_ids)} 个资源"))
+            logger.info(
+                f"Persisted {len(resource_ids)} resources "
+                f"for user {user_id}, topic '{topic}'"
+            )
         except Exception as e:
             logger.error(f"Failed to persist resources: {e}")
             return {

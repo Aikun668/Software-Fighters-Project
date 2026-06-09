@@ -18,9 +18,7 @@ from langgraph.graph import StateGraph, END
 
 from app.agents.path_agent import PathAgent
 from app.agents.content_agent import ContentAgent
-from app.db.database import get_db
-from app.models.resource import Resource
-from app.models.learning_record import LearningRecord
+from app.services.java_api_client import get_java_client
 from app.workflows.base_workflow import BaseWorkflow
 
 logger = logging.getLogger(__name__)
@@ -113,45 +111,37 @@ class LearningPathWorkflow(BaseWorkflow):
         return {"steps": matched_steps}
 
     async def _persist_node(self, state: LearningPathState) -> dict:
-        """Stage 4: 持久化路径步骤 + 对应资源到 DB"""
+        """Stage 4: 持久化路径步骤 + 对应资源（通过 Java API）"""
         user_id = state.get("user_id", 1)
         steps = state.get("steps", [])
         resource_ids = []
+        client = get_java_client()
 
         try:
-            async with get_db() as session:
-                for idx, step in enumerate(steps):
-                    topic = step.get("topic", "")
-                    preview = step.get("preview", "")
+            for idx, step in enumerate(steps):
+                topic = step.get("topic", "")
+                preview = step.get("preview", "")
 
-                    resource = Resource(
-                        user_id=user_id,
-                        type="path_step",
-                        topic=topic,
-                        title=topic,
-                        content_json={
-                            "order": step.get("order", 0),
-                            "status": step.get("status", "pending"),
-                            "preview": preview,
-                        },
+                rid = await client.create_resource(
+                    user_id=user_id,
+                    resource_type="path_step",
+                    topic=topic,
+                    title=topic,
+                    content_json={
+                        "order": step.get("order", 0),
+                        "status": step.get("status", "pending"),
+                        "preview": preview,
+                    },
+                )
+                if rid:
+                    await client.create_learning_record(
+                        user_id=user_id, resource_id=rid, progress=0.0,
                     )
-                    session.add(resource)
-                    await session.flush()
-
-                    record = LearningRecord(
-                        user_id=user_id,
-                        resource_id=resource.id,
-                        progress=0.0,
-                    )
-                    session.add(record)
-                    resource_ids.append(resource.id)
-
-                    # 回填 resource_id（不可变模式）
-                    step = {**step, "resource_id": resource.id}
+                    resource_ids.append(rid)
+                    step = {**step, "resource_id": rid}
                     steps[idx] = step
 
-                await session.commit()
-                logger.info(f"Persisted path with {len(resource_ids)} steps for user {user_id}")
+            logger.info(f"Persisted path with {len(resource_ids)} steps for user {user_id}")
         except Exception as e:
             logger.error(f"Failed to persist learning path: {e}")
             return {
