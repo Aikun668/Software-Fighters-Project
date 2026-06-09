@@ -22,19 +22,25 @@
           <div class="stat-card-content">
             <div class="stat-icon" :style="{ background: stat.gradient }">
               <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
-                <path v-if="stat.iconType === 'document'" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                <polyline v-if="stat.iconType === 'document'" points="14 2 14 8 20 8"/>
-                <g v-if="stat.iconType === 'chart'">
+                <template v-if="stat.iconType === 'document'">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                </template>
+                <g v-else-if="stat.iconType === 'chart'">
                   <line x1="18" y1="20" x2="18" y2="10"/>
                   <line x1="12" y1="20" x2="12" y2="4"/>
                   <line x1="6" y1="20" x2="6" y2="14"/>
                 </g>
-                <circle v-if="stat.iconType === 'clock'" cx="12" cy="12" r="10"/>
-                <polyline v-if="stat.iconType === 'clock'" points="12 6 12 12 16 14"/>
-                <path v-if="stat.iconType === 'trophy'" d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/>
-                <path v-if="stat.iconType === 'trophy'" d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
-                <path v-if="stat.iconType === 'trophy'" d="M4 22h16"/>
-                <path v-if="stat.iconType === 'trophy'" d="M10 22V8a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v14"/>
+                <template v-else-if="stat.iconType === 'clock'">
+                  <circle cx="12" cy="12" r="10"/>
+                  <polyline points="12 6 12 12 16 14"/>
+                </template>
+                <template v-else-if="stat.iconType === 'trophy'">
+                  <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/>
+                  <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
+                  <path d="M4 22h16"/>
+                  <path d="M10 22V8a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v14"/>
+                </template>
               </svg>
             </div>
             <div class="stat-info">

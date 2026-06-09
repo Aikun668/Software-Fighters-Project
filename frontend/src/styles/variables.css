@@ -121,6 +121,19 @@ body {
   margin: 0;
   padding: 0;
   min-height: 100vh;
+  width: 100%;
+  overflow-x: hidden;
+}
+
+html {
+  width: 100%;
+  overflow-x: hidden;
+}
+
+#app {
+  width: 100%;
+  min-height: 100vh;
+  overflow-x: hidden;
 }
 
 /* ============ 全局链接样式 ============ */
@@ -158,6 +171,13 @@ a:hover {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ============ 全局输入框约束 ============ */
+input, textarea, select, .el-input, .el-textarea {
+  box-sizing: border-box !important;
+  max-width: 100% !important;
+  width: 100% !important;
 }
 
 /* ============ 深色主题 Element Plus 覆盖 ============ */
