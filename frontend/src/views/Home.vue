@@ -388,7 +388,7 @@ const toggleSidebar = () => {
 
 .main-content {
   padding: 24px;
-  min-height: 100%;
+  /* min-height: 100%; */
 }
 
 @media (max-width: 768px) {

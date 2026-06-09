@@ -472,7 +472,9 @@ initForm()
 .container {
   display: flex;
   width: 900px;
+  max-width: 95vw;
   height: 560px;
+  max-height: 95vh;
   background-color: var(--bg-card);
   border-radius: 24px;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
@@ -480,6 +482,29 @@ initForm()
   position: relative;
   z-index: 1;
   border: 1px solid var(--border-color);
+}
+
+@media (max-width: 768px) {
+  .container {
+    flex-direction: column;
+    width: 95vw;
+    max-width: 100%;
+    height: auto;
+    min-height: 100vh;
+    border-radius: 0;
+  }
+  
+  .brand-section {
+    width: 100%;
+    padding: 32px 24px;
+    min-height: auto;
+  }
+  
+  .form-section {
+    width: 100%;
+    padding: 32px 24px;
+    flex: 1;
+  }
 }
 
 .brand-section {

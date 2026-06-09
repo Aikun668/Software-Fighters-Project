@@ -431,7 +431,27 @@ onMounted(() => {
 
 .messages-wrapper {
   max-width: 800px;
+  width: 100%;
   margin: 0 auto;
+  box-sizing: border-box;
+}
+
+@media (max-width: 768px) {
+  .chat-header {
+    padding: 12px 16px;
+  }
+  
+  .message-container {
+    padding: 16px;
+  }
+  
+  .input-container {
+    padding: 12px 16px 16px;
+  }
+  
+  .quick-questions {
+    flex-wrap: wrap;
+  }
 }
 
 .message-wrapper {
