@@ -1,3 +1,12 @@
+"""
+Internal API — Architecture #2: Java → Python 纯 AI 推理
+
+原则：
+- Java 把所有需要的数据放在请求体中传给 Python
+- Python 只做 AI 计算，返回结果
+- Python 不调 Java API，不持久化
+"""
+
 import asyncio
 import json
 import logging
@@ -11,9 +20,9 @@ from fastapi.responses import StreamingResponse, FileResponse
 
 from app.utils.sse_heartbeat import sse_heartbeat_generator
 from app.api.errors import ErrorCode, api_error, api_success
-from app.services.java_api_client import get_java_client
 from app.api.models import (
     ProfileChatRequest,
+    ProfileWorkflowStatusRequest,
     ResourceGenRequest,
     ExportPptxRequest,
     TutorChatRequest,
@@ -23,18 +32,18 @@ from app.api.models import (
     SolveRequest,
     ErrorAnalysisRequest,
     UnifiedChatRequest,
-    PlanCreateRequest,
-    PlanProgressRequest,
-    PlanResumeRequest,
     RegressionCheckRequest,
-    NodeStatusChangeRequest,
     CreatePlanFromPathRequest,
     InquiryResolveRequest,
+    KnowledgeGraphRequest,
+    KnowledgeGraphNodeRequest,
+    PlanStatusRequest,
+    ReviewScheduleRequest,
+    SummaryRequest,
 )
 from app.services.plan_service import get_plan_service
 from app.services.plan_constants import RETURN_MESSAGES
 from app.events.types import StreamEvent, done_event
-from app.services.conversation_service import get_conversation_service
 from app.services.intent_extractor import IntentExtractor
 
 logger = logging.getLogger(__name__)
@@ -55,8 +64,6 @@ _path_workflow_singleton = None
 _inquiry_service_singleton = None
 
 
-# Mock 模式已全面废弃，始终使用真实 LLM 调用
-# 保留 _get_mock_flag() 接口以兼容存量调用方
 def _get_mock_flag() -> bool:
     return False
 
@@ -168,10 +175,17 @@ def _get_inquiry_service():
     return _inquiry_service_singleton
 
 
-async def _load_profile(user_id: int) -> dict:
-    from app.services.profile_service import get_profile_service
-    profile = await get_profile_service().get_profile(user_id)
-    return profile or {}
+# ── SSE 输出安全 ─────────────────────────────────────────────────
+
+def _sse_sanitize(text: str) -> str:
+    """移除用户文本中的 SSE 控制序列，防止注入攻击。"""
+    return text.replace("\n\n", "  ").replace("\ndata:", " data:").replace("\r", "")
+
+
+def _sse_stream_chunks(text: str, size: int = 4):
+    """将文本按固定大小切分为块生成器，用于 SSE token 流。"""
+    for i in range(0, len(text), size):
+        yield text[i:i + size]
 
 
 # ── 多模态消息构建 ──────────────────────────────────────────────
@@ -180,7 +194,6 @@ ALLOWED_IMAGE_MIMES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 
 
 def _extract_text_from_multimodal(content) -> str:
-    """从多模态 content（字符串或数组）中提取纯文本，用于 RAG 检索和 DB 持久化"""
     if isinstance(content, str):
         return content
     if isinstance(content, list):
@@ -195,18 +208,30 @@ _SSRF_BLOCKED_NETWORKS = re.compile(
     re.IGNORECASE,
 )
 
+_SSRF_DECIMAL_IP = re.compile(r"://(\d{8,10})(?:/|$|:)", re.IGNORECASE)
+_SSRF_HEX_IP = re.compile(r"://0x[0-9a-f]{6,8}(?:/|$|:)", re.IGNORECASE)
+_SSRF_OCTAL_IP = re.compile(r"://0[0-7]{9,11}(?:/|$|:)", re.IGNORECASE)
+
 
 def _is_internal_url(url: str) -> bool:
-    """检测 URL 是否指向内网/云元数据地址，防御 SSRF。"""
-    return bool(_SSRF_BLOCKED_NETWORKS.search(url))
+    if _SSRF_BLOCKED_NETWORKS.search(url):
+        return True
+    dec_match = _SSRF_DECIMAL_IP.search(url)
+    if dec_match:
+        try:
+            ip_int = int(dec_match.group(1))
+            octets = [(ip_int >> 24) & 0xFF, (ip_int >> 16) & 0xFF, (ip_int >> 8) & 0xFF, ip_int & 0xFF]
+            ip_str = ".".join(str(o) for o in octets)
+            if _SSRF_BLOCKED_NETWORKS.search(f"://{ip_str}"):
+                return True
+        except (ValueError, OverflowError):
+            pass
+    if _SSRF_HEX_IP.search(url) or _SSRF_OCTAL_IP.search(url):
+        return True
+    return False
 
 
 def _build_multimodal_message(text: str, images: list[str] | None) -> dict:
-    """构建用户消息 dict，支持多模态图片。
-
-    纯文本 → {"role": "user", "content": "text"}
-    带图片 → {"role": "user", "content": [{"type": "text", ...}, {"type": "image_url", ...}]}
-    """
     if not images:
         return {"role": "user", "content": text}
 
@@ -226,43 +251,45 @@ def _build_multimodal_message(text: str, images: list[str] | None) -> dict:
                     continue
             url = img
         elif img.startswith("http://") or img.startswith("https://"):
-            # 防御 SSRF：只允许常见域名模式，拒绝内网/云元数据地址
             if _is_internal_url(img):
                 logger.warning(f"Rejected internal/infra URL for SSRF prevention: {img[:80]}")
                 continue
             url = img
         else:
-            # 裸 base64，默认当作 JPEG
             url = f"data:image/jpeg;base64,{img}"
         content_parts.append({"type": "image_url", "image_url": {"url": url}})
 
     if not content_parts:
         return {"role": "user", "content": text}
-    # 如果只有文本没有图片，降级为纯字符串格式
     if len(content_parts) == 1 and content_parts[0].get("type") == "text":
         return {"role": "user", "content": text}
     return {"role": "user", "content": content_parts}
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Profile Chat
+# ═══════════════════════════════════════════════════════════════════
+
 @router.post("/profile/chat")
 async def profile_chat(body: ProfileChatRequest):
     messages = body.messages
-    user_id = body.user_id
+    current_profile = body.student_profile
 
-    current_profile = await _load_profile(user_id)
     workflow = _get_profile_workflow()
 
     async def event_stream():
         try:
             state = await workflow.run({
                 "messages": messages,
-                "user_id": user_id,
+                "user_id": body.user_id,
                 "current_profile": current_profile,
             })
 
             response = state.get("response", "")
             if response:
-                for char in response:
+                for chunk in _sse_stream_chunks(response):
                     await asyncio.sleep(0.04)
-                    yield f"data: {json.dumps({'type': 'token', 'content': char}, ensure_ascii=False)}\n\n"
+                    yield f"data: {json.dumps({'type': 'token', 'content': chunk}, ensure_ascii=False)}\n\n"
 
             if state.get("profile_changed"):
                 yield f"data: {json.dumps({'type': 'profile_update', 'content': state.get('current_profile', {})}, ensure_ascii=False)}\n\n"
@@ -270,7 +297,10 @@ async def profile_chat(body: ProfileChatRequest):
             if state.get("profile_complete"):
                 yield f"data: {json.dumps({'type': 'profile_complete', 'filled_dimensions': state.get('filled_dimensions', 0)}, ensure_ascii=False)}\n\n"
 
-            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
+            done_payload = {"type": "done"}
+            if state.get("profile_changed"):
+                done_payload["profile_delta"] = state.get("current_profile", {})
+            yield f"data: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
         except Exception as e:
             logger.error(f"Profile chat SSE error: {e}")
             yield f"data: {json.dumps({'type': 'error', 'content': '画像对话失败，请稍后重试'}, ensure_ascii=False)}\n\n"
@@ -279,44 +309,40 @@ async def profile_chat(body: ProfileChatRequest):
     return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
 
 
+# ═══════════════════════════════════════════════════════════════════
+# Resources Generate
+# ═══════════════════════════════════════════════════════════════════
+
 @router.post("/resources/generate")
 async def resources_generate(body: ResourceGenRequest):
     topic = body.topic.strip()
-    user_id = body.user_id
     student_profile = body.student_profile
-
-    if not student_profile:
-        student_profile = await _load_profile(user_id)
 
     workflow = _get_resource_workflow()
 
     async def event_stream():
         queue: asyncio.Queue = asyncio.Queue()
         try:
-            # Kick off the workflow in background — it pushes StreamEvent to queue
             async def run_workflow():
                 try:
                     state = await workflow.run({
-                        "user_id": user_id,
+                        "user_id": body.user_id,
                         "topic": topic,
                         "student_profile": student_profile,
                         "event_queue": queue,
                     })
-                    # Push final done event with results
                     await queue.put(done_event({
                         "content_blocks": state.get("content_blocks", []),
                         "questions": state.get("questions", []),
-                        "resource_ids": state.get("resource_ids", []),
                         "response": state.get("response", ""),
                         "error": state.get("error", ""),
                     }))
                 except Exception as e:
-                    logger.error(f"Resources generate workflow failed: {e}")
-                    await queue.put(done_event({"error": str(e)}))
+                    logger.error(f"Resources generate workflow failed: {e}", exc_info=True)
+                    await queue.put(done_event({"error": "资源生成失败，请稍后重试"}))
 
             task = asyncio.ensure_future(run_workflow())
 
-            # Stream events from queue as they arrive
             while True:
                 event = await queue.get()
                 if isinstance(event, StreamEvent):
@@ -324,7 +350,6 @@ async def resources_generate(body: ResourceGenRequest):
                     if event.type == "done":
                         break
                 else:
-                    # Backward compat: raw dicts
                     yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
             await task
@@ -336,113 +361,47 @@ async def resources_generate(body: ResourceGenRequest):
     return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
 
 
+# ═══════════════════════════════════════════════════════════════════
+# Tutor Chat
+# ═══════════════════════════════════════════════════════════════════
+
 @router.post("/tutor/chat")
 async def tutor_chat(body: TutorChatRequest):
-    user_id = body.user_id
-    student_profile = body.student_profile
-    content = body.content
     messages = body.messages
-    conversation_id = body.conversation_id
-
-    # ── 新 API：content + conversation_id ──
-    if content is not None and content.strip():
-        conv_service = get_conversation_service()
-        conv = await conv_service.get_or_create_conversation(user_id, conversation_id)
-        history = await conv_service.load_history(conv["id"])
-        messages = history + [{"role": "user", "content": content.strip()}]
-        is_new_api = True
-    # ── 旧 API：完整 messages 数组（向后兼容）──
-    elif messages is not None and len(messages) > 0:
-        is_new_api = False
-    else:
-        return api_error(ErrorCode.INVALID_REQUEST, "需要 content 或 messages 字段")
-
-    if not student_profile:
-        student_profile = await _load_profile(user_id)
+    student_profile = body.student_profile
 
     agent = _get_tutor_agent()
 
     async def event_stream():
-        user_conversation_id = (
-            conv["id"] if is_new_api else None
-        )
         try:
             state = await agent.run({
                 "messages": messages,
-                "user_id": user_id,
                 "student_profile": student_profile,
-                "conversation_id": user_conversation_id,
             })
 
             response = state.get("response", "")
 
-            # 发送会话元信息
-            if user_conversation_id is not None:
-                yield (
-                    "data: "
-                    + json.dumps(
-                        {"type": "meta", "conversation_id": user_conversation_id},
-                        ensure_ascii=False,
-                    )
-                    + "\n\n"
-                )
-
-            # 持久化新消息（不阻塞流式输出）
-            if is_new_api and response:
-                import asyncio as _asyncio
-
-                def _log_save_error(task):
-                    try:
-                        task.result()
-                    except Exception as exc:
-                        logger.warning(f"Background save_messages failed: {exc}")
-
-                save_task = _asyncio.ensure_future(
-                    conv_service.save_messages(
-                        user_conversation_id,
-                        content.strip(),
-                        response,
-                    )
-                )
-                save_task.add_done_callback(_log_save_error)
-
-                def _log_compress_error(task):
-                    try:
-                        task.result()
-                    except Exception as exc:
-                        logger.warning(f"Background compress_history failed: {exc}")
-
-                compress_task = _asyncio.ensure_future(
-                    conv_service.compress_history(user_conversation_id, user_id)
-                )
-                compress_task.add_done_callback(_log_compress_error)
-
             if response:
-                for char in response:
+                for chunk in _sse_stream_chunks(response):
                     await asyncio.sleep(0.03)
-                    yield f"data: {json.dumps({'type': 'token', 'content': char}, ensure_ascii=False)}\n\n"
+                    yield f"data: {json.dumps({'type': 'token', 'content': chunk}, ensure_ascii=False)}\n\n"
 
-            # 后台增量画像提取（DeepTutor 模式：答疑中自然提取画像信号）
+            # 后台增量画像提取，结果放进 done event
+            profile_delta = None
             if response and messages:
-                import asyncio as _asyncio2
+                try:
+                    p_agent = _get_profile_agent()
+                    result = await p_agent.extract_and_merge(student_profile, messages)
+                    if result.get("changed"):
+                        profile_delta = result.get("profile")
+                        logger.info("Background profile updated during tutor chat")
+                except Exception as exc:
+                    logger.warning("Background profile extract failed: %s", exc)
 
-                async def _bg_profile_extract():
-                    try:
-                        agent = _get_profile_agent()
-                        result = await agent.extract_and_merge(
-                            user_id, messages, student_profile,
-                        )
-                        if result.get("changed"):
-                            logger.info(
-                                "Background profile updated for user %d during tutor chat",
-                                user_id,
-                            )
-                    except Exception as exc:
-                        logger.warning("Background profile extract failed: %s", exc)
-
-                _asyncio2.ensure_future(_bg_profile_extract())
-
-            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
+            done_payload: dict = {"type": "done"}
+            if profile_delta:
+                done_payload["profile_delta"] = profile_delta
+            yield f"data: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
         except Exception as e:
             logger.error(f"Tutor chat SSE error: {e}")
             yield f"data: {json.dumps({'type': 'error', 'content': '答疑失败，请稍后重试'}, ensure_ascii=False)}\n\n"
@@ -451,16 +410,16 @@ async def tutor_chat(body: TutorChatRequest):
     return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
 
 
+# ═══════════════════════════════════════════════════════════════════
+# Exercise Generate
+# ═══════════════════════════════════════════════════════════════════
+
 @router.post("/exercise/generate")
 async def exercise_generate(body: ExerciseGenRequest):
     topic = body.topic.strip()
     count = body.count
     difficulty = body.difficulty
-    student_profile = body.student_profileSoftware-Fighters-Project/ai-service/internal_api.py
-    user_id = body.user_id
-
-    if not student_profile:
-        student_profile = await _load_profile(user_id)
+    student_profile = body.student_profile
 
     agent = _get_exercise_agent()
 
@@ -489,8 +448,12 @@ async def exercise_generate(body: ExerciseGenRequest):
     return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
 
 
-@router.get("/path/{student_id}")
-async def learning_path(student_id: str):
+# ═══════════════════════════════════════════════════════════════════
+# Learning Path (changed from GET to POST)
+# ═══════════════════════════════════════════════════════════════════
+
+@router.post("/path/{student_id}")
+async def learning_path(student_id: str, body: CreatePlanFromPathRequest):
     workflow = _get_path_workflow()
 
     try:
@@ -498,7 +461,7 @@ async def learning_path(student_id: str):
     except (ValueError, TypeError):
         return api_error(ErrorCode.INVALID_REQUEST, f"student_id must be an integer, got: {student_id}")
 
-    student_profile = await _load_profile(user_id)
+    student_profile = body.student_profile
 
     try:
         state = await workflow.run({
@@ -515,23 +478,27 @@ async def learning_path(student_id: str):
         "user_id": user_id,
         "steps": state.get("steps", []),
         "concept_graph": state.get("concept_graph", {}),
-        "resource_ids": state.get("resource_ids", []),
         "response": state.get("response", ""),
     })
 
 
-@router.get("/profile/workflow/status")
-async def profile_workflow_status(user_id: int = Query(default=1)):
-    """查询画像完整度（供前端判断是否继续引导对话）"""
+# ═══════════════════════════════════════════════════════════════════
+# Profile Workflow Status (changed from GET to POST)
+# ═══════════════════════════════════════════════════════════════════
+
+@router.post("/profile/workflow/status")
+async def profile_workflow_status(body: ProfileWorkflowStatusRequest):
     workflow = _get_profile_workflow()
-    profile = await _load_profile(user_id)
-    status = workflow.check_profile_status(profile)
+    status = workflow.check_profile_status(body.student_profile)
     return api_success(status)
 
 
+# ═══════════════════════════════════════════════════════════════════
+# PPTX Export / Download
+# ═══════════════════════════════════════════════════════════════════
+
 @router.post("/resources/export-pptx")
 async def export_pptx(body: ExportPptxRequest):
-    """Export content blocks to PPTX file."""
     from app.utils.ppt_exporter import export_to_pptx
 
     content_blocks = body.content_blocks
@@ -552,8 +519,6 @@ async def export_pptx(body: ExportPptxRequest):
 
 @router.get("/resources/download-pptx")
 async def download_pptx(filename: str = Query(...)):
-    """Download a generated PPTX file by filename."""
-    # Prevent path traversal
     safe_name = os.path.basename(filename)
     output_dir = os.path.join(os.path.dirname(__file__), "exports")
     file_path = os.path.join(output_dir, safe_name)
@@ -568,11 +533,14 @@ async def download_pptx(filename: str = Query(...)):
     )
 
 
+# ═══════════════════════════════════════════════════════════════════
+# Solve
+# ═══════════════════════════════════════════════════════════════════
+
 @router.post("/solve")
 async def solve_question(body: SolveRequest):
     question = body.question.strip()
     context = body.context
-    user_id = body.user_id
 
     agent = _get_solve_agent()
 
@@ -589,9 +557,9 @@ async def solve_question(body: SolveRequest):
 
             solution = state.get("solution", "")
             if solution:
-                for char in solution:
+                for chunk in _sse_stream_chunks(solution):
                     await asyncio.sleep(0.03)
-                    yield f"data: {json.dumps({'type': 'token', 'content': char}, ensure_ascii=False)}\n\n"
+                    yield f"data: {json.dumps({'type': 'token', 'content': chunk}, ensure_ascii=False)}\n\n"
 
             confidence = state.get("confidence_score")
             if confidence is not None:
@@ -606,10 +574,14 @@ async def solve_question(body: SolveRequest):
     return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
 
 
+# ═══════════════════════════════════════════════════════════════════
+# Exercise Error Analysis
+# ═══════════════════════════════════════════════════════════════════
+
 @router.post("/exercise/error-analysis")
 async def exercise_error_analysis(body: ErrorAnalysisRequest):
-    """对错题进行深度分析，解释错误原因和改进方法"""
     from app.utils.prompt_loader import load_prompt_file
+    from app.utils.prompt_guard import sanitize_for_llm
 
     errors = body.errors
     level = body.level
@@ -619,9 +591,13 @@ async def exercise_error_analysis(body: ErrorAnalysisRequest):
         user_tpl = load_prompt_file("tutor_agent", "error_analysis.yaml", key="user_template")
         from app.utils.prompt_loader import interpolate_variables
 
+        sanitized_errors = [
+            {k: sanitize_for_llm(v) if isinstance(v, str) else v for k, v in e.items()}
+            for e in errors
+        ]
         user_prompt = interpolate_variables(
             user_tpl,
-            {"errors": json.dumps(errors, ensure_ascii=False), "level": str(level)},
+            {"errors": json.dumps(sanitized_errors, ensure_ascii=False), "level": str(level)},
         )
 
         from app.services.llm_service import get_llm_service
@@ -637,6 +613,10 @@ async def exercise_error_analysis(body: ErrorAnalysisRequest):
         logger.error(f"Error analysis failed: {e}")
         return api_error(ErrorCode.GENERATION_FAILED, "错题分析失败，请稍后重试", status_code=500)
 
+
+# ═══════════════════════════════════════════════════════════════════
+# Grade Exercise
+# ═══════════════════════════════════════════════════════════════════
 
 @router.post("/exercise/grade")
 async def grade_exercise(body: GradeRequest):
@@ -668,23 +648,21 @@ async def grade_exercise(body: GradeRequest):
     return api_success(result)
 
 
+# ═══════════════════════════════════════════════════════════════════
+# Evaluation Report
+# ═══════════════════════════════════════════════════════════════════
+
 @router.post("/evaluation/report")
 async def get_evaluation_report(body: EvaluationReportRequest):
-    user_id = body.user_id
-    evaluation_results = body.evaluation_results
+    from app.services.evaluation_service import generate_report
 
-    from app.services.evaluation_report import generate_report
-
-    report = generate_report(evaluation_results)
-    if user_id is not None:
-        from app.services.profile_service import get_profile_service
-
-        profile_service = get_profile_service()
-        await profile_service.incremental_update(user_id, report)
+    report = generate_report(body.evaluation_results)
     return api_success(report)
 
 
-# ── GraphService singleton ───────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════
+# Knowledge Graph (changed from GET to POST)
+# ═══════════════════════════════════════════════════════════════════
 
 _graph_service_singleton = None
 
@@ -697,95 +675,47 @@ def _get_graph_service():
     return _graph_service_singleton
 
 
-# ── Knowledge Graph Endpoints ────────────────────────────────────
-
-
-@router.get("/knowledge-graph/{course_id}")
-async def get_knowledge_graph(course_id: str, user_id: int = Query(default=1)):
-    """获取完整知识图谱（含用户掌握度+颜色映射）"""
+@router.post("/knowledge-graph/{course_id}")
+async def get_knowledge_graph(course_id: str, body: KnowledgeGraphRequest):
     try:
         graph_service = _get_graph_service()
-        graph = await graph_service.get_graph(user_id, course_id)
+        graph = await graph_service.get_graph(masteries=body.masteries)
         return api_success(graph)
     except Exception as e:
         logger.error(f"Failed to get knowledge graph: {e}")
         return api_error(ErrorCode.INTERNAL_ERROR, "获取知识图谱失败", status_code=500)
 
 
-@router.get("/knowledge-graph/{course_id}/node/{node_id}")
-async def get_node_card(course_id: str, node_id: str, user_id: int = Query(default=1)):
-    """获取节点卡片详情（基本信息+子概念掌握度+图谱上下文+推荐动作）"""
+@router.post("/knowledge-graph/{course_id}/node/{node_id}")
+async def get_node_card(course_id: str, node_id: str, body: KnowledgeGraphNodeRequest):
     try:
         graph_service = _get_graph_service()
-        card = await graph_service.get_node_card(user_id, course_id, node_id)
+        card = await graph_service.get_node_card(
+            node_id=node_id,
+            masteries=body.masteries,
+            total_exercises=body.total_exercises,
+            last_practiced=body.last_practiced,
+        )
         return api_success(card)
-    except ValueError as e:
-        return api_error(ErrorCode.NOT_FOUND, str(e), status_code=404)
+    except ValueError:
+        return api_error(ErrorCode.NOT_FOUND, "节点不存在", status_code=404)
     except Exception as e:
         logger.error(f"Failed to get node card: {e}")
         return api_error(ErrorCode.INTERNAL_ERROR, "获取节点卡片失败", status_code=500)
 
 
-# ── Learning Plan Endpoints ──────────────────────────────────────
-
-
-@router.post("/plans/create")
-async def create_plan(body: PlanCreateRequest):
-    """从路径规划结果创建学习计划"""
-    try:
-        user_id = body.user_id
-        course_id = body.course_id
-        steps = body.steps
-        concept_graph = body.concept_graph
-
-        node_map = {}
-        for node in concept_graph.get("nodes", []):
-            node_map[node.get("name", "")] = node.get("id", "")
-            node_map[node.get("label", "")] = node.get("id", "")
-
-        client = get_java_client()
-        plan_steps = []
-        for i, step in enumerate(steps):
-            topic = step.get("topic", "")
-            knowledge_node_id = node_map.get(topic, "")
-            plan_steps.append({
-                "step_order": i + 1,
-                "topic": topic,
-                "knowledge_node_id": knowledge_node_id,
-                "status": step.get("status", "pending"),
-                "estimated_days": step.get("estimated_days", 1),
-                "topic_difficulty": 3,
-            })
-
-        result = await client.create_plan(
-            user_id=user_id,
-            course_id=course_id,
-            title=f"学习计划 - {course_id}",
-            steps=plan_steps,
-        )
-        if result:
-            return api_success({"plan_id": result.get("id"), "total_steps": len(steps)})
-        return api_error(ErrorCode.PERSIST_FAILED, "创建计划失败", status_code=500)
-    except Exception as e:
-        logger.error(f"Failed to create plan: {e}")
-        return api_error(ErrorCode.PERSIST_FAILED, f"创建计划失败: {e}", status_code=500)
-
+# ═══════════════════════════════════════════════════════════════════
+# Create Plan From Path
+# ═══════════════════════════════════════════════════════════════════
 
 @router.post("/plans/create-from-path")
 async def create_plan_from_path(body: CreatePlanFromPathRequest):
-    """一键生成学习路径 + 创建执行计划（桥接两个功能模块）。
-
-    合并原先的两步操作：
-      1. GET /path/{student_id} → 生成学习路径
-      2. POST /plans/create → 手动创建计划
-    为单次调用：前端只需点一次"生成学习计划"。
-    """
+    """一键生成学习路径。返回 steps + concept_graph，Java 自行创建 plan。"""
     try:
         user_id = body.user_id
         course_id = body.course_id
+        student_profile = body.student_profile
 
-        # 第一步：生成学习路径
-        student_profile = await _load_profile(user_id)
         path_workflow = _get_path_workflow()
         path_state = await path_workflow.run({
             "user_id": user_id,
@@ -800,13 +730,12 @@ async def create_plan_from_path(body: CreatePlanFromPathRequest):
                 ErrorCode.GENERATION_FAILED, "未能生成学习路径，请确认画像已构建", status_code=400
             )
 
-        # 第二步：自动创建执行计划
+        # 为每个 step 匹配 knowledge_node_id
         node_map = {}
         for node in concept_graph.get("nodes", []):
             node_map[node.get("name", "")] = node.get("id", "")
             node_map[node.get("label", "")] = node.get("id", "")
 
-        client = get_java_client()
         plan_steps = []
         for i, step in enumerate(steps):
             topic = step.get("topic", "")
@@ -820,54 +749,43 @@ async def create_plan_from_path(body: CreatePlanFromPathRequest):
                 "topic_difficulty": 3,
             })
 
-        result = await client.create_plan(
-            user_id=user_id,
-            course_id=course_id,
-            title=f"学习计划 - {course_id}",
-            steps=plan_steps,
-        )
-        if not result:
-            return api_error(ErrorCode.PERSIST_FAILED, "创建计划失败", status_code=500)
-
         return api_success({
-            "plan_id": result.get("id"),
+            "course_id": course_id,
             "total_steps": len(steps),
-            "steps": [
-                {"step_order": s["step_order"], "topic": s["topic"],
-                 "knowledge_node_id": s["knowledge_node_id"],
-                 "estimated_days": s.get("estimated_days", 1),
-                 "status": s.get("status", "pending")}
-                for s in plan_steps
-            ],
+            "steps": plan_steps,
             "concept_graph": concept_graph,
             "summary": path_state.get("response", ""),
         })
     except Exception as e:
         logger.error(f"Failed to create plan from path: {e}", exc_info=True)
-        return api_error(ErrorCode.INTERNAL_ERROR, f"创建学习计划失败: {e}", status_code=500)
+        return api_error(ErrorCode.INTERNAL_ERROR, "创建学习计划失败，请稍后重试", status_code=500)
 
 
-@router.get("/plans/{plan_id}/status")
-async def get_plan_status(plan_id: int, user_id: int = Query(default=1)):
-    """查询计划状态（含软着陆触发检测）"""
+# ═══════════════════════════════════════════════════════════════════
+# Plan Status (changed from GET to POST)
+# ═══════════════════════════════════════════════════════════════════
+
+@router.post("/plans/{plan_id}/status")
+async def get_plan_status(plan_id: int, body: PlanStatusRequest):
+    """查询计划状态（含软着陆触发检测）。Java 传入 plan + steps 数据。"""
     from datetime import datetime, timezone
 
     try:
-        client = get_java_client()
-        plan = await client.get_plan(plan_id, user_id)
+        plan = body.plan
+        steps = body.steps
+
         if not plan:
             return api_error(ErrorCode.NOT_FOUND, "计划不存在", status_code=404)
-
-        steps = await client.get_plan_steps(plan_id)
 
         days_idle = 0
         last_activity = plan.get("last_activity_at")
         if last_activity:
             now = datetime.now(timezone.utc)
             try:
-                dt = datetime.fromisoformat(last_activity.replace("Z", "+00:00"))
-                delta = now - dt
-                days_idle = delta.days
+                if isinstance(last_activity, str):
+                    dt = datetime.fromisoformat(last_activity.replace("Z", "+00:00"))
+                    delta = now - dt
+                    days_idle = delta.days
             except (ValueError, TypeError):
                 pass
 
@@ -922,140 +840,21 @@ async def get_plan_status(plan_id: int, user_id: int = Query(default=1)):
         return api_error(ErrorCode.INTERNAL_ERROR, "查询计划状态失败", status_code=500)
 
 
-@router.post("/plans/{plan_id}/progress")
-async def update_plan_progress(plan_id: int, body: PlanProgressRequest):
-    """更新步骤进度 + 触发掌握度更新"""
-    from datetime import datetime, timezone
-
-    try:
-        user_id = body.user_id
-        client = get_java_client()
-
-        plan = await client.get_plan(plan_id, user_id)
-        if not plan:
-            return api_error(ErrorCode.NOT_FOUND, "计划不存在", status_code=404)
-
-        steps = await client.get_plan_steps(plan_id)
-        step = next((s for s in steps if s.get("id") == body.step_id), None)
-        if not step:
-            return api_error(ErrorCode.NOT_FOUND, "步骤不存在", status_code=404)
-
-        plan_service = get_plan_service()
-
-        current_mastery = step.get("mastery_current") or 0
-        activity_type = body.activity_type or "study"
-        new_status = body.status or step.get("status")
-
-        if activity_type in ("exercise", "quiz") and body.score is not None:
-            if body.score >= 0.6:
-                new_mastery = plan_service.update_mastery(current_mastery, "exercise_done", body.score)
-            else:
-                new_mastery = plan_service.update_mastery(current_mastery, "exercise_failed")
-        elif activity_type in ("exercise", "quiz") and body.score is None:
-            new_mastery = current_mastery
-            logger.warning("exercise/quiz activity without score for step %s — mastery unchanged", body.step_id)
-        else:
-            new_mastery = plan_service.update_mastery(current_mastery, activity_type, body.score)
-
-        completed_steps = (plan.get("completed_steps") or 0)
-        if new_status == "completed":
-            completed_steps += 1
-
-        await client.update_plan_step(body.step_id, {
-            "status": new_status,
-            "mastery_current": new_mastery,
-            "mastery_after": new_mastery,
-            "review_count": (step.get("review_count") or 0) + 1,
-            "last_review_at": datetime.now(timezone.utc).isoformat(),
-        })
-
-        await client.update_plan(plan_id, {
-            "last_activity_at": datetime.now(timezone.utc).isoformat(),
-            "completed_steps": completed_steps,
-        })
-
-        await client.create_activity(
-            user_id=user_id, plan_id=plan_id, step_id=body.step_id,
-            activity_type=body.activity_type,
-            duration_minutes=body.duration_minutes or 0,
-            score=body.score,
-        )
-
-        knowledge_node_id = step.get("knowledge_node_id")
-        if knowledge_node_id:
-            await client.upsert_node_mastery(
-                user_id=user_id,
-                node_id=knowledge_node_id,
-                course_id=plan.get("course_id") or "ai_intro",
-                mastery=new_mastery,
-                review_count=(step.get("review_count") or 0) + 1,
-            )
-
-        return api_success({
-            "plan_id": plan_id,
-            "step_id": body.step_id,
-            "status": new_status,
-            "completed_steps": completed_steps,
-        })
-    except Exception as e:
-        logger.error(f"Failed to update progress: {e}", exc_info=True)
-        return api_error(ErrorCode.PERSIST_FAILED, "更新进度失败，请稍后重试", status_code=500)
-
-
-@router.post("/plans/{plan_id}/resume")
-async def resume_plan(plan_id: int, body: PlanResumeRequest):
-    """中断后回归，触发软着陆检查"""
-    from datetime import datetime, timezone
-
-    try:
-        client = get_java_client()
-        plan = await client.get_plan(plan_id, body.user_id)
-        if not plan:
-            return api_error(ErrorCode.NOT_FOUND, "计划不存在", status_code=404)
-
-        await client.update_plan(plan_id, {
-            "status": "in_progress",
-            "paused_at": None,
-            "last_activity_at": datetime.now(timezone.utc).isoformat(),
-        })
-
-        return api_success({
-            "plan_id": plan.get("id"),
-            "status": "in_progress",
-            "message": "已恢复计划",
-        })
-    except Exception as e:
-        logger.error(f"Failed to resume plan: {e}", exc_info=True)
-        return api_error(ErrorCode.INTERNAL_ERROR, "恢复计划失败，请稍后重试", status_code=500)
-
-
-# ── Regression Check Endpoint ────────────────────────────────────
-
+# ═══════════════════════════════════════════════════════════════════
+# Regression Check
+# ═══════════════════════════════════════════════════════════════════
 
 @router.post("/plans/{plan_id}/regression-check")
 async def regression_check(plan_id: int, body: RegressionCheckRequest):
-    """回归检测管线：出题 → 判分 → 重排"""
-    from datetime import datetime, timezone
-
+    """回归检测管线：出题 → 判分 → 重排。纯算法，不写 DB。"""
     try:
         plan_service = get_plan_service()
-        client = get_java_client()
+        plan = body.plan
+        steps = body.steps
+        days_idle = body.days_idle
 
-        plan = await client.get_plan(plan_id, body.user_id)
         if not plan:
             return api_error(ErrorCode.NOT_FOUND, "计划不存在", status_code=404)
-
-        steps = await client.get_plan_steps(plan_id)
-
-        days_idle = 0
-        last_activity = plan.get("last_activity_at")
-        if last_activity:
-            now = datetime.now(timezone.utc)
-            try:
-                dt = datetime.fromisoformat(last_activity.replace("Z", "+00:00"))
-                days_idle = (now - dt).days
-            except (ValueError, TypeError):
-                pass
 
         paused_steps = [s for s in steps if s.get("status") in ("paused", "in_progress")]
 
@@ -1126,6 +925,8 @@ async def regression_check(plan_id: int, body: RegressionCheckRequest):
             topic = ans.get("topic", "")
             answers_by_topic.setdefault(topic, []).append(ans)
 
+        # 计算每个 topic 的 mastery 更新
+        mastery_updates = {}
         for topic, topic_answers in answers_by_topic.items():
             total_score = 0
             for ans in topic_answers:
@@ -1146,12 +947,15 @@ async def regression_check(plan_id: int, body: RegressionCheckRequest):
                         new_m = plan_service.update_mastery(prev_mastery, "exercise_done", avg_score)
                     else:
                         new_m = plan_service.update_mastery(prev_mastery, "exercise_failed")
-                    await client.update_plan_step(step.get("id"), {
-                        "mastery_current": new_m,
+                    mastery_updates[topic] = {
+                        "previous_mastery": prev_mastery,
+                        "new_mastery": new_m,
                         "review_count": (step.get("review_count") or 0) + 1,
-                        "last_review_at": datetime.now(timezone.utc).isoformat(),
-                    })
+                        "step_id": step.get("id"),
+                    }
 
+        # 重排
+        reordered_steps = None
         if decay_results:
             current_node = steps[0].get("knowledge_node_id", "") if steps else ""
             goal_node = steps[-1].get("knowledge_node_id", "") if steps else ""
@@ -1165,47 +969,19 @@ async def regression_check(plan_id: int, body: RegressionCheckRequest):
                 step_dicts, decay_results, days_idle,
                 current_topic=current_node, goal_topic=goal_node,
             )
+            reordered_steps = [
+                {"step_order": i + 1, "topic": r.get("topic"), "status": r.get("status"),
+                 "mastery_current": r.get("mastery_current")}
+                for i, r in enumerate(reordered)
+            ]
 
-            topic_to_step = {s.get("topic"): s for s in steps}
-            new_order = 1
-            for item in reordered:
-                topic = item.get("topic", "")
-                if topic in topic_to_step:
-                    await client.update_plan_step(topic_to_step[topic].get("id"), {
-                        "step_order": new_order,
-                        "status": item.get("status", topic_to_step[topic].get("status")),
-                    })
-                else:
-                    await client.insert_plan_step(plan_id, {
-                        "step_order": new_order,
-                        "topic": topic,
-                        "knowledge_node_id": item.get("knowledge_node_id", ""),
-                        "status": item.get("status", "review"),
-                        "topic_difficulty": 3,
-                        "mastery_current": 0.0,
-                    })
-                new_order += 1
-
-            await client.update_plan(plan_id, {"total_steps": len(reordered)})
-
-        await client.update_plan(plan_id, {
-            "status": "in_progress",
-            "last_activity_at": datetime.now(timezone.utc).isoformat(),
-        })
-
-        # Re-fetch steps in new order
-        steps = await client.get_plan_steps(plan_id)
-        reordered_steps = sorted(steps, key=lambda s: s.get("step_order", 0))
         return api_success({
             "plan_id": plan_id,
             "strategy": "regression_check",
             "message": RETURN_MESSAGES["after_pass"] if not decay_results else RETURN_MESSAGES["after_fail"],
             "questions": [],
-            "reordered_steps": [
-                {"step_order": s.get("step_order"), "topic": s.get("topic"), "status": s.get("status"),
-                 "mastery_current": s.get("mastery_current")}
-                for s in reordered_steps
-            ],
+            "mastery_updates": mastery_updates,
+            "reordered_steps": reordered_steps,
         })
 
     except Exception as e:
@@ -1213,23 +989,18 @@ async def regression_check(plan_id: int, body: RegressionCheckRequest):
         return api_error(ErrorCode.INTERNAL_ERROR, "回归检测失败，请稍后重试", status_code=500)
 
 
-# ── Review Schedule Endpoint ─────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════
+# Review Schedule (changed from GET to POST)
+# ═══════════════════════════════════════════════════════════════════
 
-
-@router.get("/plans/{plan_id}/review-schedule")
-async def get_review_schedule(plan_id: int, user_id: int = Query(default=1),
-                               days_ahead: int = Query(default=7, ge=1, le=30)):
-    """获取未来 N 天的复习日程（间隔重复提醒）"""
+@router.post("/plans/{plan_id}/review-schedule")
+async def get_review_schedule(plan_id: int, body: ReviewScheduleRequest):
+    """获取未来 N 天的复习日程。Java 传入 steps 数据。"""
 
     try:
-        client = get_java_client()
-        plan = await client.get_plan(plan_id, user_id)
-        if not plan:
-            return api_error(ErrorCode.NOT_FOUND, "计划不存在", status_code=404)
+        steps = body.steps
+        days_ahead = body.days_ahead
 
-        steps = await client.get_plan_steps(plan_id)
-
-        # Convert dict steps to objects for get_review_schedule compatibility
         from dataclasses import dataclass
 
         @dataclass
@@ -1270,26 +1041,9 @@ async def get_review_schedule(plan_id: int, user_id: int = Query(default=1),
         return api_error(ErrorCode.INTERNAL_ERROR, "获取复习日程失败", status_code=500)
 
 
-# ── Node Status Change Endpoint ──────────────────────────────────
-
-
-@router.post("/plans/{plan_id}/node-status-change")
-async def on_node_status_change(plan_id: int, body: NodeStatusChangeRequest):
-    """联动：知识图谱节点状态变化 → 计划重排"""
-    try:
-        plan_service = get_plan_service()
-        result = await plan_service.on_node_status_change(
-            user_id=body.user_id,
-            node_id=body.node_id,
-            old_status=body.old_status,
-            new_status=body.new_status,
-            plan_id=plan_id,
-        )
-        return api_success(result)
-    except Exception as e:
-        logger.error(f"Failed node status change: {e}", exc_info=True)
-        return api_error(ErrorCode.INTERNAL_ERROR, "联动处理失败，请稍后重试", status_code=500)
-
+# ═══════════════════════════════════════════════════════════════════
+# Unified Chat (双层模式策略)
+# ═══════════════════════════════════════════════════════════════════
 
 _intent_extractor: IntentExtractor | None = None
 _intent_extractor_lock = threading.Lock()
@@ -1304,8 +1058,6 @@ def _get_intent_extractor() -> IntentExtractor:
     return _intent_extractor
 
 
-# ── 意图 → 模式映射 ────────────────────────────────────────────
-
 _INTENT_MODE_MAP: dict[str, str] = {
     "exercise_gen": "exercise",
     "resource_gen": "resource",
@@ -1319,7 +1071,6 @@ _INTENT_MODE_MAP: dict[str, str] = {
 
 
 def _build_confirmation(intent: str, confidence: float) -> str | None:
-    """置信度不足时生成确认追问。"""
     hints: dict[str, str] = {
         "exercise_gen": "检测到你可能想练习，需要切换到出题模式吗？",
         "resource_gen": "检测到你可能想生成学习资源，需要切换吗？",
@@ -1334,21 +1085,14 @@ def _build_confirmation(intent: str, confidence: float) -> str | None:
 
 @router.post("/api/chat")
 async def unified_chat(body: UnifiedChatRequest):
-    """统一对话入口 — 双层模式策略。
-
-    Layer 1 (显式): mode != "auto" → 直接路由到指定模式
-    Layer 2 (感知): mode == "auto" → IntentExtractor 分析 → 静默路由 + 提示
-    """
+    """统一对话入口 — 双层模式策略。Architecture #2: Java 传入完整数据。"""
     message = body.message.strip()
     user_id = body.user_id
     mode = body.mode
     conversation_id = body.conversation_id
     style = body.style or "standard"
-
-    # ── 统一 conversation ──
-    conv_service = get_conversation_service()
-    conv = await conv_service.get_or_create_conversation(user_id, conversation_id)
-    resolved_conv_id = conv["id"]
+    student_profile = body.student_profile
+    history = body.messages
 
     # ── 双层模式策略 ──
     intent_meta: dict | None = None
@@ -1369,34 +1113,35 @@ async def unified_chat(body: UnifiedChatRequest):
                 result.intent, result.confidence
             )
 
+    # ── 构建完整消息列表 ──
+    user_msg = {"role": "user", "content": message}
+    messages = history + [user_msg]
+
     # ── 模式分发 ──
     if effective_mode == "resource":
-        return await _resource_mode_dispatch(message, user_id)
+        return await _resource_mode_dispatch(message, user_id, student_profile)
     elif effective_mode == "solve":
-        return await _unified_solve_chat(message, user_id, resolved_conv_id, style)
+        return await _unified_solve_chat(message, messages, student_profile, conversation_id)
     elif effective_mode == "exercise":
-        return await _unified_exercise_chat(message, user_id, resolved_conv_id, style)
+        return await _unified_exercise_chat(message, messages, student_profile, conversation_id)
     elif effective_mode == "research":
-        return await _unified_research_chat(message, user_id, resolved_conv_id, style)
+        return await _unified_research_chat(message, messages, student_profile, conversation_id, user_id)
     else:  # tutor (兜底)
-        return await _unified_tutor_chat(message, user_id, resolved_conv_id, style, intent_meta)
+        return await _unified_tutor_chat(message, messages, student_profile, conversation_id, style, intent_meta)
 
 
 # ── 资源模式分流 ─────────────────────────────────────────────────
 
-async def _resource_mode_dispatch(message: str, user_id: int):
-    """资源模式：先过 InquiryService 检查需求清晰度。
-    - 清晰 → 直接生成
-    - 模糊 → 返回追问让用户回答"""
-    profile = await _load_profile(user_id)
+async def _resource_mode_dispatch(message: str, user_id: int, student_profile: dict):
+    """资源模式：先过 InquiryService 检查需求清晰度。"""
     inquiry = _get_inquiry_service()
-    result = await inquiry.check(message, profile)
+    result = await inquiry.check(message, student_profile)
 
     if result.is_clear:
         return await resources_generate(ResourceGenRequest(
             topic=result.clarified_topic,
             user_id=user_id,
-            student_profile=profile,
+            student_profile=student_profile,
         ))
 
     return api_success({
@@ -1411,34 +1156,26 @@ async def _resource_mode_dispatch(message: str, user_id: int):
 # ── Unified Dispatch: tutor ──────────────────────────────────────
 
 async def _unified_tutor_chat(
-    message: str, user_id: int, conversation_id: int,
-    style: str = "standard", intent_meta: dict | None = None,
+    message: str, messages: list[dict], student_profile: dict,
+    conversation_id: int | None, style: str = "standard",
+    intent_meta: dict | None = None,
 ):
-    """答疑模式：统一 conversation 上下文 + 意图元信息提示"""
-    conv_service = get_conversation_service()
-    history = await conv_service.load_history(conversation_id)
-    user_msg = {"role": "user", "content": message}
-    messages = history + [user_msg]
-    profile = await _load_profile(user_id)
-
-    # 计算苏格拉底追问轮次（仅统计带 tutor:socratic 标记的 assistant 消息）
+    """答疑模式"""
+    # 计算苏格拉底追问轮次
     socratic_round = 0
     if style == "socratic":
         socratic_round = sum(
-            1 for m in history[-20:]
+            1 for m in messages[-20:]
             if m.get("role") == "assistant" and m.get("mode") == "tutor:socratic"
         )
 
     agent = _get_tutor_agent()
-    assistant_mode = "tutor:socratic" if style == "socratic" else "tutor"
 
     async def event_stream():
         try:
             state = await agent.run({
                 "messages": messages,
-                "user_id": user_id,
-                "student_profile": profile,
-                "conversation_id": conversation_id,
+                "student_profile": student_profile,
                 "style": style,
                 "socratic_round": socratic_round,
             })
@@ -1451,32 +1188,27 @@ async def _unified_tutor_chat(
 
             response = state.get("response", "")
             if response:
-                for char in response:
+                for chunk in _sse_stream_chunks(response):
                     await asyncio.sleep(0.03)
-                    yield f"data: {json.dumps({'type': 'token', 'content': char}, ensure_ascii=False)}\n\n"
+                    yield f"data: {json.dumps({'type': 'token', 'content': chunk}, ensure_ascii=False)}\n\n"
 
-            yield f"data: {json.dumps({'type': 'meta', 'conversation_id': conversation_id}, ensure_ascii=False)}\n\n"
-            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
-
-            # 后台持久化
+            # 后台画像提取，结果放进 done event
+            profile_delta = None
             if response:
-                import asyncio as _aio
-                _aio.ensure_future(
-                    conv_service.save_messages(conversation_id, message, response,
-                                               user_mode="tutor", assistant_mode=assistant_mode)
-                )
-                _aio.ensure_future(conv_service.compress_history(conversation_id, user_id))
+                try:
+                    p_agent = _get_profile_agent()
+                    result = await p_agent.extract_and_merge(student_profile, messages)
+                    if result.get("changed"):
+                        profile_delta = result.get("profile")
+                except Exception as exc:
+                    logger.warning("Background profile extract failed: %s", exc)
 
-                # 后台画像提取
-                async def _bg_extract():
-                    try:
-                        p_agent = _get_profile_agent()
-                        result = await p_agent.extract_and_merge(user_id, messages, profile)
-                        if result.get("changed"):
-                            logger.info("Background profile updated for user %d", user_id)
-                    except Exception as exc:
-                        logger.warning("Background profile extract failed: %s", exc)
-                _aio.ensure_future(_bg_extract())
+            done_payload: dict = {"type": "done"}
+            if conversation_id:
+                done_payload["conversation_id"] = conversation_id
+            if profile_delta:
+                done_payload["profile_delta"] = profile_delta
+            yield f"data: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
 
         except Exception as e:
             logger.error(f"Unified tutor chat error: {e}")
@@ -1489,14 +1221,12 @@ async def _unified_tutor_chat(
 # ── Unified Dispatch: solve ──────────────────────────────────────
 
 async def _unified_solve_chat(
-    message: str, user_id: int, conversation_id: int, _style: str = "standard",
+    message: str, messages: list[dict], student_profile: dict,
+    conversation_id: int | None,
 ):
-    """解题模式：复用 SolveAgent + 历史上下文"""
-    conv_service = get_conversation_service()
-    history = await conv_service.load_history(conversation_id)
-
+    """解题模式"""
     context_parts = []
-    for m in history[-6:]:
+    for m in messages[-6:]:
         role_label = "学生" if m.get("role") == "user" else "AI"
         ctx = m.get("content", "")[:200]
         context_parts.append(f"[{role_label}]: {ctx}")
@@ -1517,22 +1247,18 @@ async def _unified_solve_chat(
 
             solution = state.get("solution", "")
             if solution:
-                for char in solution:
+                for chunk in _sse_stream_chunks(solution):
                     await asyncio.sleep(0.03)
-                    yield f"data: {json.dumps({'type': 'token', 'content': char}, ensure_ascii=False)}\n\n"
+                    yield f"data: {json.dumps({'type': 'token', 'content': chunk}, ensure_ascii=False)}\n\n"
 
             confidence = state.get("confidence_score")
             if confidence is not None:
                 yield f"data: {json.dumps({'type': 'confidence', 'score': confidence}, ensure_ascii=False)}\n\n"
 
-            yield f"data: {json.dumps({'type': 'meta', 'conversation_id': conversation_id}, ensure_ascii=False)}\n\n"
-            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
-
-            import asyncio as _aio
-            _aio.ensure_future(
-                conv_service.save_messages(conversation_id, message, solution,
-                                           user_mode="solve", assistant_mode="solve")
-            )
+            done_payload: dict = {"type": "done"}
+            if conversation_id:
+                done_payload["conversation_id"] = conversation_id
+            yield f"data: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
 
         except Exception as e:
             logger.error(f"Unified solve chat error: {e}")
@@ -1545,12 +1271,10 @@ async def _unified_solve_chat(
 # ── Unified Dispatch: exercise ───────────────────────────────────
 
 async def _unified_exercise_chat(
-    message: str, user_id: int, conversation_id: int, _style: str = "standard",
+    message: str, messages: list[dict], student_profile: dict,
+    conversation_id: int | None,
 ):
-    """练习模式：复用 ExerciseAgent + IntentExtractor 提取参数"""
-    conv_service = get_conversation_service()
-    profile = await _load_profile(user_id)
-
+    """练习模式"""
     extractor = _get_intent_extractor()
     intent_result = await extractor.extract(message)
     topic = intent_result.params.get("topic", message)
@@ -1567,20 +1291,20 @@ async def _unified_exercise_chat(
                 "topic": topic,
                 "count": count,
                 "difficulty": difficulty,
-                "student_profile": profile,
+                "student_profile": student_profile,
             })
 
             questions = state.get("questions", [])
             yield f"data: {json.dumps({'type': 'progress', 'stage': 'generate', 'content': f'已生成 {len(questions)} 道题目'}, ensure_ascii=False)}\n\n"
-            yield f"data: {json.dumps({'type': 'done', 'questions': questions}, ensure_ascii=False)}\n\n"
 
-            # 持久化
-            response_text = f"已生成 {len(questions)} 道关于「{topic}」的{difficulty}难度练习题。"
-            import asyncio as _aio
-            _aio.ensure_future(
-                conv_service.save_messages(conversation_id, message, response_text,
-                                           user_mode="exercise", assistant_mode="exercise")
-            )
+            done_payload: dict = {
+                "type": "done",
+                "questions": questions,
+            }
+            if conversation_id:
+                done_payload["conversation_id"] = conversation_id
+            yield f"data: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
+
         except Exception as e:
             logger.error(f"Unified exercise chat error: {e}")
             yield f"data: {json.dumps({'type': 'error', 'content': '练习题生成失败'}, ensure_ascii=False)}\n\n"
@@ -1592,12 +1316,10 @@ async def _unified_exercise_chat(
 # ── Unified Dispatch: research ───────────────────────────────────
 
 async def _unified_research_chat(
-    message: str, user_id: int, conversation_id: int, _style: str = "standard",
+    message: str, messages: list[dict], student_profile: dict,
+    conversation_id: int | None, user_id: int,
 ):
     """研究模式：学习路径 + 资源组合"""
-    conv_service = get_conversation_service()
-    profile = await _load_profile(user_id)
-
     extractor = _get_intent_extractor()
     intent_result = await extractor.extract(message)
     topic = intent_result.params.get("topic", message)
@@ -1610,7 +1332,7 @@ async def _unified_research_chat(
 
             path_state = await path_workflow.run({
                 "user_id": user_id,
-                "student_profile": profile,
+                "student_profile": student_profile,
             })
 
             steps = path_state.get("steps", [])
@@ -1619,19 +1341,15 @@ async def _unified_research_chat(
             yield f"data: {json.dumps({'type': 'path', 'steps': steps}, ensure_ascii=False)}\n\n"
 
             if path_summary:
-                for char in path_summary:
+                for chunk in _sse_stream_chunks(path_summary):
                     await asyncio.sleep(0.02)
-                    yield f"data: {json.dumps({'type': 'token', 'content': char}, ensure_ascii=False)}\n\n"
+                    yield f"data: {json.dumps({'type': 'token', 'content': chunk}, ensure_ascii=False)}\n\n"
 
-            yield f"data: {json.dumps({'type': 'meta', 'conversation_id': conversation_id}, ensure_ascii=False)}\n\n"
-            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
+            done_payload: dict = {"type": "done"}
+            if conversation_id:
+                done_payload["conversation_id"] = conversation_id
+            yield f"data: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
 
-            full_response = path_summary + f"\n\n已规划 {len(steps)} 步学习路径。"
-            import asyncio as _aio
-            _aio.ensure_future(
-                conv_service.save_messages(conversation_id, message, full_response,
-                                           user_mode="research", assistant_mode="research")
-            )
         except Exception as e:
             logger.error(f"Unified research chat error: {e}")
             yield f"data: {json.dumps({'type': 'error', 'content': '研究模式暂时不可用'}, ensure_ascii=False)}\n\n"
@@ -1640,14 +1358,14 @@ async def _unified_research_chat(
     return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
 
 
+# ═══════════════════════════════════════════════════════════════════
+# Inquiry Resolve
+# ═══════════════════════════════════════════════════════════════════
+
 @router.post("/inquiry/resolve")
 async def inquiry_resolve(body: InquiryResolveRequest):
     """接收用户对追问的回答，合并后调用 ResourceGenWorkflow 生成资源。"""
-    user_id = body.user_id
-    if not body.student_profile:
-        student_profile = await _load_profile(user_id)
-    else:
-        student_profile = body.student_profile
+    student_profile = body.student_profile
 
     inquiry = _get_inquiry_service()
     resolved = inquiry.resolve(
@@ -1663,11 +1381,10 @@ async def inquiry_resolve(body: InquiryResolveRequest):
     suggested_types = resolved.get("suggested_types", [])
 
     logger.info(
-        "Inquiry resolved: topic=%s, types=%s, answers=%s",
-        topic, suggested_types, body.answers,
+        "Inquiry resolved: topic=%s, types=%s, answer_count=%d",
+        topic, suggested_types, len(body.answers),
     )
 
-    # 将追问上下文和 suggested_types 注入 student_profile，供 ResourceGenWorkflow 使用
     enriched_profile = dict(student_profile)
     enriched_profile["_inquiry_context"] = context_note
     enriched_profile["_suggested_types"] = suggested_types
@@ -1679,7 +1396,7 @@ async def inquiry_resolve(body: InquiryResolveRequest):
                 try:
                     workflow = _get_resource_workflow()
                     state = await workflow.run({
-                        "user_id": user_id,
+                        "user_id": body.user_id,
                         "topic": topic,
                         "student_profile": enriched_profile,
                         "event_queue": queue,
@@ -1688,13 +1405,12 @@ async def inquiry_resolve(body: InquiryResolveRequest):
                     await queue.put(done_event({
                         "content_blocks": state.get("content_blocks", []),
                         "questions": state.get("questions", []),
-                        "resource_ids": state.get("resource_ids", []),
                         "response": state.get("response", ""),
                         "error": state.get("error", ""),
                     }))
                 except Exception as e:
-                    logger.error(f"Inquiry resolve workflow failed: {e}")
-                    await queue.put(done_event({"error": str(e)}))
+                    logger.error(f"Inquiry resolve workflow failed: {e}", exc_info=True)
+                    await queue.put(done_event({"error": "资源生成失败，请稍后重试"}))
 
             task = asyncio.ensure_future(run_workflow())
 
@@ -1716,63 +1432,23 @@ async def inquiry_resolve(body: InquiryResolveRequest):
     return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
 
 
-# ── Dashboard Endpoint ────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════
+# Conversation Summary (changed from GET to POST)
+# ═══════════════════════════════════════════════════════════════════
 
-
-@router.get("/user/dashboard")
-async def get_user_dashboard(
-    user_id: int = Query(default=1),
-    course_id: str = Query(default="ai_intro"),
-):
-    """聚合学生仪表盘数据：画像 + 学习轨迹 + 能力评估"""
-    from app.services.dashboard_service import DashboardService
+@router.post("/conversations/{conversation_id}/summary")
+async def get_conversation_summary(conversation_id: int, body: SummaryRequest):
+    """获取学习总结卡片。Java 传入原始消息列表，Python 用 LLM 生成总结。"""
     try:
-        data = await DashboardService().get_dashboard(user_id, course_id)
-        return api_success(data)
-    except Exception as e:
-        logger.error(f"Dashboard query failed: {e}")
-        return api_error(ErrorCode.INTERNAL_ERROR, "获取仪表盘数据失败", status_code=500)
+        from app.utils.conversation_compress import format_messages_for_compress, llm_summarize
 
+        messages_text = format_messages_for_compress(body.messages)
+        summary = await llm_summarize("", messages_text)
 
-# ── Summary & Session End ──────────────────────────────────────────
-
-
-@router.get("/conversations/{conversation_id}/summary")
-async def get_conversation_summary(
-    conversation_id: int,
-    user_id: int = Query(default=1),
-    course_id: str = Query(default="ai_intro"),
-):
-    """获取学习总结卡片"""
-    from app.services.summary_service import get_summary_service
-    try:
-        data = await get_summary_service().get_session_summary(
-            user_id, conversation_id, course_id,
-        )
-        return api_success(data)
+        return api_success({
+            "conversation_id": conversation_id,
+            "summary": summary or "本次对话涵盖了多个学习主题。",
+        })
     except Exception as e:
         logger.error(f"Summary generation failed: {e}")
         return api_error(ErrorCode.INTERNAL_ERROR, "生成总结卡片失败", status_code=500)
-
-
-@router.post("/conversations/{conversation_id}/end")
-async def end_conversation(
-    conversation_id: int,
-    user_id: int = Query(default=1),
-    course_id: str = Query(default="ai_intro"),
-):
-    """结束会话：生成总结卡片 + 触发摘要压缩"""
-    from app.services.summary_service import get_summary_service
-    try:
-        summary = await get_summary_service().get_session_summary(
-            user_id, conversation_id, course_id,
-        )
-        conv_service = get_conversation_service()
-        await conv_service.compress_history(conversation_id, user_id)
-        return api_success({
-            "summary": summary,
-            "conversation_id": conversation_id,
-        })
-    except Exception as e:
-        logger.error(f"End conversation failed: {e}")
-        return api_error(ErrorCode.INTERNAL_ERROR, "结束会话失败", status_code=500)

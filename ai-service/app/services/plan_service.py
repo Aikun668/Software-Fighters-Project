@@ -1,4 +1,4 @@
-"""计划引擎服务 — 动态半衰期、软着陆、穿插重排、掌握度更新、联动机制"""
+"""计划引擎服务 — 动态半衰期、软着陆、穿插重排、掌握度更新（纯算法）"""
 
 import logging
 import math
@@ -6,7 +6,6 @@ import threading
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
-from app.services.java_api_client import get_java_client
 from app.services.plan_constants import RETURN_MESSAGES
 
 logger = logging.getLogger(__name__)
@@ -22,10 +21,7 @@ def _step_attr(step, name: str, default=None):
 
 
 class PlanService:
-    """计划引擎 — 纯算法 + Java API 调用（不调 LLM）"""
-
-    def __init__(self):
-        self._client = get_java_client()
+    """计划引擎 — 纯算法（不调 LLM，不调 Java）"""
 
     # ── 5.4.1 动态半衰期 ──────────────────────────────────────
 
@@ -261,25 +257,6 @@ class PlanService:
                     })
 
         return sorted(schedule, key=lambda s: s["days_until_review"])
-
-    # ── 6.2 联动机制 ──────────────────────────────────────────
-
-    async def on_node_status_change(self, user_id: int, node_id: str,
-                                     old_status: str, new_status: str,
-                                     plan_id: int = None) -> dict:
-        if new_status != "forgotten":
-            return {"action": "none", "reason": f"status {new_status} 不需要调整计划"}
-
-        try:
-            result = await self._client.on_node_status_change(
-                user_id, node_id, old_status, new_status, plan_id,
-            )
-            if result:
-                return result
-            return {"action": "none", "reason": "Java API 返回空"}
-        except Exception as e:
-            logger.error(f"Failed to handle node status change: {e}")
-            return {"action": "none", "reason": f"调用 Java API 失败: {e}"}
 
 
 _plan_service_singleton = None

@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from internal_api import router as internal_router
+from app.utils.security_middleware import SecurityMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -55,21 +56,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.add_middleware(SecurityMiddleware)
+
 
 @app.get("/health")
 async def health():
-    try:
-        from app.services.java_api_client import get_java_client
-        client = get_java_client()
-        result = await client._get("/health")
-        java_ok = result is not None
-    except Exception:
-        java_ok = False
-
-    return {
-        "status": "ok" if java_ok else "degraded",
-        "java_api": "connected" if java_ok else "unreachable",
-    }
+    return {"status": "ok", "service": "ai-inference"}
 
 
 if __name__ == "__main__":

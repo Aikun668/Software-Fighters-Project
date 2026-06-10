@@ -1,4 +1,4 @@
-"""Pydantic request models — 替换所有 request: Request 的裸 JSON 解析"""
+"""Pydantic request models — Architecture #2: Java 在请求体中传入所有数据"""
 
 from typing import Optional, Literal
 from pydantic import BaseModel, Field
@@ -9,6 +9,12 @@ from pydantic import BaseModel, Field
 class ProfileChatRequest(BaseModel):
     messages: list[dict] = Field(..., min_length=1, description="对话消息数组 [{role, content}]")
     user_id: int = Field(default=1, description="用户 ID")
+    student_profile: dict = Field(default_factory=dict, description="学生画像（Java 传入）")
+
+
+class ProfileWorkflowStatusRequest(BaseModel):
+    user_id: int = Field(default=1, description="用户 ID")
+    student_profile: dict = Field(default_factory=dict, description="学生画像（Java 传入）")
 
 
 # ── Resources ──────────────────────────────────────────────────
@@ -16,7 +22,7 @@ class ProfileChatRequest(BaseModel):
 class ResourceGenRequest(BaseModel):
     topic: str = Field(..., min_length=1, description="资源主题")
     user_id: int = Field(default=1, description="用户 ID")
-    student_profile: dict = Field(default_factory=dict, description="学生画像（可选，后端会自动加载）")
+    student_profile: dict = Field(default_factory=dict, description="学生画像（Java 传入）")
 
 
 class ExportPptxRequest(BaseModel):
@@ -28,10 +34,8 @@ class ExportPptxRequest(BaseModel):
 
 class TutorChatRequest(BaseModel):
     user_id: int = Field(default=1, description="用户 ID")
-    student_profile: dict = Field(default_factory=dict, description="学生画像")
-    content: Optional[str] = Field(default=None, description="【新 API】当前消息文本")
-    messages: Optional[list[dict]] = Field(default=None, description="【旧 API】完整消息数组")
-    conversation_id: Optional[int] = Field(default=None, description="【新 API】会话 ID")
+    student_profile: dict = Field(default_factory=dict, description="学生画像（Java 传入）")
+    messages: list[dict] = Field(..., min_length=1, description="完整对话消息数组（Java 传入）")
 
 
 # ── Exercise ───────────────────────────────────────────────────
@@ -40,7 +44,7 @@ class ExerciseGenRequest(BaseModel):
     topic: str = Field(..., min_length=1, description="题目主题")
     count: int = Field(default=3, ge=1, le=20, description="题目数量")
     difficulty: Literal["easy", "medium", "hard"] = Field(default="medium", description="难度")
-    student_profile: dict = Field(default_factory=dict, description="学生画像")
+    student_profile: dict = Field(default_factory=dict, description="学生画像（Java 传入）")
     user_id: int = Field(default=1, description="用户 ID")
 
 
@@ -72,8 +76,9 @@ class ErrorAnalysisRequest(BaseModel):
 
 class EvaluationReportRequest(BaseModel):
     evaluation_results: dict = Field(..., description="评估结果")
-    user_id: Optional[int] = Field(default=None, description="用户 ID（提供则触发画像增量更新）")
 
+
+# ── Unified Chat ───────────────────────────────────────────────
 
 class UnifiedChatRequest(BaseModel):
     message: str = Field(..., min_length=1, description="用户自然语言输入")
@@ -81,8 +86,10 @@ class UnifiedChatRequest(BaseModel):
     mode: Literal["tutor", "resource", "solve", "exercise", "research", "auto"] = Field(
         default="auto", description="对话模式: auto=自动感知, tutor=答疑, resource=资源, solve=解题, exercise=练习, research=研究"
     )
-    conversation_id: Optional[int] = Field(default=None, description="会话 ID，所有模式共享同一会话")
-    style: Optional[Literal["standard", "socratic"]] = Field(default="standard", description="tutor 子风格: standard=标准, socratic=苏格拉底引导")
+    conversation_id: Optional[int] = Field(default=None, description="会话 ID（Java 传入，仅供参考）")
+    style: Optional[Literal["standard", "socratic"]] = Field(default="standard", description="tutor 子风格")
+    messages: list[dict] = Field(default_factory=list, description="历史消息列表（Java 传入）")
+    student_profile: dict = Field(default_factory=dict, description="学生画像（Java 传入）")
 
 
 # ── Inquiry ──────────────────────────────────────────────────────
@@ -91,47 +98,54 @@ class InquiryResolveRequest(BaseModel):
     original_message: str = Field(..., min_length=1, description="原始用户消息")
     answers: list[str] = Field(..., min_length=1, description="用户对追问的回答列表")
     user_id: int = Field(default=1, description="用户 ID")
-    student_profile: dict = Field(default_factory=dict, description="学生画像（可选）")
-    questions: list[dict] = Field(default_factory=list, description="追问列表（客户端回传，用于构造上下文）")
-    suggested_types: list[str] = Field(default_factory=list, description="推荐的资源类型（客户端回传）")
-    clarified_topic: str = Field(default="", description="澄清后的主题（客户端回传）")
+    student_profile: dict = Field(default_factory=dict, description="学生画像（Java 传入）")
+    questions: list[dict] = Field(default_factory=list, description="追问列表")
+    suggested_types: list[str] = Field(default_factory=list, description="推荐的资源类型")
+    clarified_topic: str = Field(default="", description="澄清后的主题")
 
 
 # ── Knowledge Graph ──────────────────────────────────────────────
 
+class KnowledgeGraphRequest(BaseModel):
+    masteries: dict[str, float] = Field(default_factory=dict, description="用户各节点掌握度 {node_id: mastery}")
 
-class PlanCreateRequest(BaseModel):
-    user_id: int = Field(..., ge=1, description="用户 ID")
-    course_id: str = Field(default="ai_intro", description="课程 ID")
-    steps: list[dict] = Field(..., min_length=1, description="学习路径步骤列表")
-    concept_graph: dict = Field(default_factory=dict, description="知识图谱数据")
 
+class KnowledgeGraphNodeRequest(BaseModel):
+    masteries: dict[str, float] = Field(default_factory=dict, description="用户各节点掌握度")
+    total_exercises: int = Field(default=0, description="该节点练习总数")
+    last_practiced: Optional[str] = Field(default=None, description="上次练习时间 ISO 字符串")
+
+
+# ── Plans ────────────────────────────────────────────────────────
 
 class CreatePlanFromPathRequest(BaseModel):
     user_id: int = Field(..., ge=1, description="用户 ID")
     course_id: str = Field(default="ai_intro", description="课程 ID")
+    student_profile: dict = Field(default_factory=dict, description="学生画像（Java 传入）")
 
 
-class PlanProgressRequest(BaseModel):
-    user_id: int = Field(..., ge=1, description="用户 ID")
-    step_id: int = Field(..., ge=1, description="步骤 ID")
-    status: str = Field(default="completed", description="步骤状态: pending|in_progress|completed|paused|review")
-    score: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="练习得分 0-1")
-    activity_type: str = Field(default="study", description="活动类型: study|exercise|review|quiz")
-    duration_minutes: int = Field(default=0, ge=0, description="学习时长（分钟）")
-
-
-class PlanResumeRequest(BaseModel):
-    user_id: int = Field(..., ge=1, description="用户 ID")
+class PlanStatusRequest(BaseModel):
+    """Java 传入 plan 元数据 + steps 列表，Python 计算 soft_landing + decay"""
+    plan: dict = Field(..., description="计划元数据 {id, user_id, status, total_steps, completed_steps, last_activity_at}")
+    steps: list[dict] = Field(default_factory=list, description="计划步骤列表")
 
 
 class RegressionCheckRequest(BaseModel):
     user_id: int = Field(..., ge=1, description="用户 ID")
-    answers: Optional[list[dict]] = Field(default=None, description="用户答案 [{step_id, question_id, user_answer}]")
+    answers: Optional[list[dict]] = Field(default=None, description="用户答案 [{topic, question_type, user_answer, correct_answer, choices}]")
+    plan: dict = Field(default_factory=dict, description="计划元数据（Java 传入）")
+    steps: list[dict] = Field(default_factory=list, description="计划步骤列表（Java 传入）")
+    days_idle: int = Field(default=0, description="计划空闲天数（Java 计算）")
 
 
-class NodeStatusChangeRequest(BaseModel):
-    user_id: int = Field(..., ge=1, description="用户 ID")
-    node_id: str = Field(..., min_length=1, description="知识图谱节点 ID")
-    old_status: str = Field(..., description="旧状态")
-    new_status: str = Field(..., description="新状态")
+class ReviewScheduleRequest(BaseModel):
+    """Java 传入步骤列表，Python 计算复习日程"""
+    steps: list[dict] = Field(default_factory=list, description="计划步骤列表")
+    days_ahead: int = Field(default=7, ge=1, le=30, description="未来 N 天")
+
+
+# ── Conversation Summary ─────────────────────────────────────────
+
+class SummaryRequest(BaseModel):
+    messages: list[dict] = Field(..., min_length=1, description="原始对话消息列表（Java 传入）")
+    course_id: str = Field(default="ai_intro", description="课程 ID")

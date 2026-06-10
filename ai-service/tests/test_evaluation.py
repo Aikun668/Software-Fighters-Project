@@ -6,8 +6,8 @@ from app.services.evaluation_service import (
     grade_choice,
     grade_short_answer,
     evaluate_session,
+    generate_report,
 )
-from app.services.evaluation_report import generate_report
 
 
 class TestGradeChoice:
@@ -470,99 +470,3 @@ class TestGenerateReport:
         }
         report = generate_report(eval_results)
         assert report["correct_count"] == 2
-
-
-class TestIncrementalUpdate:
-    @pytest.mark.asyncio
-    async def test_incremental_update_merges_weak_points(self):
-        from unittest.mock import AsyncMock
-        from app.services.profile_service import ProfileService
-
-        service = ProfileService()
-        service._client = AsyncMock()
-        service._client.get_profile = AsyncMock(return_value={
-            "knowledge_base": 50, "weak_points": ["Python"], "entries": {},
-        })
-        service._client.update_profile = AsyncMock()
-
-        await service.incremental_update(1, {
-            "recommended_weak_points": ["math", "Python"],
-            "overall_score": 80,
-        })
-        call_args = service._client.update_profile.call_args
-        updated = call_args[0][1]
-        assert "math" in updated["weak_points"]
-        assert "Python" in updated["weak_points"]
-
-    @pytest.mark.asyncio
-    async def test_incremental_update_knowledge_base(self):
-        from unittest.mock import AsyncMock
-        from app.services.profile_service import ProfileService
-
-        service = ProfileService()
-        service._client = AsyncMock()
-        service._client.get_profile = AsyncMock(return_value={
-            "knowledge_base": 30, "weak_points": [], "entries": {},
-        })
-        service._client.update_profile = AsyncMock()
-
-        await service.incremental_update(1, {
-            "recommended_weak_points": [],
-            "overall_score": 70,
-        })
-        expected_kb = int(30 * 0.7 + 70 * 0.3)
-        call_args = service._client.update_profile.call_args
-        assert call_args[0][1]["knowledge_base"] == expected_kb
-
-    @pytest.mark.asyncio
-    async def test_incremental_update_knowledge_base_clamped(self):
-        from unittest.mock import AsyncMock
-        from app.services.profile_service import ProfileService
-
-        service = ProfileService()
-        service._client = AsyncMock()
-        service._client.get_profile = AsyncMock(return_value={
-            "knowledge_base": 98, "weak_points": [], "entries": {},
-        })
-        service._client.update_profile = AsyncMock()
-
-        await service.incremental_update(1, {
-            "recommended_weak_points": [],
-            "overall_score": 95,
-        })
-        call_args = service._client.update_profile.call_args
-        assert call_args[0][1]["knowledge_base"] <= 100
-
-    @pytest.mark.asyncio
-    async def test_incremental_update_no_profile(self):
-        from unittest.mock import AsyncMock
-        from app.services.profile_service import ProfileService
-
-        service = ProfileService()
-        service._client = AsyncMock()
-        service._client.get_profile = AsyncMock(return_value=None)
-        service._client.update_profile = AsyncMock()
-
-        await service.incremental_update(999, {
-            "recommended_weak_points": ["math"],
-            "overall_score": 80,
-        })
-        service._client.update_profile.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_incremental_update_save_failure(self):
-        from unittest.mock import AsyncMock
-        from app.services.profile_service import ProfileService
-
-        service = ProfileService()
-        service._client = AsyncMock()
-        service._client.get_profile = AsyncMock(return_value={
-            "knowledge_base": 50, "weak_points": ["Python"], "entries": {},
-        })
-        service._client.update_profile = AsyncMock(side_effect=Exception("API error"))
-
-        # 不应抛出异常
-        await service.incremental_update(1, {
-            "recommended_weak_points": [],
-            "overall_score": 80,
-        })

@@ -3,7 +3,6 @@ BaseWorkflow — 多 Agent 编排工作流基类
 
 借鉴 DeepTutor BaseCapability 协议化思路：
   - 统一 run() 入口 + 进度回调
-  - 复用 profile_service / knowledge_base 单例
   - 子类实现 _build_graph() 返回编译后的 LangGraph StateGraph
 """
 
@@ -13,7 +12,6 @@ from typing import Any
 
 from langgraph.graph import StateGraph
 
-from app.services.profile_service import get_profile_service
 
 
 class BaseWorkflow(ABC):
@@ -21,7 +19,6 @@ class BaseWorkflow(ABC):
 
     def __init__(self, use_mock: bool = False):
         self.use_mock = use_mock
-        self.profile_service = get_profile_service()
         self.logger = logging.getLogger(f"workflows.{self.__class__.__name__}")
         self._compiled_graph = None
 

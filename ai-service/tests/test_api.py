@@ -52,7 +52,7 @@ class TestInputValidation:
         assert response.status_code == 400
 
     def test_resources_empty_topic(self, client):
-        response = client.post("/internal/resources/generate", json={"student_id": "1"})
+        response = client.post("/internal/resources/generate", json={"user_id": 1})
         assert response.status_code == 400
         assert "topic" in response.json()["error"].lower()
 
@@ -115,7 +115,7 @@ class TestStreamingEndpoints:
 
             response = await async_client.post(
                 "/internal/resources/generate",
-                json={"student_id": "1", "topic": "Python"},
+                json={"topic": "Python", "user_id": 1, "student_profile": {}},
             )
             assert response.status_code == 200
             assert "text/event-stream" in response.headers["content-type"]
@@ -157,8 +157,11 @@ class TestPathEndpoint:
                 "concept_graph": {"nodes": [], "edges": []},
             })
             mock_get.return_value = mock_agent
-            
-            response = await async_client.get("/internal/path/1")
+
+            response = await async_client.post(
+                "/internal/path/1",
+                json={"user_id": 1, "student_profile": {}},
+            )
             assert response.status_code == 200
             data = response.json()
             assert data["success"] is True
@@ -178,7 +181,10 @@ class TestPathEndpoint:
             })
             mock_get.return_value = mock_agent
 
-            response = await async_client.get("/internal/path/1")
+            response = await async_client.post(
+                "/internal/path/1",
+                json={"user_id": 1, "student_profile": {}},
+            )
             data = response.json()
             steps = data["data"]["steps"]
             assert len(steps) > 0

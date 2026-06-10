@@ -189,19 +189,14 @@ class TutorAgent(BaseAgent):
                 pass
 
         # Inject conversation summary (LLM-compressed history)
-        conversation_id = state.get("conversation_id")
-        if conversation_id:
-            try:
-                from app.services.conversation_service import get_conversation_service
-                summary = await get_conversation_service().get_summary(conversation_id)
-                if summary:
-                    system_with_context += (
-                        "\n\n## 对话历史摘要（经过压缩的早期对话记录）\n"
-                        + summary
-                        + "\n---"
-                    )
-            except Exception:
-                pass
+        conversation_summary = state.get("conversation_summary", "")
+        if conversation_summary:
+            truncated_summary = conversation_summary[:1200]
+            system_with_context += (
+                "\n\n## 对话历史摘要（经过压缩的早期对话记录）\n"
+                + truncated_summary
+                + "\n---"
+            )
 
         try:
             response = ""
