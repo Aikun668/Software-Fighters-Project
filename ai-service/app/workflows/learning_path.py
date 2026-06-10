@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 class LearningPathState(TypedDict, total=False):
     user_id: int
     student_profile: dict
+    topic: str
     concept_graph: dict
     steps: list[dict]
     version: int
@@ -60,9 +61,11 @@ class LearningPathWorkflow(BaseWorkflow):
     async def _draft_node(self, state: LearningPathState) -> dict:
         """Stage 1: 委托 PathAgent 设计初始路径"""
         student_profile = state.get("student_profile", {})
+        topic = state.get("topic", "")
 
         path_state = {
             "student_profile": student_profile,
+            "topic": topic,
         }
         result = await self.path_agent._draft_node(path_state)
 
@@ -74,11 +77,13 @@ class LearningPathWorkflow(BaseWorkflow):
         student_profile = state.get("student_profile", {})
         steps = state.get("steps", [])
         concept_graph = state.get("concept_graph", {})
+        topic = state.get("topic", "")
 
         path_state = {
             "steps": steps,
             "student_profile": student_profile,
             "concept_graph": concept_graph,
+            "topic": topic,
         }
         result = await self.path_agent._revise_node(path_state)
 

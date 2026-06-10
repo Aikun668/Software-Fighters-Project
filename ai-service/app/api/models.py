@@ -121,6 +121,7 @@ class KnowledgeGraphNodeRequest(BaseModel):
 class CreatePlanFromPathRequest(BaseModel):
     user_id: int = Field(..., ge=1, description="用户 ID")
     course_id: str = Field(default="ai_intro", description="课程 ID")
+    topic: str = Field(default="", description="学习主题（用户原始输入或提取的关键词）")
     student_profile: dict = Field(default_factory=dict, description="学生画像（Java 传入）")
 
 

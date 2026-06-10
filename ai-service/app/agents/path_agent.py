@@ -11,9 +11,16 @@ from app.utils.prompt_loader import interpolate_variables
 logger = logging.getLogger(__name__)
 
 
+def _loose_topic_match(title: str, topic_keywords: set[str]) -> bool:
+    """检查章节标题是否与 topic 有至少一个字的交集。
+    用途：过滤 LLM 输出的明显无关章节（如用户要学数学，LLM 混入英语语法章）。"""
+    return bool(topic_keywords & set(title))
+
+
 class PathState(TypedDict, total=False):
     student_id: str
     student_profile: dict
+    topic: str
     concept_graph: dict
     steps: list[dict]
     critique: str
@@ -47,11 +54,18 @@ class PathAgent(BaseAgent):
     async def _draft_node(self, state: PathState) -> dict:
         """Draft：调用 LLM 设计学习路径"""
         student_profile = state.get("student_profile", {})
+        topic = state.get("topic", "")
 
         system_prompt = self._load_extra_prompt("path_planner.yaml", key="system")
         user_tpl = self._load_extra_prompt("path_planner.yaml", key="user_template")
         profile_text = json.dumps(student_profile, ensure_ascii=False) if student_profile else "（暂无画像）"
-        user_prompt = interpolate_variables(user_tpl, {"student_profile": profile_text})
+        system_prompt = interpolate_variables(
+            system_prompt, {"topic": topic or "未指定"}
+        )
+        user_prompt = interpolate_variables(
+            user_tpl,
+            {"student_profile": profile_text, "topic": topic or "（用户未指定主题，请基于画像推断）"},
+        )
 
         result = await self._call_llm_json(
             system_prompt=system_prompt,
@@ -62,7 +76,14 @@ class PathAgent(BaseAgent):
 
         chapters = result.get("chapters", [])
         if not chapters:
-            chapters = self._fallback_chapters(student_profile)
+            chapters = self._fallback_chapters(student_profile, topic)
+
+        # 后处理：过滤与 topic 明显无关的章节（如用户要学数学，profile 有英语弱点时 LLM 可能混入英语章）
+        if topic and chapters:
+            topic_keywords = set(topic)
+            filtered = [ch for ch in chapters if _loose_topic_match(ch.get("title", ""), topic_keywords)]
+            if len(filtered) >= 2:
+                chapters = filtered
 
         steps = [
             {"order": i + 1, "topic": ch["title"], "status": "pending", "resource_id": None}
@@ -77,24 +98,25 @@ class PathAgent(BaseAgent):
             "version": 1,
         }
 
-    def _fallback_chapters(self, profile: dict) -> list[dict]:
+    def _fallback_chapters(self, profile: dict, topic: str = "") -> list[dict]:
         knowledge_base = profile.get("knowledge_base", 0)
+        subject = topic or "基础知识"
         if knowledge_base < 30:
             return [
-                {"title": "Python 基础回顾", "learning_objectives": ["掌握 Python 语法"], "content_type": "theory", "prerequisites": [], "summary": "Python 基础"},
-                {"title": "人工智能概述", "learning_objectives": ["了解 AI 发展"], "content_type": "concept", "prerequisites": ["Python 基础回顾"], "summary": "AI 概述"},
-                {"title": "机器学习基础", "learning_objectives": ["理解 ML 概念"], "content_type": "theory", "prerequisites": ["人工智能概述"], "summary": "ML 基础"},
+                {"title": f"{subject}基础概念", "learning_objectives": [f"掌握{subject}的基本概念"], "content_type": "concept", "prerequisites": [], "summary": f"{subject}入门基础"},
+                {"title": f"{subject}核心原理", "learning_objectives": [f"理解{subject}的核心原理"], "content_type": "theory", "prerequisites": [f"{subject}基础概念"], "summary": f"{subject}核心理论"},
+                {"title": f"{subject}实践应用", "learning_objectives": [f"能独立完成{subject}相关练习"], "content_type": "practice", "prerequisites": [f"{subject}核心原理"], "summary": f"{subject}动手实践"},
             ]
         elif knowledge_base < 60:
             return [
-                {"title": "机器学习算法深入", "learning_objectives": ["掌握常见算法"], "content_type": "theory", "prerequisites": [], "summary": "ML 算法"},
-                {"title": "神经网络基础", "learning_objectives": ["理解神经网络"], "content_type": "theory", "prerequisites": ["机器学习算法深入"], "summary": "神经网络"},
-                {"title": "深度学习实践", "learning_objectives": ["动手实践 DL"], "content_type": "practice", "prerequisites": ["神经网络基础"], "summary": "DL 实践"},
+                {"title": f"{subject}进阶理论", "learning_objectives": [f"深入理解{subject}进阶概念"], "content_type": "theory", "prerequisites": [], "summary": f"{subject}进阶"},
+                {"title": f"{subject}综合应用", "learning_objectives": [f"综合运用{subject}知识"], "content_type": "practice", "prerequisites": [f"{subject}进阶理论"], "summary": f"{subject}综合"},
+                {"title": f"{subject}前沿探索", "learning_objectives": [f"了解{subject}最新发展"], "content_type": "concept", "prerequisites": [f"{subject}综合应用"], "summary": f"{subject}前沿"},
             ]
         return [
-            {"title": "Transformer 架构", "learning_objectives": ["理解 Attention"], "content_type": "theory", "prerequisites": [], "summary": "Transformer"},
-            {"title": "大模型微调", "learning_objectives": ["掌握微调技术"], "content_type": "practice", "prerequisites": ["Transformer 架构"], "summary": "模型微调"},
-            {"title": "多模态应用", "learning_objectives": ["了解多模态"], "content_type": "practice", "prerequisites": ["大模型微调"], "summary": "多模态"},
+            {"title": f"{subject}专项突破", "learning_objectives": [f"攻克{subject}难点"], "content_type": "theory", "prerequisites": [], "summary": f"{subject}专项"},
+            {"title": f"{subject}项目实战", "learning_objectives": [f"完成{subject}综合项目"], "content_type": "practice", "prerequisites": [f"{subject}专项突破"], "summary": f"{subject}实战"},
+            {"title": f"{subject}体系构建", "learning_objectives": [f"构建{subject}知识体系"], "content_type": "practice", "prerequisites": [f"{subject}项目实战"], "summary": f"{subject}体系"},
         ]
 
     def _build_concept_graph(self, chapters: list[dict]) -> dict:
@@ -109,17 +131,20 @@ class PathAgent(BaseAgent):
         steps = state.get("steps", [])
         student_profile = state.get("student_profile", {})
         concept_graph = state.get("concept_graph", {})
+        topic = state.get("topic", "")
 
         # 构建自查 prompt
         steps_text = json.dumps(steps, ensure_ascii=False)
         profile_text = json.dumps(student_profile, ensure_ascii=False) if student_profile else "（暂无画像）"
 
         revise_system = (
-            "你是学习路径审核专家。请审查以下学习路径，检查覆盖度、顺序合理性、与学生画像的匹配度。"
+            f"你是学习路径审核专家。当前学习主题：{topic}。"
+            "请审查以下学习路径，检查覆盖度、顺序合理性、与学生画像的匹配度。"
+            f"注意：所有章节必须围绕「{topic}」，不要添加其他学科的章节。"
             "如有问题请修正，输出 JSON："
             '{"revised_steps": [{"order": 1, "topic": "...", "status": "pending", "resource_id": null, "rationale": "..."}]}'
         )
-        revise_user = f"学生画像：{profile_text}\n\n当前路径：{steps_text}\n\n请审查并输出修正后的路径 JSON。"
+        revise_user = f"学习主题：{topic}\n学生画像：{profile_text}\n\n当前路径：{steps_text}\n\n请审查并输出修正后的路径 JSON。"
 
         result = await self._call_llm_json(
             system_prompt=revise_system,
@@ -130,6 +155,12 @@ class PathAgent(BaseAgent):
 
         if result and result.get("revised_steps"):
             steps = result["revised_steps"]
+            # 再次过滤：revise 可能重新引入与 topic 无关的章节
+            if topic:
+                topic_keywords = set(topic)
+                filtered = [s for s in steps if _loose_topic_match(s.get("topic", ""), topic_keywords)]
+                if len(filtered) >= 2:
+                    steps = filtered
         else:
             # fallback: 原有兴趣方向匹配逻辑
             interest = student_profile.get("interest_direction", [])
