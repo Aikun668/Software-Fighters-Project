@@ -5,6 +5,7 @@ from langgraph.graph import StateGraph
 
 from app.agents.base_agent import BaseAgent
 from app.services.analogy_library import get_analogy_library
+from app.services.domain_router import get_domain_router
 from app.services.hallucination_guard import HallucinationGuard
 from app.services.knowledge_base import get_kb
 from app.utils.prompt_loader import interpolate_variables
@@ -22,8 +23,12 @@ class TutorState(TypedDict, total=False):
     user_id: int
     student_profile: dict
     knowledge_context: str
+    kb_top_score: float | None
+    course_id: str
+    domain: str
     response: str
     conversation_id: int | None  # 用于加载对话摘要
+    conversation_summary: str
     style: str                   # "standard" | "socratic"
     socratic_round: int          # 苏格拉底追问轮次（0-based）
 
@@ -122,30 +127,59 @@ class TutorAgent(BaseAgent):
         query = self._build_rag_query(messages)
 
         knowledge_context = ""
+        kb_top_score: float | None = None
         try:
             kb = get_kb()
             if not kb.is_empty():
-                knowledge_context = kb.format_context(query, top_k=3)
+                docs = kb.search(query, top_k=3)
+                if docs:
+                    kb_top_score = docs[0].get("score")
+                    # format_context 重新 search 一次，但结果一致（幂等）
+                    # 直接用 docs 构建 context 避免重复查询
+                    parts = ["【参考知识库内容】"]
+                    for i, doc in enumerate(docs, 1):
+                        parts.append(f"[{i}] {doc['content']}")
+                    knowledge_context = "\n".join(parts)
         except Exception as e:
             logger.warning(f"Knowledge retrieval failed: {e}")
 
-        return {"knowledge_context": knowledge_context}
+        return {
+            "knowledge_context": knowledge_context,
+            "kb_top_score": kb_top_score,
+        }
 
     async def _respond_node(self, state: TutorState) -> dict:
-        """基于画像和 RAG 上下文生成回复。style="socratic" 时动态加载苏格拉底 prompt。"""
+        """基于画像和 RAG 上下文生成回复。style="socratic" 时动态加载苏格拉底 prompt。
+
+        领域路由 + KB 门控 + 类比门控 + 动态 system prompt 三层防护。"""
         messages = state.get("messages", [])
         student_profile = state.get("student_profile", {})
         knowledge_context = state.get("knowledge_context", "")
+        kb_top_score = state.get("kb_top_score")
+        course_id = state.get("course_id", "")
         style = state.get("style", "standard")
         socratic_round = state.get("socratic_round", 0)
 
-        # 截断后再传给 LLM
         truncated = self._truncate_messages(messages)
-
         profile_text = self._format_profile(student_profile)
 
+        # ── Layer 1+2: 领域路由 + KB 门控 ──
+        query = self._build_rag_query(messages)
+        router = get_domain_router()
+        domain = router.classify(query, course_id=course_id, kb_top_score=kb_top_score)
+
+        # 非 AI 领域 / KB 不相关：清空 KB 上下文，LLM 用自身知识回答
+        if domain == "general" or not router.should_inject_kb(kb_top_score):
+            knowledge_context = ""
+
+        # ── 动态 domain_context（Layer 3: 动态 system prompt） ──
+        domain_context = (
+            "，当前课程为《人工智能导论》。优先使用知识库内容回答。"
+            if domain == "ai" else
+            "。用通用知识回答学生问题，涵盖各类学科，不受特定课程限制。"
+        )
+
         if style == "socratic":
-            # 动态加载苏格拉底 prompt，计算追问轮次指示
             if socratic_round >= 3:
                 socratic_instruction = (
                     f"⚠️ 当前为第 {socratic_round} 轮（最后一轮），已经不是引导轮次，"
@@ -163,6 +197,7 @@ class TutorAgent(BaseAgent):
                     "student_profile": profile_text,
                     "knowledge_context": knowledge_context,
                     "socratic_instruction": socratic_instruction,
+                    "domain_context": domain_context,
                 },
             )
         else:
@@ -171,6 +206,7 @@ class TutorAgent(BaseAgent):
                 {
                     "student_profile": profile_text,
                     "knowledge_context": knowledge_context,
+                    "domain_context": domain_context,
                 },
             )
 
@@ -179,14 +215,16 @@ class TutorAgent(BaseAgent):
             if followup_context:
                 system_with_context += "\n\n" + followup_context
 
-            # Inject analogy if available for the query topic
-            query = self._build_rag_query(messages)
-            try:
-                analogy_text = get_analogy_library().format_for_prompt(query)
-                if analogy_text:
-                    system_with_context += "\n\n" + analogy_text
-            except Exception:
-                pass
+            # ── 类比门控：只在 AI 领域注入类比 ──
+            if router.should_inject_analogy(domain):
+                try:
+                    analogy_text = get_analogy_library().format_for_prompt(
+                        query, domain=domain
+                    )
+                    if analogy_text:
+                        system_with_context += "\n\n" + analogy_text
+                except Exception:
+                    pass
 
         # Inject conversation summary (LLM-compressed history)
         conversation_summary = state.get("conversation_summary", "")
@@ -208,13 +246,15 @@ class TutorAgent(BaseAgent):
             logger.error(f"Tutor respond failed: {e}")
             response = "抱歉，我暂时无法回答这个问题。请稍后再试。"
 
-        try:
-            kb = get_kb()
-            guard = HallucinationGuard(kb)
-            verified = guard.verify_and_format(response)
-            if verified != response:
-                response = verified
-        except Exception as e:
-            logger.warning(f"Hallucination guard check failed: {e}")
+        # ── 幻觉守护只对 AI 领域生效 ──
+        if domain == "ai":
+            try:
+                kb = get_kb()
+                guard = HallucinationGuard(kb)
+                verified = guard.verify_and_format(response)
+                if verified != response:
+                    response = verified
+            except Exception as e:
+                logger.warning(f"Hallucination guard check failed: {e}")
 
-        return {"response": response}
+        return {"response": response, "domain": domain}

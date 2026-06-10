@@ -20,13 +20,13 @@ INTENT_TYPES = Literal[
 
 
 class ExerciseParams(BaseModel):
-    topic: str = Field(default="AI基础", min_length=1)
+    topic: str = Field(default="", min_length=1)
     count: int = Field(default=3, ge=1, le=20)
     difficulty: Literal["easy", "medium", "hard"] = Field(default="medium")
 
 
 class ResourceParams(BaseModel):
-    topic: str = Field(default="AI基础", min_length=1)
+    topic: str = Field(default="", min_length=1)
 
 
 class TutorParams(BaseModel):
@@ -34,7 +34,7 @@ class TutorParams(BaseModel):
 
 
 class LearningPathParams(BaseModel):
-    topic: str = Field(default="AI基础", min_length=1)
+    topic: str = Field(default="", min_length=1)
     level: Literal["beginner", "intermediate", "advanced"] = Field(default="beginner")
 
 
@@ -43,7 +43,7 @@ class SolveParams(BaseModel):
 
 
 class FlashcardParams(BaseModel):
-    topic: str = Field(default="AI基础", min_length=1)
+    topic: str = Field(default="", min_length=1)
     count: int = Field(default=5, ge=1, le=20)
 
 
@@ -198,7 +198,7 @@ def _extract_topic(message: str) -> str:
                   "一个", "一些", "一道", "几道"]:
         cleaned = cleaned.replace(word, " ")
     candidates = re.findall(r"[一-鿿]{2,4}|[a-zA-Z0-9]+", cleaned)
-    return " ".join(candidates[:3])[:30] or "AI基础"
+    return " ".join(candidates[:3])[:30] or message[:30]
 
 
 def _mock_extract_params(intent: INTENT_TYPES, message: str) -> dict:
