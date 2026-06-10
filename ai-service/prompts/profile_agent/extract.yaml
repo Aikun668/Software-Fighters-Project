@@ -46,6 +46,6 @@ user: |
       "knowledge_base": null 或 0-100,
       "cognitive_style": null 或 "visual|auditory|kinesthetic|theoretical",
       "learning_goal": null 或 "用户原话",
-      "learning_pace": null 或 "fast|steady|slow"
+      "learning_pace": null 或 "用户原话描述（如：每周20小时，中等速度；或：每天2小时，希望快速推进）"
     }}
   }}
