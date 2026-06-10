@@ -380,6 +380,7 @@ async def tutor_chat(body: TutorChatRequest):
             })
 
             response = state.get("response", "")
+            domain = state.get("domain", "")
 
             if response:
                 for chunk in _sse_stream_chunks(response):
@@ -398,7 +399,7 @@ async def tutor_chat(body: TutorChatRequest):
                 except Exception as exc:
                     logger.warning("Background profile extract failed: %s", exc)
 
-            done_payload: dict = {"type": "done"}
+            done_payload: dict = {"type": "done", "domain": domain}
             if profile_delta:
                 done_payload["profile_delta"] = profile_delta
             yield f"data: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
@@ -1187,6 +1188,7 @@ async def _unified_tutor_chat(
                     yield f"data: {json.dumps({'type': 'intent_hint', 'content': hint, 'detected_intent': intent_meta.get('detected_intent'), 'confidence': intent_meta.get('confidence')}, ensure_ascii=False)}\n\n"
 
             response = state.get("response", "")
+            domain = state.get("domain", "")
             if response:
                 for chunk in _sse_stream_chunks(response):
                     await asyncio.sleep(0.03)
@@ -1203,7 +1205,7 @@ async def _unified_tutor_chat(
                 except Exception as exc:
                     logger.warning("Background profile extract failed: %s", exc)
 
-            done_payload: dict = {"type": "done"}
+            done_payload: dict = {"type": "done", "domain": domain}
             if conversation_id:
                 done_payload["conversation_id"] = conversation_id
             if profile_delta:
