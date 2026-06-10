@@ -32,16 +32,19 @@ public class PythonClient {
     /**
      * 统一对话入口（SSE流式）
      * @param conversationId 会话ID，null则自动创建
+     * @param studentProfile 学生画像（可选）
      * @param historyMessages 历史消息列表（可选，用于上下文）
      */
     public SseEmitter unifiedChatStream(Long userId, String message,
                                          Long conversationId,
+                                         Map<String, Object> studentProfile,
                                          List<Map<String, Object>> historyMessages,
                                          Consumer<Map<String, Object>> onDone) {
         Map<String, Object> request = new HashMap<>();
         request.put("user_id", userId);
         request.put("message", message);
         request.put("mode", "auto");
+        request.put("student_profile", studentProfile != null ? studentProfile : new HashMap<>());
         if (conversationId != null) {
             request.put("conversation_id", conversationId);
         }
@@ -181,62 +184,48 @@ public class PythonClient {
     // ==================== 知识图谱 ====================
 
     /** 获取完整知识图谱（含用户掌握度+颜色映射） */
-    public Map<String, Object> getKnowledgeGraph(String courseId, Long userId) {
-        return doGet(BASE_URL + "/knowledge-graph/" + courseId + "?user_id=" + userId);
+    public Map<String, Object> getKnowledgeGraph(String courseId, Map<String, Float> masteries) {
+        Map<String, Object> request = new HashMap<>();
+        request.put("masteries", masteries != null ? masteries : new HashMap<>());
+        return doPost(BASE_URL + "/knowledge-graph/" + courseId, request);
     }
 
     /** 获取知识图谱节点卡片详情（子概念掌握度+图谱上下文+推荐动作） */
-    public Map<String, Object> getNodeCard(String courseId, String nodeId, Long userId) {
-        return doGet(BASE_URL + "/knowledge-graph/" + courseId + "/node/" + nodeId + "?user_id=" + userId);
+    public Map<String, Object> getNodeCard(String courseId, String nodeId,
+                                            Map<String, Float> masteries,
+                                            int totalExercises, String lastPracticed) {
+        Map<String, Object> request = new HashMap<>();
+        request.put("masteries", masteries != null ? masteries : new HashMap<>());
+        request.put("total_exercises", totalExercises);
+        request.put("last_practiced", lastPracticed != null ? lastPracticed : "");
+        return doPost(BASE_URL + "/knowledge-graph/" + courseId + "/node/" + nodeId, request);
     }
 
     // ==================== 学习计划 ====================
 
-    /** 从路径规划结果创建学习计划 */
-    public Map<String, Object> createPlan(Long userId, String courseId,
-                                          List<Map<String, Object>> steps,
-                                          Map<String, Object> conceptGraph) {
-        Map<String, Object> request = new HashMap<>();
-        request.put("user_id", userId);
-        request.put("course_id", courseId);
-        request.put("steps", steps);
-        request.put("concept_graph", conceptGraph != null ? conceptGraph : new HashMap<>());
-        return doPost(BASE_URL + "/plans/create", request);
-    }
-
     /** 一键生成学习路径 + 创建执行计划 */
-    public Map<String, Object> createPlanFromPath(Long userId, String courseId) {
+    public Map<String, Object> createPlanFromPath(Long userId, String courseId,
+                                                   Map<String, Object> studentProfile) {
         Map<String, Object> request = new HashMap<>();
         request.put("user_id", userId);
         request.put("course_id", courseId);
+        request.put("student_profile", studentProfile != null ? studentProfile : new HashMap<>());
         return doPost(BASE_URL + "/plans/create-from-path", request);
     }
 
+    // createPlan 在 Python 端不存在，已移除
+    // 计划创建统一走 createPlanFromPath（Python 内部已包含路径生成）
+
     /** 查询计划状态（含软着陆触发检测） */
-    public Map<String, Object> getPlanStatus(Long planId, Long userId) {
-        return doGet(BASE_URL + "/plans/" + planId + "/status?user_id=" + userId);
+    public Map<String, Object> getPlanStatus(Map<String, Object> plan, List<Map<String, Object>> steps) {
+        Map<String, Object> request = new HashMap<>();
+        request.put("plan", plan != null ? plan : new HashMap<>());
+        request.put("steps", steps != null ? steps : new ArrayList<>());
+        return doPost(BASE_URL + "/plans/status", request);
     }
 
-    /** 更新步骤进度 + 触发掌握度更新 */
-    public Map<String, Object> updatePlanProgress(Long planId, Long userId, Long stepId,
-                                                   String status, Float score,
-                                                   String activityType, int durationMinutes) {
-        Map<String, Object> request = new HashMap<>();
-        request.put("user_id", userId);
-        request.put("step_id", stepId);
-        request.put("status", status != null ? status : "completed");
-        request.put("score", score);
-        request.put("activity_type", activityType != null ? activityType : "study");
-        request.put("duration_minutes", durationMinutes);
-        return doPost(BASE_URL + "/plans/" + planId + "/progress", request);
-    }
-
-    /** 中断后恢复计划（触发软着陆检查） */
-    public Map<String, Object> resumePlan(Long planId, Long userId) {
-        Map<String, Object> request = new HashMap<>();
-        request.put("user_id", userId);
-        return doPost(BASE_URL + "/plans/" + planId + "/resume", request);
-    }
+    // updatePlanProgress、resumePlan 在 Python 端不存在，已移除
+    // 进度更新走 regressionCheck 和 NodeMasteryController.upsert
 
     /**
      * 回归检测管线
@@ -257,17 +246,8 @@ public class PythonClient {
                 + "&days_ahead=" + daysAhead);
     }
 
-    /** 联动：知识图谱节点状态变化 → 计划重排 */
-    public Map<String, Object> onNodeStatusChange(Long planId, Long userId,
-                                                   String nodeId, String oldStatus,
-                                                   String newStatus) {
-        Map<String, Object> request = new HashMap<>();
-        request.put("user_id", userId);
-        request.put("node_id", nodeId);
-        request.put("old_status", oldStatus);
-        request.put("new_status", newStatus);
-        return doPost(BASE_URL + "/plans/" + planId + "/node-status-change", request);
-    }
+    // onNodeStatusChange 在 Python 端不存在，已移除
+    // 节点状态变更通过 NodeMasteryController.upsert + PlanStep 更新完成
 
     // ==================== 追问解析（SSE流式） ====================
 
@@ -372,11 +352,17 @@ public class PythonClient {
                     Map<String, Object> collectedData = new HashMap<>();
                     StringBuilder responseText = new StringBuilder();
                     boolean streamEnded = false;
+                    boolean isSse = false;
+                    StringBuilder jsonBody = new StringBuilder();
 
                     while (!streamEnded && (line = reader.readLine()) != null) {
                         if (line.startsWith("data: ")) {
+                            isSse = true;
                             String data = line.substring(6);
                             dataBuffer.append(data);
+                        } else if (!line.startsWith("data: ") && !line.isEmpty()) {
+                            // 非SSE行，累积为JSON
+                            jsonBody.append(line);
                         } else if (line.isEmpty() && dataBuffer.length() > 0) {
                             String eventData = dataBuffer.toString();
                             dataBuffer = new StringBuilder();
@@ -424,7 +410,28 @@ public class PythonClient {
                         }
                     }
 
-                    if (onDone != null && !collectedData.isEmpty()) {
+                    // 非SSE响应：Python返回了普通JSON（如inquiry追问、错误等）
+                    if (!isSse && jsonBody.length() > 0) {
+                        try {
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> jsonResp = objectMapper.readValue(
+                                    jsonBody.toString(), Map.class);
+                            log.info("Python返回JSON(非SSE): keys={}", jsonResp.keySet());
+                            // 提取data字段作为doneData传给回调
+                            Object respData = jsonResp.get("data");
+                            if (respData instanceof Map) {
+                                @SuppressWarnings("unchecked")
+                                Map<String, Object> dataMap = (Map<String, Object>) respData;
+                                if (onDone != null) {
+                                    onDone.accept(dataMap);
+                                }
+                            }
+                        } catch (Exception e) {
+                            log.error("解析Python JSON响应失败", e);
+                        }
+                    }
+
+                    if (isSse && onDone != null && !collectedData.isEmpty()) {
                         try {
                             onDone.accept(collectedData);
                             log.info("回调执行成功");

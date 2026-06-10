@@ -4,9 +4,11 @@ import com.university.learning.client.PythonClient;
 import com.university.learning.entity.Conversation;
 import com.university.learning.entity.Message;
 import com.university.learning.entity.Resource;
+import com.university.learning.entity.StudentProfile;
 import com.university.learning.service.IConversationService;
 import com.university.learning.service.IMessageService;
 import com.university.learning.service.IResourceService;
+import com.university.learning.service.IStudentProfileService;
 import com.university.learning.utils.UserHolder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,14 +20,14 @@ import java.util.stream.Collectors;
 
 /**
  * 统一对话入口 — AI自动识别意图
- *
+
  * 支持的意图（由Python AI自动检测）：
  *   tutor     → 答疑对话，文字回复
  *   resource  → 生成学习资源（课程文档/思维导图等），自动落库
  *   exercise  → 生成练习题，自动落库
  *   solve     → 分步解题
  *   research  → 学习路径规划
- *
+
  * 流程：用户发消息 → 自动创建/复用会话 → 加载历史 → 调AI(SSE)
  *       → AI回复文字+自动识别意图生成内容 → 全部落库
  */
@@ -39,6 +41,7 @@ public class ChatController {
     private final IResourceService resourceService;
     private final IConversationService conversationService;
     private final IMessageService messageService;
+    private final IStudentProfileService profileService;
 
     /**
      * 统一对话入口
@@ -65,12 +68,22 @@ public class ChatController {
         // 3. 加载历史消息作为上下文
         List<Map<String, Object>> history = loadHistory(finalConvId, 50);
 
-        // 4. 调用AI（mode=auto，AI自动识别意图）
-        return pythonClient.unifiedChatStream(userId, message, finalConvId, history, (doneData) -> {
-            // 5. 处理AI回复 — 按实际意图分别处理
+        // 4. 加载学生画像
+        Map<String, Object> profileMap = buildProfileMap(userId);
+
+        // 5. 调用AI（mode=auto，AI自动识别意图）
+        return pythonClient.unifiedChatStream(userId, message, finalConvId, profileMap, history, (doneData) -> {
+            log.info("Chat done回调: convId={}, doneKeys={}", finalConvId, doneData.keySet());
+            Object inner = doneData.get("data");
+            if (inner instanceof Map) {
+                log.info("Chat done.data keys: {}", ((Map<?,?>) inner).keySet());
+            }
+
             String detectedMode = detectMode(doneData);
+            log.info("Chat 检测到模式: {}", detectedMode);
             saveAiResponse(finalConvId, doneData, detectedMode);
             saveGeneratedContent(userId, doneData);
+            saveProfileDelta(userId, doneData);
             updateConversationTitle(finalConvId, message);
         });
     }
@@ -123,7 +136,11 @@ public class ChatController {
 
     /** 检测AI实际使用的模式（从done事件中推断） */
     private String detectMode(Map<String, Object> doneData) {
-        // 先检查嵌套的data字段（resource模式用StreamEvent包装）
+        // inquiry模式：Python返回追问（非SSE JSON响应）
+        if ("inquiry".equals(doneData.get("type"))) {
+            return "inquiry";
+        }
+        // 检查嵌套的data字段（resource模式用StreamEvent包装）
         Map<String, Object> innerData = getInnerData(doneData);
 
         // resource模式：有content_blocks
@@ -138,7 +155,6 @@ public class ChatController {
         if (doneData.containsKey("confidence") || doneData.containsKey("steps")) {
             return "solve";
         }
-        // 默认tutor
         return "tutor";
     }
 
@@ -179,21 +195,40 @@ public class ChatController {
     }
 
     /** 从done事件中提取AI回复文字 */
+    @SuppressWarnings("unchecked")
     private String extractResponseText(Map<String, Object> doneData) {
         // 1. SSE累积的完整文字（token事件拼合）
         String text = (String) doneData.get("_response_text");
         if (text != null && !text.isEmpty()) return text;
 
-        // 2. done事件顶层的response字段
+        // 2. Inquiry追问响应：格式化追问问题
+        if ("inquiry".equals(doneData.get("type"))) {
+            Object qs = doneData.get("questions");
+            if (qs instanceof List && !((List<?>) qs).isEmpty()) {
+                StringBuilder sb = new StringBuilder("请确认以下信息：\n");
+                for (Object q : (List<?>) qs) {
+                    if (q instanceof Map) {
+                        Map<?, ?> m = (Map<?, ?>) q;
+                        Object question = m.get("question");
+                        sb.append("- ").append(question != null ? question : q).append("\n");
+                    }
+                }
+                return sb.toString();
+            }
+            Object topic = doneData.get("clarified_topic");
+            return topic != null ? topic.toString() : "请提供更详细的学习需求";
+        }
+
+        // 3. done事件顶层的response字段
         text = (String) doneData.getOrDefault("response", "");
         if (!text.isEmpty()) return text;
 
-        // 3. 嵌套data中的response字段（resource模式）
+        // 4. 嵌套data中的response字段（resource模式）
         Map<String, Object> inner = getInnerData(doneData);
         text = (String) inner.getOrDefault("response", "");
         if (!text.isEmpty()) return text;
 
-        // 4. resource/exercise模式没有流式文字时，给个描述
+        // 5. resource/exercise模式没有流式文字时，给个描述
         if (hasContent(doneData, "content_blocks") || hasContent(inner, "content_blocks")) {
             return "已生成学习资源，请查看";
         }
@@ -220,9 +255,12 @@ public class ChatController {
             List<Map<String, Object>> contentBlocks = extractList(doneData, inner, "content_blocks");
             List<Map<String, Object>> questions = extractList(doneData, inner, "questions");
 
+            log.info("saveGeneratedContent: hasContentBlocks={}, hasQuestions={}, innerKeys={}",
+                    contentBlocks != null, questions != null, inner.keySet());
+
             // 提取主题
-            String topic = (String) doneData.getOrDefault("topic",
-                    inner.getOrDefault("topic", "未知主题"));
+            String topic = (String) inner.getOrDefault("topic",
+                    doneData.getOrDefault("topic", "未知主题"));
 
             // 保存学习资源
             if (contentBlocks != null && !contentBlocks.isEmpty()) {
@@ -272,6 +310,76 @@ public class ChatController {
         if (val instanceof List && !((List<?>) val).isEmpty()) {
             return (List<Map<String, Object>>) val;
         }
+        return null;
+    }
+
+    /** 构建学生画像Map */
+    private Map<String, Object> buildProfileMap(Long userId) {
+        StudentProfile profile = profileService.getByUserId(userId);
+        if (profile == null) return new HashMap<>();
+        Map<String, Object> map = new HashMap<>();
+        map.put("knowledge_base", profile.getKnowledgeBase());
+        map.put("cognitive_style", profile.getCognitiveStyle());
+        map.put("learning_goal", profile.getLearningGoal());
+        map.put("weak_points", profile.getWeakPoints());
+        map.put("learning_pace", profile.getLearningPace());
+        map.put("interest_direction", profile.getInterestDirection());
+        return map;
+    }
+
+    /**
+     * 保存AI在对话中被动提取的画像增量
+     * Python TutorAgent 在 done 事件中附带 profile_delta
+     */
+    @SuppressWarnings("unchecked")
+    private void saveProfileDelta(Long userId, Map<String, Object> doneData) {
+        Object delta = doneData.get("profile_delta");
+        if (!(delta instanceof Map)) return;
+
+        Map<String, Object> deltaMap = (Map<String, Object>) delta;
+        if (deltaMap.isEmpty()) return;
+
+        try {
+            StudentProfile profile = profileService.getByUserId(userId);
+            if (profile == null) {
+                profile = new StudentProfile();
+                profile.setUserId(userId);
+            }
+
+            if (deltaMap.containsKey("knowledge_base")) {
+                profile.setKnowledgeBase(toInteger(deltaMap.get("knowledge_base")));
+            }
+            if (deltaMap.containsKey("cognitive_style")) {
+                profile.setCognitiveStyle((String) deltaMap.get("cognitive_style"));
+            }
+            if (deltaMap.containsKey("learning_goal")) {
+                profile.setLearningGoal((String) deltaMap.get("learning_goal"));
+            }
+            if (deltaMap.containsKey("weak_points")) {
+                profile.setWeakPoints(deltaMap.get("weak_points"));
+            }
+            if (deltaMap.containsKey("learning_pace")) {
+                profile.setLearningPace((String) deltaMap.get("learning_pace"));
+            }
+            if (deltaMap.containsKey("interest_direction")) {
+                profile.setInterestDirection(deltaMap.get("interest_direction"));
+            }
+
+            // 保存完整画像快照
+            Map<String, Object> rawProfile = new HashMap<>(buildProfileMap(userId));
+            rawProfile.putAll(deltaMap);
+            profile.setRawProfileJson(rawProfile);
+
+            profileService.saveOrUpdateProfile(userId, profile);
+            log.info("画像被动更新: userId={}, changedFields={}", userId, deltaMap.keySet());
+        } catch (Exception e) {
+            log.error("被动保存画像失败: userId={}", userId, e);
+        }
+    }
+
+    private Integer toInteger(Object value) {
+        if (value instanceof Integer) return (Integer) value;
+        if (value instanceof Number) return ((Number) value).intValue();
         return null;
     }
 

@@ -39,6 +39,24 @@ public class PlanStep {
     /** 图谱深度层级 */
     private Integer depth;
 
+    /** 知识点难度 (1-5) */
+    private Integer topicDifficulty;
+
+    /** 当前掌握度 (0.0-1.0) */
+    private Float masteryCurrent;
+
+    /** 更新后掌握度 */
+    private Float masteryAfter;
+
+    /** 复习次数 */
+    private Integer reviewCount;
+
+    /** 最近复习时间 */
+    private LocalDateTime lastReviewAt;
+
+    /** 预计学习天数 */
+    private Integer estimatedDays;
+
     /** 创建时间 */
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;

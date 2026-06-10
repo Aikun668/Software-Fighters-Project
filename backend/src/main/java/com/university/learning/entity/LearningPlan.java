@@ -35,6 +35,12 @@ public class LearningPlan {
     /** 已完成步骤数 */
     private Integer completedSteps;
 
+    /** 最近活动时间（用于软着陆算法计算idle天数） */
+    private LocalDateTime lastActivityAt;
+
+    /** 暂停时间 */
+    private LocalDateTime pausedAt;
+
     /** 创建时间 */
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
