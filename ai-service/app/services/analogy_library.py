@@ -38,7 +38,16 @@ BUILTIN_ANALOGIES: dict[str, list[AnalogyEntry]] = {
 
 
 class AnalogyLibrary:
-    def search(self, concept: str, category: str = "") -> list[AnalogyEntry]:
+    def search(self, concept: str, category: str = "", domain: str = "ai") -> list[AnalogyEntry]:
+        """搜索类比条目。
+
+        Args:
+            concept: 搜索关键词
+            category: 可选分类过滤
+            domain: 领域标识 ("ai" | "general")，非 AI 领域直接返回空
+        """
+        if domain != "ai":
+            return []
         results = []
         query_lower = concept.lower()
         for cat, entries in BUILTIN_ANALOGIES.items():
@@ -49,15 +58,18 @@ class AnalogyLibrary:
                     results.append(entry)
         return results[:3]
 
-    def get_for_concept(self, concept: str) -> AnalogyEntry | None:
-        results = self.search(concept)
+    def get_for_concept(self, concept: str, domain: str = "ai") -> AnalogyEntry | None:
+        results = self.search(concept, domain=domain)
         return results[0] if results else None
 
     def get_categories(self) -> list[str]:
         return list(BUILTIN_ANALOGIES.keys())
 
-    def format_for_prompt(self, concept: str) -> str:
-        entry = self.get_for_concept(concept)
+    def format_for_prompt(self, concept: str, domain: str = "ai") -> str:
+        """格式化类比为 prompt 文本。非 AI 领域直接返回空字符串。"""
+        if domain != "ai":
+            return ""
+        entry = self.get_for_concept(concept, domain=domain)
         if not entry:
             return ""
         return f"【类比】{entry.concept}：{entry.analogy}——{entry.explanation}"
