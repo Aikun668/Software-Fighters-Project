@@ -46,7 +46,7 @@ DEDUP_SIMILARITY = 0.55
 
 TAG_EMA_ALPHA = 0.4
 TAG_CUTOFF = 0.2
-STABILITY_N = 3
+STABILITY_N = 2
 
 MAX_EXTRACT_TURNS = 10
 
@@ -133,7 +133,7 @@ class ProfileAgent(BaseAgent):
             new_messages = new_messages[-MAX_EXTRACT_TURNS:]
             new_start = len(messages) - len(new_messages)
 
-        entries = current_profile.get("entries", {})
+        entries = current_profile.get("entries") or {}
         entries_summary = self._format_entries_for_extract(entries)
 
         new_messages_text = self._format_new_messages(new_messages)
@@ -313,7 +313,7 @@ class ProfileAgent(BaseAgent):
         new_profile = dict(profile)
         changed = False
 
-        db_entries = dict(new_profile.get("entries", {}))
+        db_entries = dict(new_profile.get("entries") or {})
 
         for dim in ARRAY_DIMENSIONS:
             new_items = fragment.get(dim)
@@ -341,26 +341,30 @@ class ProfileAgent(BaseAgent):
             except (TypeError, ValueError):
                 continue
             old_val = new_profile.get(dim)
-            merged = int(old_val * 0.7 + new_num * 0.3) if old_val is not None else int(new_num)
+            if old_val is None:
+                merged = int(new_num)
+            else:
+                merged = max(int(old_val), int(old_val * 0.7 + new_num * 0.3))
             if merged != old_val:
                 new_profile[dim] = merged
                 changed = True
 
-        stability = dict(new_profile.get("stability_counter", {}))
+        stability = dict((new_profile or {}).get("stability_counter") or {})
         for dim in REPLACE_DIMENSIONS:
             new_val = fragment.get(dim)
             if new_val is None:
                 continue
-            sc = dict(stability.get(dim, {"value": None, "count": 0}))
+            sc = dict(stability.get(dim, {"value": None, "count": 0, "status": None}))
             if sc["value"] == new_val:
                 sc["count"] += 1
             else:
-                sc = {"value": new_val, "count": 1}
+                sc = {"value": new_val, "count": 1, "status": "tentative"}
+            if sc["count"] >= STABILITY_N:
+                sc["status"] = "confirmed"
             stability[dim] = sc
-            if sc["count"] >= STABILITY_N and new_val != new_profile.get(dim):
+            if new_val != new_profile.get(dim):
                 new_profile[dim] = new_val
                 changed = True
-                stability[dim] = {"value": new_val, "count": 0}
 
         if stability != (new_profile.get("stability_counter") or {}):
             new_profile["stability_counter"] = stability
@@ -464,7 +468,7 @@ class ProfileAgent(BaseAgent):
             "interest_direction": "兴趣方向",
         }
 
-        entries = profile.get("entries", {})
+        entries = profile.get("entries") or {}
 
         for dim, label in labels.items():
             val = profile.get(dim)
