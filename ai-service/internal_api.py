@@ -1324,14 +1324,27 @@ async def _unified_research_chat(
     message: str, messages: list[dict], student_profile: dict,
     conversation_id: int | None, user_id: int,
 ):
-    """研究模式：学习路径 + 资源组合"""
+    """研究模式：学习路径规划。先检查需求清晰度，模糊时先追问。"""
     extractor = _get_intent_extractor()
     intent_result = await extractor.extract(message)
     topic = intent_result.params.get("topic", message)
 
+    inquiry = _get_inquiry_service()
+    check_result = await inquiry.check(message, student_profile)
+
     path_workflow = _get_path_workflow()
 
     async def event_stream():
+        if not check_result.is_clear:
+            yield f"data: {json.dumps({
+                'type': 'inquiry',
+                'is_clear': False,
+                'clarified_topic': check_result.clarified_topic or topic,
+                'questions': check_result.questions,
+                'rationale': check_result.rationale,
+            }, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
+            return
         try:
             yield f"data: {json.dumps({'type': 'progress', 'stage': 'path', 'content': f'正在为「{topic}」规划学习路径...'}, ensure_ascii=False)}\n\n"
 
@@ -1342,6 +1355,7 @@ async def _unified_research_chat(
             })
 
             steps = path_state.get("steps", [])
+            concept_graph = path_state.get("concept_graph", {})
             path_summary = path_state.get("response", "")
 
             yield f"data: {json.dumps({'type': 'path', 'steps': steps}, ensure_ascii=False)}\n\n"
@@ -1351,7 +1365,17 @@ async def _unified_research_chat(
                     await asyncio.sleep(0.02)
                     yield f"data: {json.dumps({'type': 'token', 'content': chunk}, ensure_ascii=False)}\n\n"
 
-            done_payload: dict = {"type": "done"}
+            done_payload: dict = {
+                "type": "done",
+                "mode": "research",
+                "plan": {
+                    "title": f"{topic}学习计划",
+                    "topic": topic,
+                    "total_steps": len(steps),
+                    "steps": steps,
+                    "concept_graph": concept_graph,
+                }
+            }
             if conversation_id:
                 done_payload["conversation_id"] = conversation_id
             yield f"data: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
@@ -1433,6 +1457,70 @@ async def inquiry_resolve(body: InquiryResolveRequest):
         except Exception as e:
             logger.error(f"Inquiry resolve SSE error: {e}")
             yield f"data: {json.dumps({'type': 'error', 'content': '资源生成失败'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
+
+
+@router.post("/inquiry/resolve/plan")
+async def inquiry_resolve_plan(body: InquiryResolveRequest):
+    """接收用户对追问的回答，合并后调用 LearningPathWorkflow 生成学习路径。"""
+    student_profile = body.student_profile
+
+    inquiry = _get_inquiry_service()
+    resolved = inquiry.resolve(
+        body.original_message,
+        body.answers,
+        questions=body.questions or None,
+        suggested_types=body.suggested_types or None,
+        clarified_topic=body.clarified_topic or None,
+    )
+
+    topic = resolved.get("topic", body.original_message)
+    context_note = resolved.get("context_note", "")
+
+    enriched_profile = dict(student_profile)
+    enriched_profile["_inquiry_context"] = context_note
+
+    path_workflow = _get_path_workflow()
+
+    async def event_stream():
+        try:
+            yield f"data: {json.dumps({'type': 'progress', 'stage': 'path', 'content': f'正在为「{topic}」规划学习路径...'}, ensure_ascii=False)}\n\n"
+
+            path_state = await path_workflow.run({
+                "user_id": body.user_id,
+                "student_profile": enriched_profile,
+                "topic": topic,
+            })
+
+            steps = path_state.get("steps", [])
+            concept_graph = path_state.get("concept_graph", {})
+            path_summary = path_state.get("response", "")
+
+            yield f"data: {json.dumps({'type': 'path', 'steps': steps}, ensure_ascii=False)}\n\n"
+
+            if path_summary:
+                for chunk in _sse_stream_chunks(path_summary):
+                    await asyncio.sleep(0.02)
+                    yield f"data: {json.dumps({'type': 'token', 'content': chunk}, ensure_ascii=False)}\n\n"
+
+            done_payload: dict = {
+                "type": "done",
+                "mode": "research",
+                "plan": {
+                    "title": f"{topic}学习计划",
+                    "topic": topic,
+                    "total_steps": len(steps),
+                    "steps": steps,
+                    "concept_graph": concept_graph,
+                }
+            }
+            yield f"data: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
+
+        except Exception as e:
+            logger.error(f"Inquiry resolve plan error: {e}")
+            yield f"data: {json.dumps({'type': 'error', 'content': '学习路径生成失败，请稍后重试'}, ensure_ascii=False)}\n\n"
             yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
