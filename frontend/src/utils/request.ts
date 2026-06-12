@@ -1,13 +1,13 @@
   import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosResponse } from 'axios'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
-
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 /**
  * 创建 axios 实例
  */
 const createInstance = (): AxiosInstance => {
   const instance = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+    baseURL: API_BASE_URL,
     timeout: 10000,
     headers: {
       'Content-Type': 'application/json;charset=UTF-8'
