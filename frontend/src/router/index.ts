@@ -52,6 +52,11 @@ const router = createRouter({
           path: 'learning-resource-network',
           name: 'LearningResourceNetwork',
           component: () => import('../views/LearningResourceNetwork.vue')
+        },
+        {
+          path: 'question-nav-chat',
+          name: 'QuestionNavChat',
+          component: () => import('../views/QuestionNavChat.vue')
         }
       ]
     },

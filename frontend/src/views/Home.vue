@@ -42,75 +42,105 @@
     </header>
 
     <div class="home-content">
+      <!-- 左侧导航栏 -->
       <aside :class="['sidebar', { collapsed: isCollapsed }]">
-        <el-menu
-          :default-active="activeMenu"
-          class="sidebar-menu"
-          @select="handleMenuSelect"
-        >
-          <el-menu-item index="dashboard">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="3" width="7" height="7"/>
-              <rect x="14" y="3" width="7" height="7"/>
-              <rect x="14" y="14" width="7" height="7"/>
-              <rect x="3" y="14" width="7" height="7"/>
+        <!-- 全局动作区 -->
+        <div class="nav-section">
+          <button class="new-chat-btn" @click="createNewChat">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"/>
+              <line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
-            <span>学习仪表盘</span>
-          </el-menu-item>
-          <el-menu-item index="profile-chat">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-              <circle cx="12" cy="7" r="4"/>
-            </svg>
-            <span>学生画像</span>
-          </el-menu-item>
-          <el-menu-item index="resource-center">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-            </svg>
-            <span>资源中心</span>
-          </el-menu-item>
-          <el-menu-item index="learning-path">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-            </svg>
-            <span>学习路径</span>
-          </el-menu-item>
-          <el-menu-item index="ai-tutor">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-            </svg>
-            <span>智能答疑</span>
-          </el-menu-item>
-          <el-menu-item index="course-detail">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <polyline points="14 2 14 8 20 8"/>
-              <line x1="16" y1="13" x2="8" y2="13"/>
-              <line x1="16" y1="17" x2="8" y2="17"/>
-              <polyline points="10 9 9 9 8 9"/>
-            </svg>
-            <span>课程文档</span>
-          </el-menu-item>
-          <el-menu-item index="exercise">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-            </svg>
-            <span>在线答题</span>
-          </el-menu-item>
-          <el-menu-item index="learning-resource-network">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="18" cy="5" r="3"/>
-              <circle cx="6" cy="12" r="3"/>
-              <circle cx="18" cy="19" r="3"/>
-              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
-              <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-            </svg>
-            <span>知识图谱</span>
-          </el-menu-item>
-        </el-menu>
+            <span>新建对话</span>
+          </button>
+        </div>
 
+        <!-- 核心功能区 -->
+        <div class="nav-section">
+          <div class="section-title">核心功能</div>
+          <el-menu
+            :default-active="activeMenu"
+            class="sidebar-menu"
+            @select="handleMenuSelect"
+          >
+            <el-menu-item index="question-nav-chat">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+              <span>对话辅导</span>
+            </el-menu-item>
+          </el-menu>
+        </div>
+
+        <!-- 个人学习产出区 -->
+        <div class="nav-section">
+          <div class="section-title">个人学习</div>
+          <el-menu
+            :default-active="activeMenu"
+            class="sidebar-menu"
+            @select="handleMenuSelect"
+          >
+            <el-menu-item index="learning-plan">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                <polyline points="22 4 12 14.01 9 11.01"/>
+              </svg>
+              <span>我的计划</span>
+            </el-menu-item>
+            <el-menu-item index="exercise">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+              <span>练习中心</span>
+            </el-menu-item>
+            <el-menu-item index="resource-center">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+              </svg>
+              <span>资源工坊</span>
+            </el-menu-item>
+            <el-menu-item index="learning-resource-network">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="18" cy="5" r="3"/>
+                <circle cx="6" cy="12" r="3"/>
+                <circle cx="18" cy="19" r="3"/>
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+              </svg>
+              <span>知识图谱</span>
+            </el-menu-item>
+          </el-menu>
+        </div>
+
+        <!-- 数据&个人区 -->
+        <div class="nav-section">
+          <div class="section-title">数据&个人</div>
+          <el-menu
+            :default-active="activeMenu"
+            class="sidebar-menu"
+            @select="handleMenuSelect"
+          >
+            <el-menu-item index="dashboard">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="7" height="7"/>
+                <rect x="14" y="3" width="7" height="7"/>
+                <rect x="14" y="14" width="7" height="7"/>
+                <rect x="3" y="14" width="7" height="7"/>
+              </svg>
+              <span>数据看板</span>
+            </el-menu-item>
+            <el-menu-item index="profile-chat">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+              <span>学习画像</span>
+            </el-menu-item>
+          </el-menu>
+        </div>
+
+        <!-- 折叠按钮 -->
         <div class="sidebar-footer">
           <button class="collapse-btn" @click="toggleSidebar" :title="isCollapsed ? '展开侧边栏' : '收起侧边栏'">
             <svg v-if="isCollapsed" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
@@ -123,6 +153,7 @@
         </div>
       </aside>
 
+      <!-- 主内容区 -->
       <main :class="['main-content-wrapper', { 'sidebar-collapsed': isCollapsed }]">
         <div class="main-content">
           <router-view />
@@ -133,30 +164,34 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
-import { useRouter, useRoute } from 'vue-router';
+import { ref, computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 
-const router = useRouter();
-const route = useRoute();
+const router = useRouter()
+const route = useRoute()
 
-const isCollapsed = ref(false);
+const isCollapsed = ref(false)
 
 const activeMenu = computed(() => {
-  const path = route.path.split('/').pop() || 'dashboard';
-  return path;
-});
+  const path = route.path.split('/').pop() || 'dashboard'
+  return path
+})
 
 const handleMenuSelect = (index: string) => {
-  router.push(`/${index}`);
-};
+  router.push(`/${index}`)
+}
 
 const goToLogin = () => {
-  router.push('/loginRegister');
-};
+  router.push('/loginRegister')
+}
+
+const createNewChat = () => {
+  router.push('/question-nav-chat')
+}
 
 const toggleSidebar = () => {
-  isCollapsed.value = !isCollapsed.value;
-};
+  isCollapsed.value = !isCollapsed.value
+}
 </script>
 
 <style scoped>
@@ -296,23 +331,73 @@ const toggleSidebar = () => {
   left: 0;
   top: var(--header-height);
   bottom: 0;
-  overflow-y: auto;
   z-index: 50;
   transition: width 0.3s ease;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .sidebar.collapsed {
   width: var(--sidebar-collapsed-width);
 }
 
+/* 导航区块 */
+.nav-section {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.nav-section:last-of-type {
+  border-bottom: none;
+}
+
+/* 新建对话按钮 */
+.new-chat-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--gradient-primary);
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.25);
+}
+
+.new-chat-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(34, 197, 94, 0.35);
+}
+
+.new-chat-btn svg {
+  flex-shrink: 0;
+}
+
+/* 区块标题 */
+.section-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-placeholder);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 8px 8px 4px 8px;
+  margin-bottom: 4px;
+}
+
+/* 菜单样式 */
 .sidebar-menu {
   border: none;
-  padding: 8px;
-  flex: 1;
+  background: transparent;
 }
 
 .sidebar-menu :deep(.el-menu-item) {
-  margin: 2px 4px;
+  margin: 2px 0;
   border-radius: 8px;
   height: 40px;
   line-height: 40px;
@@ -346,20 +431,30 @@ const toggleSidebar = () => {
   box-shadow: 0 4px 12px rgba(34, 197, 94, 0.25);
 }
 
+/* 折叠状态 */
+.sidebar.collapsed .section-title,
+.sidebar.collapsed .new-chat-btn span,
+.sidebar.collapsed .sidebar-menu :deep(.el-menu-item) span {
+  display: none;
+}
+
+.sidebar.collapsed .new-chat-btn {
+  justify-content: center;
+  padding: 10px;
+}
+
 .sidebar.collapsed .sidebar-menu :deep(.el-menu-item) {
   padding: 0 !important;
   justify-content: center;
-}
-
-.sidebar.collapsed .sidebar-menu :deep(.el-menu-item) span {
-  display: none;
 }
 
 .sidebar.collapsed .sidebar-menu :deep(.el-menu-item) svg {
   margin-right: 0;
 }
 
+/* 底部折叠按钮 */
 .sidebar-footer {
+  margin-top: auto;
   padding: 12px;
   border-top: 1px solid var(--border-color);
   background: linear-gradient(180deg, transparent 0%, rgba(34, 197, 94, 0.05) 100%);
@@ -385,6 +480,7 @@ const toggleSidebar = () => {
   color: var(--primary-color);
 }
 
+/* 主内容区 */
 .main-content-wrapper {
   flex: 1;
   margin-left: var(--sidebar-width);
@@ -398,20 +494,27 @@ const toggleSidebar = () => {
 
 .main-content {
   padding: 24px;
-  /* min-height: 100%; */
 }
 
+/* 响应式 */
 @media (max-width: 768px) {
   .sidebar {
     width: var(--sidebar-collapsed-width);
   }
 
+  .sidebar .section-title,
+  .sidebar .new-chat-btn span,
   .sidebar-menu :deep(.el-menu-item) span {
     display: none;
   }
 
+  .sidebar .new-chat-btn {
+    justify-content: center;
+    padding: 10px;
+  }
+
   .sidebar-menu :deep(.el-menu-item) {
-    padding-left: 0 !important;
+    padding: 0 !important;
     justify-content: center;
   }
 
