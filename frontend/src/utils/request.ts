@@ -1,16 +1,16 @@
   import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosResponse } from 'axios'
 import { ElMessage } from 'element-plus'
-import { useUserStore } from '@/stores/user'
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 /**
  * 创建 axios 实例
  */
 const createInstance = (): AxiosInstance => {
+  console.log(localStorage.getItem('token'))
   const instance = axios.create({
     baseURL: API_BASE_URL,
     timeout: 10000,
     headers: {
-      'Content-Type': 'application/json;charset=UTF-8'
+      'token': localStorage.getItem('token') || ''
     }
   })
 
@@ -25,12 +25,13 @@ const request = createInstance()
 request.interceptors.request.use(
   // @ts-ignore
     (config: AxiosRequestConfig) => {
-    const userStore = useUserStore()
+    // 从 localStorage 读取 token
+    const token = localStorage.getItem('token')
     
-    // 添加 token
-    if (userStore.profile?.id) {
+    // 添加 token 到请求头
+    if (token) {
       config.headers = config.headers || {}
-      config.headers['Authorization'] = `Bearer ${userStore.profile.id}`
+      config.headers['Authorization'] = `Bearer ${token}`
     }
 
     return config
