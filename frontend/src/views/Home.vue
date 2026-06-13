@@ -31,13 +31,25 @@
             </svg>
           </button>
         </div>
-        <button class="login-btn" @click="goToLogin">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-            <circle cx="12" cy="7" r="4"/>
-          </svg>
-          <span>登录 / 注册</span>
-        </button>
+        <div class="user-info-wrapper">
+          <div class="user-avatar">
+            <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+          </div>
+          <div class="user-detail">
+            <span class="user-name">{{ userStore.userName }}</span>
+            <span class="user-status">在线</span>
+          </div>
+          <button class="logout-btn" @click="handleLogout" title="退出登录">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+              <polyline points="16 17 21 12 16 7"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+          </button>
+        </div>
       </div>
     </header>
 
@@ -166,9 +178,11 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { useUserStore } from '@/stores/user'
 
 const router = useRouter()
 const route = useRoute()
+const userStore = useUserStore()
 
 const isCollapsed = ref(false)
 
@@ -185,6 +199,12 @@ const goToLogin = () => {
   router.push('/loginRegister')
 }
 
+const handleLogout = () => {
+  userStore.logout()
+  localStorage.removeItem('token')
+  router.push('/loginRegister')
+}
+
 const createNewChat = () => {
   router.push('/question-nav-chat')
 }
@@ -196,10 +216,11 @@ const toggleSidebar = () => {
 
 <style scoped>
 .home-container {
-  min-height: 100vh;
+  height: 100vh;
   background: var(--bg-page);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .home-header {
@@ -294,31 +315,76 @@ const toggleSidebar = () => {
   color: var(--primary-color);
 }
 
-.login-btn {
+.user-info-wrapper {
   display: flex;
   align-items: center;
-  gap: 8px;
-  background: var(--gradient-primary);
-  border: none;
-  color: #ffffff;
-  font-weight: 600;
-  padding: 10px 20px;
-  border-radius: 10px;
-  cursor: pointer;
-  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.25);
+  gap: 12px;
+  padding: 6px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
   transition: all 0.2s ease;
-  font-size: 14px;
 }
 
-.login-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(34, 197, 94, 0.35);
+.user-info-wrapper:hover {
+  border-color: var(--primary-color);
+  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.15);
+}
+
+.user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--gradient-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  flex-shrink: 0;
+}
+
+.user-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.user-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.user-status {
+  font-size: 12px;
+  color: var(--primary-color);
+}
+
+.logout-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.logout-btn:hover {
+  background: var(--danger-bg);
+  border-color: var(--danger-color);
+  color: var(--danger-color);
 }
 
 .home-content {
   display: flex;
-  min-height: calc(100vh - var(--header-height));
+  flex: 1;
   position: relative;
+  overflow: hidden;
 }
 
 .sidebar {
@@ -484,7 +550,8 @@ const toggleSidebar = () => {
 .main-content-wrapper {
   flex: 1;
   margin-left: var(--sidebar-width);
-  min-height: calc(100vh - var(--header-height));
+  height: 100%;
+  overflow-y: auto;
   transition: margin-left 0.3s ease;
 }
 
@@ -493,7 +560,9 @@ const toggleSidebar = () => {
 }
 
 .main-content {
-  padding: 24px;
+  /* padding: 24px; */
+  min-height: 100%;
+  box-sizing: border-box;
 }
 
 /* 响应式 */
@@ -532,10 +601,6 @@ const toggleSidebar = () => {
 
   .main-content-wrapper {
     margin-left: var(--sidebar-collapsed-width);
-  }
-
-  .main-content {
-    padding: 16px;
   }
 }
 </style>

@@ -1,13 +1,176 @@
 import api from '@/utils/request'
 
 /**
+ * 发送消息（SSE流式）
+ * @param data - 消息数据
+ */
+export const sendMessageStream = async (data: {
+  message: string
+  conversation_id: number | null
+}): Promise<ReadableStream> => {
+  console.log('[SSE] 准备发送请求:', {
+    url: `${import.meta.env.VITE_API_BASE_URL || '/api'}/api/chat`,
+    message: data.message.length > 50 ? data.message.substring(0, 50) + '...' : data.message,
+    conversation_id: data.conversation_id
+  })
+  
+  const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || '/api'}/api/chat`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+    },
+    body: JSON.stringify(data)
+  })
+  
+  console.log('[SSE] 请求完成，状态码:', response.status)
+  
+  // 检查 HTTP 状态码
+  if (!response.ok) {
+    const errorText = await response.text()
+    console.error('[SSE] HTTP 错误:', { status: response.status, errorText })
+    throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`)
+  }
+  
+  // 检查响应类型是否为 SSE
+  const contentType = response.headers.get('content-type')
+  console.log('[SSE] 响应 Content-Type:', contentType)
+  
+  if (!contentType || !contentType.includes('text/event-stream')) {
+    console.error('[SSE] 响应类型错误，期望 text/event-stream')
+    throw new Error('Expected text/event-stream response')
+  }
+  
+  if (!response.body) {
+    console.error('[SSE] 响应体为空')
+    throw new Error('Response body is null')
+  }
+  
+  console.log('[SSE] 开始流式传输')
+  return response.body
+}
+
+/**
+ * 解析SSE流（支持新格式）
+ * 新格式示例：
+ * data:{"type": "token", "content": "哈哈"}
+ * data:{"type": "done", "domain": "general", "conversation_id": 22}
+ * @param stream - 数据流
+ * @param onData - 数据回调
+ * @param onDone - 完成回调
+ * @param onError - 错误回调
+ */
+export const parseSSEStream = async (
+  stream: ReadableStream,
+  onData: (delta: string, mode: string) => void,
+  onDone: () => void,
+  onError?: (error: Error) => void
+) => {
+  const reader = stream.getReader()
+  const decoder = new TextDecoder('utf-8') // 处理中文必须指定utf-8
+  let buffer = '' // 用来粘包/拆包的缓冲区
+  
+  console.log('[SSE] 开始解析数据流')
+  
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) {
+        console.log('[SSE] 数据流读取完成')
+        break
+      }
+      
+      // 1. 把Uint8Array解码成字符串，追加到缓冲区
+      buffer += decoder.decode(value, { stream: true })
+      // console.log('[SSE] 解码内容:', buffer.length > 200 ? buffer.substring(0, 200) + '...' : buffer)
+      
+      // 2. 按SSE分隔符 \n\n 拆分完整消息
+      const messages = buffer.split('\n\n')
+      // 最后一段可能不完整，留在下一轮处理
+      buffer = messages.pop() || ''
+      
+      // 3. 逐条处理消息
+      for (const msg of messages) {
+        if (!msg.trim()) continue
+        
+        // 提取data字段（支持多行data）
+        const lines = msg.split('\n')
+        let dataStr = ''
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            dataStr += line.substring(6)
+          } else if (line.startsWith('data:')) {
+            dataStr += line.substring(5)
+          }
+        }
+        
+        if (!dataStr) {
+          console.log('[SSE] 非 data 行，跳过:', msg.substring(0, 50))
+          continue
+        }
+        
+        // console.log('[SSE] 提取到 data:', dataStr)
+        
+        // 4. 解析JSON业务数据
+        try {
+          const data = JSON.parse(dataStr)
+          // console.log('[SSE] 收到业务数据:', data)
+          
+          // 按业务逻辑处理不同type
+          switch (data.type) {
+            case 'token':
+              // 逐字追加文本
+              if (data.content) {
+                // console.log('[SSE] token 内容:', data.content)
+                onData(data.content, data.mode || 'chat')
+              }
+              break
+            case 'done':
+              console.log('[SSE] 流结束:', data)
+              onDone()
+              return
+            case 'error':
+              console.error('[SSE] 流异常:', data.content)
+              if (onError) {
+                onError(new Error(data.content || 'Unknown error'))
+              }
+              break
+            default:
+              // 兼容旧格式
+              if (data.delta || data.content) {
+                console.log('[SSE] 兼容格式:', data.delta || data.content)
+                onData(data.delta || data.content, data.mode || 'chat')
+              }
+          }
+        } catch (e) {
+          // 非JSON数据（比如纯文本）直接处理
+          console.log('[SSE] 收到纯文本数据:', dataStr)
+          onData(dataStr, 'chat')
+        }
+      }
+    }
+    
+    // 流结束
+    console.log('[SSE] 流式传输完成')
+    onDone()
+  } catch (error) {
+    console.error('[SSE] 流式传输发生错误:', error)
+    if (onError) {
+      onError(error as Error)
+    }
+  } finally {
+    console.log('[SSE] 释放读取器锁')
+    reader.releaseLock()
+  }
+}
+
+/**
  * 发送消息
  * @param data - 消息数据
  */
 export const sendMessage = (data: {
   userId: string
   content: string
-  type?: string
 }) => {
   return api.post('/chat/message', data)
 }

@@ -102,9 +102,31 @@
             <div class="message-content">
               <div v-if="msg.role === 'assistant'" class="message-header">
                 <span class="sender-name">AI助手</span>
+                <span v-if="msg.mode" class="mode-tag">{{ getModeLabel(msg.mode) }}</span>
                 <span class="message-time">{{ msg.time }}</span>
               </div>
-              <div class="message-body">{{ msg.content }}</div>
+              <div class="message-body" v-if="msg.role === 'user'">{{ msg.content }}</div>
+              <div class="message-body markdown-body" v-else v-html="renderMarkdown(msg.content)">
+                
+              </div>
+              <!-- 流式输出时的加载指示器 -->
+              <div v-if="msg.streaming" class="typing-indicator">
+                <span class="typing-dot"></span>
+                <span class="typing-dot"></span>
+                <span class="typing-dot"></span>
+              </div>
+              <!-- 错误提示和重试按钮 -->
+              <div v-if="streamError && !msg.streaming && msg.role === 'assistant' && messages.indexOf(msg) === messages.length - 1" class="error-actions">
+                <span class="error-text">{{ streamError }}</span>
+                <button class="retry-btn" @click="retryLastMessage">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="23 4 23 10 17 10"/>
+                    <polyline points="1 20 1 14 7 14"/>
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                  </svg>
+                  重试
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -115,24 +137,35 @@
         <div class="input-wrapper">
           <textarea
             v-model="inputMessage"
-            placeholder="输入你的问题..."
+            :placeholder="isStreaming ? 'AI正在回答中...' : '输入你的问题...'"
             rows="1"
             @keydown.enter.exact.prevent="sendMessage"
             @input="autoResize"
             ref="textareaRef"
+            :disabled="isStreaming"
           ></textarea>
           <button
             class="send-btn"
-            :disabled="!inputMessage.trim()"
+            :disabled="!inputMessage.trim() || isStreaming"
             @click="sendMessage"
           >
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+            <svg v-if="!isStreaming" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="22" y1="2" x2="11" y2="13"/>
               <polygon points="22 2 15 22 11 13 2 9 22 2"/>
             </svg>
+            <svg v-else viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" class="loading-icon">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 6v6l4 2"/>
+            </svg>
           </button>
         </div>
-        <p class="input-hint">按 Enter 发送</p>
+        <p class="input-hint">
+          <span v-if="isStreaming" class="streaming-hint">
+            <span class="hint-dot"></span>
+            正在生成回答...
+          </span>
+          <span v-else>按 Enter 发送</span>
+        </p>
       </div>
     </main>
 
@@ -140,7 +173,6 @@
     <aside class="questions-sidebar" v-if="currentConversation && userQuestions.length > 0">
       <div class="sidebar-header">
         <h3>问题导航</h3>
-        <span class="count">{{ userQuestions.length }} 个问题</span>
       </div>
       
       <div class="questions-track">
@@ -173,13 +205,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, nextTick, computed } from 'vue'
+import { ref, reactive, nextTick, computed, onMounted } from 'vue'
+import { marked } from 'marked'
+//#ts-ignore
+import { sendMessageStream, parseSSEStream } from '@/api/chat'
+import { createConversation, getConversations, getConversationMessages, deleteConversation as deleteConversationAPI } from '@/api/conversations'
 
 interface Message {
   id: string
   role: 'user' | 'assistant'
   content: string
   time: string
+  streaming?: boolean
+  mode?: string
 }
 
 interface Conversation {
@@ -195,14 +233,25 @@ interface QuestionPoint {
   messageId: string
 }
 
-// 状态
-const conversations = ref<Conversation[]>([
-  { id: '1', title: '机器学习入门', preview: '什么是机器学习？', time: '10分钟前' },
-  { id: '2', title: 'Python学习', preview: '如何安装Python？', time: '1小时前' },
-  { id: '3', title: '深度学习', preview: '神经网络是什么？', time: '昨天' },
-  { id: '4', title: '数据结构', preview: '什么是二叉树？', time: '2天前' }
-])
+// 配置 marked 支持表格和其他格式
+marked.setOptions({
+  breaks: true,
+  gfm: true
+})
 
+// Markdown 渲染函数
+const renderMarkdown = (content: string): string => {
+  if (!content) return ''
+  try {
+    return marked(content)
+  } catch (e) {
+    console.error('[Chat] Markdown 渲染错误:', e)
+    return content
+  }
+}
+
+// 状态
+const conversations = ref<Conversation[]>([])
 const currentConversation = ref<Conversation | null>(null)
 const messages = ref<Message[]>([])
 const userQuestions = ref<QuestionPoint[]>([])
@@ -211,10 +260,46 @@ const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const messageContainer = ref<HTMLElement | null>(null)
 const hoveredQuestion = ref<QuestionPoint | null>(null)
 const activeQuestionIndex = ref(-1)
+const isStreaming = ref(false)  // 流式输出状态
+const streamError = ref<string | null>(null)  // 流式错误信息
 
-// 计算属性
-const activeQuestion = computed(() => {
-  return userQuestions.value[activeQuestionIndex.value] || null
+// 获取模式标签
+const getModeLabel = (mode: string): string => {
+  const modeMap: Record<string, string> = {
+    tutor: '导师答疑',
+    path: '学习路径',
+    resource: '资源生成',
+    profile: '画像构建',
+    chat: '普通聊天'
+  }
+  return modeMap[mode] || mode
+}
+
+// 加载会话列表
+const loadConversations = async () => {
+  try {
+    const convList = await getConversations()
+    conversations.value = convList.map(conv => ({
+      id: conv.id?.toString() || '',
+      title: conv.title || '未命名对话',
+      preview: conv.preview || '',
+      time: conv.updatedAt || conv.createdAt || ''
+    }))
+  } catch (error) {
+    console.error('加载会话列表失败:', error)
+    // 使用模拟数据作为降级方案
+    conversations.value = [
+      { id: '1', title: '机器学习入门', preview: '什么是机器学习？', time: '10分钟前' },
+      { id: '2', title: 'Python学习', preview: '如何安装Python？', time: '1小时前' },
+      { id: '3', title: '深度学习', preview: '神经网络是什么？', time: '昨天' },
+      { id: '4', title: '数据结构', preview: '什么是二叉树？', time: '2天前' }
+    ]
+  }
+}
+
+// 初始化
+onMounted(() => {
+  loadConversations()
 })
 
 // 选择对话
@@ -224,47 +309,107 @@ const selectConversation = (conv: Conversation) => {
 }
 
 // 加载消息
-const loadMessages = (convId: string) => {
-  messages.value = [
-    { id: 'm1', role: 'user', content: '什么是机器学习？', time: '10:30' },
-    { id: 'm2', role: 'assistant', content: '机器学习是人工智能的一个分支，它使计算机系统能够从数据中学习并改进其性能，而无需进行明确编程。', time: '10:31' },
-    { id: 'm3', role: 'user', content: '机器学习有哪些主要类型？', time: '10:32' },
-    { id: 'm4', role: 'assistant', content: '主要分为三类：监督学习、无监督学习和强化学习。监督学习使用标注数据进行训练，无监督学习从无标注数据中发现模式，强化学习通过试错学习。', time: '10:33' },
-    { id: 'm5', role: 'user', content: '监督学习和无监督学习有什么区别？', time: '10:35' },
-    { id: 'm6', role: 'assistant', content: '监督学习需要标注数据，目标是预测或分类。无监督学习不需要标注，目标是发现数据中的结构，如聚类或降维。', time: '10:36' },
-    { id: 'm7', role: 'user', content: '请推荐一些机器学习入门书籍', time: '10:38' },
-    { id: 'm8', role: 'assistant', content: '推荐《机器学习实战》、《统计学习方法》和《Hands-On Machine Learning with Scikit-Learn, Keras, and TensorFlow》。', time: '10:40' }
-  ]
-  
-  // 提取用户问题作为问题点
-  userQuestions.value = messages.value
-    .filter(m => m.role === 'user')
-    .map((msg, index) => ({
-      id: `q-${index}`,
-      text: msg.content,
-      messageId: msg.id
+const loadMessages = async (convId: string) => {
+  try {
+    // 调用API加载消息历史
+    const msgList = await getConversationMessages(parseInt(convId))
+    
+    messages.value = msgList.map(msg => ({
+      id: msg.id?.toString() || `m-${Date.now()}`,
+      role: msg.role as 'user' | 'assistant',
+      content: msg.content || '',
+      time: msg.createdAt || '',
+      mode: msg.mode
     }))
-  
-  activeQuestionIndex.value = -1
+    
+    // 提取用户问题作为问题点
+    userQuestions.value = messages.value
+      .filter(m => m.role === 'user')
+      .map((msg, index) => ({
+        id: `q-${index}`,
+        text: msg.content,
+        messageId: msg.id
+      }))
+    
+    activeQuestionIndex.value = -1
+    
+    // 滚动到底部
+    await nextTick()
+    scrollToBottom()
+  } catch (error) {
+    console.error('加载消息失败:', error)
+    // 使用模拟数据作为降级方案
+    messages.value = [
+      { id: 'm1', role: 'user', content: '什么是机器学习？', time: '10:30' },
+      { id: 'm2', role: 'assistant', content: '机器学习是人工智能的一个分支，它使计算机系统能够从数据中学习并改进其性能，而无需进行明确编程。', time: '10:31' },
+      { id: 'm3', role: 'user', content: '机器学习有哪些主要类型？', time: '10:32' },
+      { id: 'm4', role: 'assistant', content: '主要分为三类：监督学习、无监督学习和强化学习。监督学习使用标注数据进行训练，无监督学习从无标注数据中发现模式，强化学习通过试错学习。', time: '10:33' },
+      { id: 'm5', role: 'user', content: '监督学习和无监督学习有什么区别？', time: '10:35' },
+      { id: 'm6', role: 'assistant', content: '监督学习需要标注数据，目标是预测或分类。无监督学习不需要标注，目标是发现数据中的结构，如聚类或降维。', time: '10:36' },
+      { id: 'm7', role: 'user', content: '请推荐一些机器学习入门书籍', time: '10:38' },
+      { id: 'm8', role: 'assistant', content: '推荐《机器学习实战》、《统计学习方法》和《Hands-On Machine Learning with Scikit-Learn, Keras, and TensorFlow》。', time: '10:40' }
+    ]
+    
+    // 提取用户问题作为问题点
+    userQuestions.value = messages.value
+      .filter(m => m.role === 'user')
+      .map((msg, index) => ({
+        id: `q-${index}`,
+        text: msg.content,
+        messageId: msg.id
+      }))
+    
+    activeQuestionIndex.value = -1
+    
+    // 滚动到底部
+    await nextTick()
+    scrollToBottom()
+  }
 }
 
 // 创建新对话
-const createNewChat = () => {
-  const newConv: Conversation = {
-    id: Date.now().toString(),
-    title: '新对话',
-    preview: '开始新的对话...',
-    time: '刚刚'
+const createNewChat = async () => {
+  try {
+    // 调用API创建会话
+    const newConvData = await createConversation()
+    
+    const newConv: Conversation = {
+      id: newConvData.id?.toString() || Date.now().toString(),
+      title: newConvData.title || '新对话',
+      preview: '开始新的对话...',
+      time: '刚刚'
+    }
+    
+    conversations.value.unshift(newConv)
+    currentConversation.value = newConv
+    messages.value = []
+    userQuestions.value = []
+  } catch (error) {
+    console.error('创建会话失败:', error)
+    // 降级方案：本地创建
+    const newConv: Conversation = {
+      id: Date.now().toString(),
+      title: '新对话',
+      preview: '开始新的对话...',
+      time: '刚刚'
+    }
+    conversations.value.unshift(newConv)
+    currentConversation.value = newConv
+    messages.value = []
+    userQuestions.value = []
   }
-  conversations.value.unshift(newConv)
-  currentConversation.value = newConv
-  messages.value = []
-  userQuestions.value = []
 }
 
 // 发送消息
 const sendMessage = async () => {
-  if (!inputMessage.value.trim()) return
+  console.log('[Chat] 开始发送消息')
+  if (!inputMessage.value.trim() || isStreaming.value) {
+    console.log('[Chat] 消息为空或正在流式输出，跳过')
+    return
+  }
+  
+  // 清除之前的错误状态
+  streamError.value = null
   
   const userMsg: Message = {
     id: `m-${Date.now()}`,
@@ -274,6 +419,7 @@ const sendMessage = async () => {
   }
   
   messages.value.push(userMsg)
+  console.log('[Chat] 用户消息已添加:', userMsg.content.substring(0, 30))
   
   // 添加到问题点
   userQuestions.value.push({
@@ -283,25 +429,109 @@ const sendMessage = async () => {
   })
   
   inputMessage.value = ''
+  isStreaming.value = true
   
   // 滚动到底部
   await nextTick()
   scrollToBottom()
   
-  // 模拟AI回复
-  setTimeout(() => {
-    const assistantMsg: Message = {
-      id: `m-${Date.now()}`,
-      role: 'assistant',
-      content: '这是一个很好的问题！让我来为您解答...',
-      time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-    }
-    messages.value.push(assistantMsg)
+  // 创建AI回复占位消息（使用reactive确保响应式更新）
+  const assistantMsg = reactive<Message>({
+    id: `m-${Date.now()}`,
+    role: 'assistant',
+    content: '',
+    time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+    streaming: true,
+    mode: 'chat'
+  })
+  messages.value.push(assistantMsg)
+  console.log('[Chat] AI占位消息已添加')
+  // 滚动到底部
+    await nextTick()
+    scrollToBottom()
     
-    nextTick(() => {
-      scrollToBottom()
+  try {
+    console.log('[Chat] 调用 sendMessageStream...')
+    const stream = await sendMessageStream({
+      message: userMsg.content,
+      conversation_id: currentConversation.value ? parseInt(currentConversation.value.id) : null
     })
-  }, 1000)
+    console.log('[Chat] 获取到数据流，开始解析...')
+    
+    await parseSSEStream(
+      stream,
+      (delta, mode) => {
+        // 逐字追加文本到消息内容
+        assistantMsg.content += delta
+        assistantMsg.mode = mode
+        // 滚动到底部显示最新内容
+        nextTick(() => {
+          scrollToBottom()
+        })
+      },
+      () => {
+        console.log('[Chat] 流式传输完成，最终内容:', assistantMsg.content)
+        assistantMsg.streaming = false
+        isStreaming.value = false
+        updateConversationPreview(userMsg.content, assistantMsg.content)
+      },
+      (error) => {
+        console.error('[Chat] SSE错误:', error)
+        streamError.value = '连接中断，请点击重试'
+        assistantMsg.content = '抱歉，连接过程中出现问题。'
+        assistantMsg.streaming = false
+        isStreaming.value = false
+      }
+    )
+  } catch (error) {
+    console.error('[Chat] 发送消息异常:', error)
+    streamError.value = '发送失败，请检查网络连接后重试'
+    // 模拟回复作为降级方案
+    assistantMsg.content = '这是一个很好的问题！让我来为您解答...\n\n根据您的问题，我可以提供一些相关的学习建议和资源。如果您需要更详细的信息，可以继续提问。'
+    assistantMsg.streaming = false
+    isStreaming.value = false
+    updateConversationPreview(userMsg.content, assistantMsg.content)
+  }
+  
+  nextTick(() => {
+    scrollToBottom()
+  })
+}
+
+// 重试发送消息
+const retryLastMessage = async () => {
+  if (messages.value.length < 2) return
+  
+  // 找到最后一条用户消息
+  const lastUserMsg = [...messages.value].reverse().find(m => m.role === 'user')
+  if (!lastUserMsg) return
+  
+  // 移除最后一条失败的AI回复
+  const lastAssistantMsg = messages.value[messages.value.length - 1]
+  if (lastAssistantMsg.role === 'assistant') {
+    messages.value.pop()
+  }
+  
+  // 重新发送
+  inputMessage.value = lastUserMsg.content
+  streamError.value = null
+  
+  // 移除用户消息（因为sendMessage会重新添加）
+  messages.value = messages.value.filter(m => m.id !== lastUserMsg.id)
+  userQuestions.value = userQuestions.value.filter(q => q.messageId !== lastUserMsg.id)
+  
+  await sendMessage()
+}
+
+// 更新对话预览
+const updateConversationPreview = (userMsg: string, assistantMsg: string) => {
+  if (currentConversation.value) {
+    currentConversation.value.preview = userMsg.length > 30 ? userMsg.substring(0, 30) + '...' : userMsg
+    if (assistantMsg.length > 20) {
+      currentConversation.value.preview = assistantMsg.substring(0, 20) + '...'
+    }
+    currentConversation.value.time = '刚刚'
+  }
 }
 
 // 滚动到底部
@@ -357,15 +587,31 @@ const renameConversation = () => {
 }
 
 // 删除对话
-const deleteConversation = () => {
+const deleteConversation = async () => {
   if (!currentConversation.value) return
   if (confirm('确定删除这个对话吗？')) {
-    const index = conversations.value.findIndex(c => c.id === currentConversation.value?.id)
-    if (index !== -1) {
-      conversations.value.splice(index, 1)
-      currentConversation.value = conversations.value[0] || null
-      if (currentConversation.value) {
-        loadMessages(currentConversation.value.id)
+    try {
+      // 调用API删除会话
+      await deleteConversationAPI(parseInt(currentConversation.value.id))
+      
+      const index = conversations.value.findIndex(c => c.id === currentConversation.value?.id)
+      if (index !== -1) {
+        conversations.value.splice(index, 1)
+        currentConversation.value = conversations.value[0] || null
+        if (currentConversation.value) {
+          loadMessages(currentConversation.value.id)
+        }
+      }
+    } catch (error) {
+      console.error('删除会话失败:', error)
+      // 降级方案：本地删除
+      const index = conversations.value.findIndex(c => c.id === currentConversation.value?.id)
+      if (index !== -1) {
+        conversations.value.splice(index, 1)
+        currentConversation.value = conversations.value[0] || null
+        if (currentConversation.value) {
+          loadMessages(currentConversation.value.id)
+        }
       }
     }
   }
@@ -654,7 +900,7 @@ const deleteConversation = () => {
 .message-header {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   margin-bottom: 6px;
 }
 
@@ -662,6 +908,15 @@ const deleteConversation = () => {
   font-size: 12px;
   font-weight: 600;
   color: var(--text-secondary);
+}
+
+.mode-tag {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--primary-color);
+  font-weight: 500;
 }
 
 .message-time {
@@ -687,6 +942,29 @@ const deleteConversation = () => {
   color: var(--text-primary);
   border: 1px solid var(--border-color);
   border-bottom-left-radius: 4px;
+}
+
+.typing-indicator {
+  display: flex;
+  gap: 4px;
+  padding: 8px 16px;
+}
+
+.typing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  animation: typing 1.4s infinite ease-in-out;
+}
+
+.typing-dot:nth-child(1) { animation-delay: 0s; }
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typing {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.5; }
+  40% { transform: scale(1); opacity: 1; }
 }
 
 /* 输入区域 */
@@ -727,6 +1005,12 @@ const deleteConversation = () => {
   color: var(--text-placeholder);
 }
 
+.input-wrapper textarea:disabled {
+  background: var(--bg-page);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
 .send-btn {
   width: 48px;
   height: 48px;
@@ -750,6 +1034,72 @@ const deleteConversation = () => {
 .send-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* 加载图标动画 */
+.loading-icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* 流式输出提示 */
+.streaming-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--primary-color);
+}
+
+.hint-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--primary-color);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+/* 错误提示和重试按钮 */
+.error-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: var(--danger-bg);
+  border-radius: 8px;
+}
+
+.error-text {
+  color: var(--danger-color);
+  font-size: 13px;
+}
+
+.retry-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: var(--danger-color);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.retry-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
 }
 
 .input-hint {
@@ -906,5 +1256,121 @@ const deleteConversation = () => {
   .message-content {
     max-width: 85%;
   }
+}
+
+/* Markdown 样式 */
+.markdown-body {
+  padding: 12px 16px;
+  border-radius: 16px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.markdown-body :deep(pre) {
+  background-color: #0F172A;
+  padding: 12px 16px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 12px 0;
+}
+
+.markdown-body :deep(code) {
+  background-color: rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: 'Fira Code', 'Consolas', monospace;
+}
+
+.markdown-body :deep(pre code) {
+  background-color: transparent;
+  padding: 0;
+  color: #E2E8F0;
+}
+
+.markdown-body :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+}
+
+.markdown-body :deep(th),
+.markdown-body :deep(td) {
+  border: 1px solid var(--border-color);
+  padding: 10px 14px;
+  text-align: left;
+}
+
+.markdown-body :deep(th) {
+  background-color: rgba(34, 197, 94, 0.1);
+  font-weight: 600;
+}
+
+.markdown-body :deep(tr:nth-child(even)) {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+.markdown-body :deep(a) {
+  color: var(--primary-color);
+  text-decoration: none;
+}
+
+.markdown-body :deep(a:hover) {
+  text-decoration: underline;
+}
+
+.markdown-body :deep(blockquote) {
+  border-left: 3px solid var(--primary-color);
+  padding-left: 12px;
+  color: var(--text-secondary);
+  margin: 12px 0;
+  font-style: italic;
+}
+
+.markdown-body :deep(h1),
+.markdown-body :deep(h2),
+.markdown-body :deep(h3),
+.markdown-body :deep(h4) {
+  margin: 16px 0 8px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.markdown-body :deep(h1) { font-size: 18px; }
+.markdown-body :deep(h2) { font-size: 16px; }
+.markdown-body :deep(h3) { font-size: 15px; }
+.markdown-body :deep(h4) { font-size: 14px; }
+
+.markdown-body :deep(ul),
+.markdown-body :deep(ol) {
+  padding-left: 20px;
+  margin: 8px 0;
+}
+
+.markdown-body :deep(li) {
+  margin: 4px 0;
+}
+
+.markdown-body :deep(p) {
+  margin: 8px 0;
+}
+
+.markdown-body :deep(strong) {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.markdown-body :deep(hr) {
+  border: none;
+  border-top: 1px solid var(--border-color);
+  margin: 16px 0;
+}
+
+.markdown-body :deep(img) {
+  max-width: 100%;
+  border-radius: 8px;
 }
 </style>

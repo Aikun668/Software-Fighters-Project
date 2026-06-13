@@ -421,14 +421,20 @@ const handleLogin = async () => {
 
     const res = await login(loginData)
     console.log(res)
-
     
+    // 存储 token 到 localStorage
+    const token = typeof res === 'string' ? res : (res as any).data || res
+    localStorage.setItem('token', token)
     
     userStore.setProfile({
-      //@ts-ignore
-      id: res,
-      userName: loginForm.username,
+      id: token,
+      name: loginForm.username,
       avatar: '',
+      email: '',
+      major: '',
+      grade: '',
+      learningGoals: [],
+      interests: []
     })
 
     if (loginForm.remember) {
@@ -502,13 +508,21 @@ const handleRegister = async () => {
       username: registerForm.username
     }
 
-    await register(registerData)
-
+    const user = await register(registerData)
+    
+    // 注册成功后存储用户信息
+    const userId = typeof user === 'object' ? (user as any).id?.toString() || '1' : '1'
+    localStorage.setItem('token', userId)
+    
     userStore.setProfile({
-      id: '1',
-      phone: registerForm.phone,
-      username: registerForm.username,
-      avatar: ''
+      id: userId,
+      name: registerForm.username,
+      avatar: '',
+      email: registerForm.phone,
+      major: '',
+      grade: '',
+      learningGoals: [],
+      interests: []
     })
 
     ElMessage.success('注册成功！')
