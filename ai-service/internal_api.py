@@ -25,6 +25,7 @@ from app.api.models import (
     ProfileWorkflowStatusRequest,
     ResourceGenRequest,
     ExportPptxRequest,
+    ExportPdfRequest,
     TutorChatRequest,
     ExerciseGenRequest,
     GradeRequest,
@@ -37,18 +38,35 @@ from app.api.models import (
     InquiryResolveRequest,
     KnowledgeGraphRequest,
     KnowledgeGraphNodeRequest,
+    GraphExtractRequest,
+    GraphNodesRequest,
+    MasteryUpdateRequest,
+    GraphReloadRequest,
+    GraphProgressRequest,
+    GraphPrerequisiteRequest,
+    NodeDeleteRequest,
+    NodeUpdateRequest,
+    GraphSuggestEdgesRequest,
+    GraphMermaidRequest,
+    GraphLayeredRequest,
     PlanStatusRequest,
     ReviewScheduleRequest,
     SummaryRequest,
 )
 from app.services.plan_service import get_plan_service
+from app.services.knowledge_extraction import extract_knowledge_nodes
 from app.services.plan_constants import RETURN_MESSAGES
 from app.events.types import StreamEvent, done_event
 from app.services.intent_extractor import IntentExtractor
+from app.centers.chat_center import ChatCenter
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/internal")
+
+USE_CENTER_PIPELINE = os.getenv("USE_CENTER_PIPELINE", "0") == "1"
+_chat_center_singleton = None
+_chat_center_lock = threading.Lock()
 
 _profile_agent_singleton = None
 _tutor_agent_singleton = None
@@ -62,6 +80,15 @@ _profile_workflow_singleton = None
 _resource_workflow_singleton = None
 _path_workflow_singleton = None
 _inquiry_service_singleton = None
+
+
+def _get_chat_center():
+    global _chat_center_singleton
+    if _chat_center_singleton is None:
+        with _chat_center_lock:
+            if _chat_center_singleton is None:
+                _chat_center_singleton = ChatCenter(use_p1_agents=USE_CENTER_PIPELINE)
+    return _chat_center_singleton
 
 
 def _get_mock_flag() -> bool:
@@ -536,6 +563,44 @@ async def download_pptx(filename: str = Query(...)):
     )
 
 
+# ── PDF Export / Download ──────────────────────────────────────
+
+@router.post("/resources/export-pdf")
+async def export_pdf(body: ExportPdfRequest):
+    from app.utils.pdf_exporter import export_to_pdf
+
+    content_blocks = body.content_blocks
+    title = body.title
+    output_dir = os.path.join(os.path.dirname(__file__), "exports")
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = os.path.join(output_dir, f"export_{int(time.time())}.pdf")
+
+    try:
+        result_path = export_to_pdf(content_blocks, output_path, title)
+    except Exception as e:
+        logger.error(f"PDF export failed: {e}")
+        return api_error(
+            ErrorCode.GENERATION_FAILED, "导出失败，请稍后重试", status_code=500
+        )
+    return api_success({"filename": os.path.basename(result_path)})
+
+
+@router.get("/resources/download-pdf")
+async def download_pdf(filename: str = Query(...)):
+    safe_name = os.path.basename(filename)
+    output_dir = os.path.join(os.path.dirname(__file__), "exports")
+    file_path = os.path.join(output_dir, safe_name)
+
+    if not os.path.exists(file_path):
+        return api_error(ErrorCode.NOT_FOUND, "文件不存在或已过期", status_code=404)
+
+    return FileResponse(
+        file_path,
+        media_type="application/pdf",
+        filename=safe_name,
+    )
+
+
 # ═══════════════════════════════════════════════════════════════════
 # Solve
 # ═══════════════════════════════════════════════════════════════════
@@ -682,7 +747,9 @@ def _get_graph_service():
 async def get_knowledge_graph(course_id: str, body: KnowledgeGraphRequest):
     try:
         graph_service = _get_graph_service()
-        graph = await graph_service.get_graph(masteries=body.masteries)
+        graph = await graph_service.get_graph(
+            course_id=course_id, masteries=body.masteries
+        )
         return api_success(graph)
     except Exception as e:
         logger.error(f"Failed to get knowledge graph: {e}")
@@ -695,6 +762,7 @@ async def get_node_card(course_id: str, node_id: str, body: KnowledgeGraphNodeRe
         graph_service = _get_graph_service()
         card = await graph_service.get_node_card(
             node_id=node_id,
+            course_id=course_id,
             masteries=body.masteries,
             total_exercises=body.total_exercises,
             last_practiced=body.last_practiced,
@@ -705,6 +773,196 @@ async def get_node_card(course_id: str, node_id: str, body: KnowledgeGraphNodeRe
     except Exception as e:
         logger.error(f"Failed to get node card: {e}")
         return api_error(ErrorCode.INTERNAL_ERROR, "获取节点卡片失败", status_code=500)
+
+
+@router.post("/graph/extract")
+async def graph_extract(body: GraphExtractRequest):
+    try:
+        groups = await extract_knowledge_nodes(
+            course_id=body.course_id,
+            user_message=body.user_message,
+            assistant_reply=body.assistant_reply,
+            existing_node_ids=body.existing_node_ids,
+        )
+        return api_success({
+            "primary": groups.get("primary", []),
+            "related": groups.get("related", []),
+            "broad": groups.get("broad", []),
+            "candidates": groups.get("all", []),
+        })
+    except Exception as e:
+        logger.error(f"Failed to extract knowledge nodes: {e}")
+        return api_error(ErrorCode.GENERATION_FAILED, "知识节点提取失败", status_code=500)
+
+
+@router.post("/graph/nodes")
+async def graph_nodes(body: GraphNodesRequest):
+    try:
+        graph_service = _get_graph_service()
+        for update in body.updates:
+            if update.action == "add_node":
+                graph_service.add_node(body.course_id, update.data)
+            elif update.action == "add_edge":
+                graph_service.add_edge(body.course_id, update.data)
+        graph = await graph_service.get_graph(course_id=body.course_id)
+        return api_success(graph)
+    except ValueError as e:
+        return api_error(ErrorCode.INVALID_REQUEST, str(e), status_code=400)
+    except Exception as e:
+        logger.error(f"Failed to apply graph updates: {e}")
+        return api_error(ErrorCode.INTERNAL_ERROR, "图谱更新失败", status_code=500)
+
+
+@router.post("/graph/masteries")
+async def update_masteries(body: MasteryUpdateRequest):
+    """根据学习事件批量更新节点掌握度。Python 只计算，Java 自行持久化结果。"""
+    if not body.events:
+        return api_error(ErrorCode.INVALID_REQUEST, "events 不能为空", status_code=400)
+
+    plan_service = get_plan_service()
+    result = dict(body.masteries)
+
+    for event in body.events:
+        node_id = event.node_id
+        current = result.get(node_id, 0.0)
+        new_mastery = plan_service.update_mastery(current, event.event_type, event.score)
+        result[node_id] = new_mastery
+
+    return api_success({"masteries": result})
+
+
+@router.post("/graph/reload")
+async def reload_graph(body: GraphReloadRequest):
+    """热更新知识图谱骨架（管理员触发）。"""
+    from app.services.graph_service import get_graph_service
+    graph_service = get_graph_service()
+    try:
+        graph = graph_service.load_skeleton(force_reload=True)
+        return api_success({
+            "status": "reloaded",
+            "nodes": len(graph.get("nodes", [])),
+            "edges": len(graph.get("edges", [])),
+        })
+    except Exception as e:
+        logger.error(f"Failed to reload graph skeleton: {e}")
+        return api_error(ErrorCode.INTERNAL_ERROR, "图谱热更新失败", status_code=500)
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Graph Phase A: 图谱分析
+# ═══════════════════════════════════════════════════════════════════
+
+
+@router.post("/graph/next-node")
+async def recommend_next_node(body: GraphProgressRequest):
+    """知识缺口分析：根据当前掌握度推荐下一个该学的节点。"""
+    try:
+        graph_service = _get_graph_service()
+        candidates = graph_service.recommend_next_node(body.masteries, body.course_id)
+        return api_success({"recommended": candidates})
+    except Exception as e:
+        logger.error(f"Failed to recommend next node: {e}")
+        return api_error(ErrorCode.INTERNAL_ERROR, "节点推荐失败", status_code=500)
+
+
+@router.post("/graph/progress")
+async def get_progress_summary(body: GraphProgressRequest):
+    """学习进度概要：全局掌握率 + 各分类统计。"""
+    try:
+        graph_service = _get_graph_service()
+        summary = graph_service.get_progress_summary(body.masteries, body.course_id)
+        return api_success(summary)
+    except Exception as e:
+        logger.error(f"Failed to get progress summary: {e}")
+        return api_error(ErrorCode.INTERNAL_ERROR, "进度概要获取失败", status_code=500)
+
+
+@router.post("/graph/check-prerequisites")
+async def check_prerequisites(body: GraphPrerequisiteRequest):
+    """前置条件检查：用户是否可以学习指定节点。"""
+    try:
+        graph_service = _get_graph_service()
+        result = graph_service.check_prerequisites(
+            body.node_id, body.masteries, body.threshold, body.course_id
+        )
+        return api_success(result)
+    except Exception as e:
+        logger.error(f"Failed to check prerequisites: {e}")
+        return api_error(ErrorCode.INTERNAL_ERROR, "前置条件检查失败", status_code=500)
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Graph Phase B: 图谱维护
+# ═══════════════════════════════════════════════════════════════════
+
+
+@router.post("/graph/nodes/{node_id}/delete")
+async def delete_node(node_id: str, body: NodeDeleteRequest):
+    """删除动态节点（骨架节点不可删）。"""
+    try:
+        graph_service = _get_graph_service()
+        deleted = graph_service.delete_node(body.course_id, node_id)
+        return api_success({"deleted": deleted, "node_id": node_id})
+    except ValueError as e:
+        return api_error(ErrorCode.INVALID_REQUEST, str(e), status_code=400)
+    except Exception as e:
+        logger.error(f"Failed to delete node: {e}")
+        return api_error(ErrorCode.INTERNAL_ERROR, "节点删除失败", status_code=500)
+
+
+@router.post("/graph/nodes/{node_id}/update")
+async def update_node(node_id: str, body: NodeUpdateRequest):
+    """更新节点元数据。骨架节点仅可改 difficulty/category，动态节点全字段可改。"""
+    try:
+        graph_service = _get_graph_service()
+        updated = graph_service.update_node(body.course_id, node_id, body.updates)
+        return api_success({"node": updated})
+    except ValueError as e:
+        return api_error(ErrorCode.INVALID_REQUEST, str(e), status_code=400)
+    except Exception as e:
+        logger.error(f"Failed to update node: {e}")
+        return api_error(ErrorCode.INTERNAL_ERROR, "节点更新失败", status_code=500)
+
+
+@router.post("/graph/suggest-edges")
+async def suggest_edges(body: GraphSuggestEdgesRequest):
+    """LLM 自动补边：分析未连通节点对，建议遗漏的图谱关系。"""
+    try:
+        graph_service = _get_graph_service()
+        suggestions = await graph_service.suggest_edges(body.course_id)
+        return api_success({"suggestions": suggestions})
+    except Exception as e:
+        logger.error(f"Failed to suggest edges: {e}")
+        return api_error(ErrorCode.GENERATION_FAILED, "补边建议生成失败", status_code=500)
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Graph Phase C: 可视化
+# ═══════════════════════════════════════════════════════════════════
+
+
+@router.post("/graph/export-mermaid")
+async def export_mermaid(body: GraphMermaidRequest):
+    """导出知识图谱为 Mermaid 流程图语法。"""
+    try:
+        graph_service = _get_graph_service()
+        mermaid = graph_service.export_mermaid(body.course_id, body.masteries)
+        return api_success({"mermaid": mermaid})
+    except Exception as e:
+        logger.error(f"Failed to export mermaid: {e}")
+        return api_error(ErrorCode.INTERNAL_ERROR, "Mermaid 导出失败", status_code=500)
+
+
+@router.post("/graph/layered")
+async def get_layered_graph(body: GraphLayeredRequest):
+    """返回带层级信息的图谱（前端分层布局）。"""
+    try:
+        graph_service = _get_graph_service()
+        graph = graph_service.get_layered_graph(body.masteries, body.course_id)
+        return api_success(graph)
+    except Exception as e:
+        logger.error(f"Failed to get layered graph: {e}")
+        return api_error(ErrorCode.INTERNAL_ERROR, "分层图谱获取失败", status_code=500)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -772,6 +1030,23 @@ async def create_plan_from_path(body: CreatePlanFromPathRequest):
 @router.post("/plans/{plan_id}/status")
 async def get_plan_status(plan_id: int, body: PlanStatusRequest):
     """查询计划状态（含软着陆触发检测）。Java 传入 plan + steps 数据。"""
+    return await _get_plan_status_core(plan_id, body)
+
+
+@router.post("/plans/status")
+async def get_plan_status_legacy(body: PlanStatusRequest):
+    """兼容旧路径：/internal/plans/status（无 path 参数 plan_id）。
+
+    从 body.plan.id 中提取 plan_id 后复用核心逻辑。
+    """
+    plan_id = 0
+    if body.plan and isinstance(body.plan.get("id"), int):
+        plan_id = body.plan["id"]
+    return await _get_plan_status_core(plan_id, body)
+
+
+async def _get_plan_status_core(plan_id: int, body: PlanStatusRequest):
+    """查询计划状态核心逻辑。"""
     from datetime import datetime, timezone
 
     try:
@@ -1089,7 +1364,43 @@ def _build_confirmation(intent: str, confidence: float) -> str | None:
 
 @router.post("/api/chat")
 async def unified_chat(body: UnifiedChatRequest):
-    """统一对话入口 — 双层模式策略。Architecture #2: Java 传入完整数据。"""
+    if USE_CENTER_PIPELINE:
+        return await _unified_chat_center_pipeline(body)
+    return await _unified_chat_legacy(body)
+
+
+async def _unified_chat_center_pipeline(body: UnifiedChatRequest):
+    message = body.message.strip()
+    history = body.messages
+    user_msg = {"role": "user", "content": message}
+    messages = history + [user_msg]
+
+    chat_center = _get_chat_center()
+    plan = await chat_center.route(
+        message=message,
+        mode=body.mode,
+        student_profile=body.student_profile,
+        context={
+            "messages": messages,
+            "style": body.style or "standard",
+            "user_id": body.user_id,
+            "conversation_id": body.conversation_id,
+        },
+    )
+
+    async def event_stream():
+        try:
+            async for event in chat_center.execute(plan):
+                yield event.to_sse()
+        except Exception as e:
+            logger.error(f"Center pipeline error: {e}")
+            yield f"data: {json.dumps({'type': 'error', 'content': '处理失败，请稍后重试'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
+
+
+async def _unified_chat_legacy(body: UnifiedChatRequest):
     message = body.message.strip()
     user_id = body.user_id
     mode = body.mode
@@ -1098,7 +1409,6 @@ async def unified_chat(body: UnifiedChatRequest):
     student_profile = body.student_profile
     history = body.messages
 
-    # ── 双层模式策略 ──
     intent_meta: dict | None = None
 
     if mode != "auto":
@@ -1117,11 +1427,9 @@ async def unified_chat(body: UnifiedChatRequest):
                 result.intent, result.confidence
             )
 
-    # ── 构建完整消息列表 ──
     user_msg = {"role": "user", "content": message}
     messages = history + [user_msg]
 
-    # ── 模式分发 ──
     if effective_mode == "resource":
         return await _resource_mode_dispatch(message, user_id, student_profile)
     elif effective_mode == "solve":
@@ -1130,7 +1438,7 @@ async def unified_chat(body: UnifiedChatRequest):
         return await _unified_exercise_chat(message, messages, student_profile, conversation_id)
     elif effective_mode == "research":
         return await _unified_research_chat(message, messages, student_profile, conversation_id, user_id)
-    else:  # tutor (兜底)
+    else:
         return await _unified_tutor_chat(message, messages, student_profile, conversation_id, style, intent_meta)
 
 
