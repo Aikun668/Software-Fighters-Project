@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { useUserStore } from '@/stores/user'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -47,6 +48,16 @@ const router = createRouter({
           path: 'exercise',
           name: 'ExercisePage',
           component: () => import('../views/ExercisePage.vue')
+        },
+        {
+          path: 'learning-resource-network',
+          name: 'LearningResourceNetwork',
+          component: () => import('../views/LearningResourceNetwork.vue')
+        },
+        {
+          path: 'question-nav-chat',
+          name: 'QuestionNavChat',
+          component: () => import('../views/QuestionNavChat.vue')
         }
       ]
     },
@@ -57,6 +68,26 @@ const router = createRouter({
       meta: { requiresGuest: true }
     }
   ]
+})
+
+// 全局路由守卫
+router.beforeEach((to, from, next) => {
+  const userStore = useUserStore()
+  const isLoggedIn = userStore.isLoggedIn || localStorage.getItem('token')
+  
+  // 需要登录的页面
+  if (to.meta.requiresAuth && !isLoggedIn) {
+    next('/loginRegister')
+    return
+  }
+  
+  // 已登录用户访问登录页面，重定向到首页
+  if (to.meta.requiresGuest && isLoggedIn) {
+    next('/dashboard')
+    return
+  }
+  
+  next()
 })
 
 export default router

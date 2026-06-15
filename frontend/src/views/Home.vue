@@ -4,76 +4,168 @@
       <div class="header-left">
         <div class="logo-wrapper">
           <div class="logo-icon">
-            <el-icon :size="28"><Odometer /></el-icon>
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+              <path d="M2 17l10 5 10-5"/>
+              <path d="M2 12l10 5 10-5"/>
+            </svg>
           </div>
           <div class="logo-text">
             <h1 class="logo-title">智学云</h1>
-            <span class="logo-subtitle">个性化学习多智能体系统</span>
+            <span class="logo-subtitle">DeepTutor 智能学习系统</span>
           </div>
         </div>
       </div>
       <div class="header-right">
-        <div class="user-actions">
-          <el-button type="primary" size="default" class="login-btn" @click="goToLogin">
-            <el-icon><User /></el-icon>
-            <span>登录 / 注册</span>
-          </el-button>
+        <div class="header-actions">
+          <button class="icon-btn" title="通知">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+          </button>
+          <button class="icon-btn" title="设置">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+          </button>
+        </div>
+        <div class="user-info-wrapper">
+          <div class="user-avatar">
+            <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+          </div>
+          <div class="user-detail">
+            <span class="user-name">{{ userStore.userName }}</span>
+            <span class="user-status">在线</span>
+          </div>
+          <button class="logout-btn" @click="handleLogout" title="退出登录">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+              <polyline points="16 17 21 12 16 7"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+          </button>
         </div>
       </div>
     </header>
 
     <div class="home-content">
+      <!-- 左侧导航栏 -->
       <aside :class="['sidebar', { collapsed: isCollapsed }]">
-       
-        <el-menu
-          :default-active="activeMenu"
-          class="sidebar-menu"
-          @select="handleMenuSelect"
-        >
-          <el-menu-item index="dashboard">
-            <el-icon><Odometer /></el-icon>
-            <span>学习仪表盘</span>
-          </el-menu-item>
-          <el-menu-item index="profile-chat">
-            <el-icon><User /></el-icon>
-            <span>学生画像</span>
-          </el-menu-item>
-          <el-menu-item index="resource-center">
-            <el-icon><Files /></el-icon>
-            <span>资源中心</span>
-          </el-menu-item>
-          <el-menu-item index="learning-path">
-            <el-icon><Guide /></el-icon>
-            <span>学习路径</span>
-          </el-menu-item>
-          <el-menu-item index="ai-tutor">
-            <el-icon><ChatDotRound /></el-icon>
-            <span>智能答疑</span>
-          </el-menu-item>
-          <el-menu-item index="course-detail">
-            <el-icon><Document /></el-icon>
-            <span>课程文档</span>
-          </el-menu-item>
-          <el-menu-item index="exercise">
-            <el-icon><EditPen /></el-icon>
-            <span>在线答题</span>
-          </el-menu-item>
-        </el-menu>
-
-        <div class="sidebar-footer">
-
-
-          <button class="collapse-btn" @click="toggleSidebar" :title="isCollapsed ? '展开侧边栏' : '收起侧边栏'">
-            <svg v-if="isCollapsed" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-              <path d="M9.29 6.71a.996.996 0 000 1.41L13.17 12l-3.88 3.88a.996.996 0 101.41 1.41l4.59-4.59a.996.996 0 000-1.41L10.7 6.7c-.38-.38-1.02-.38-1.41.01z"/>
+        <!-- 全局动作区 -->
+        <div class="nav-section">
+          <button class="new-chat-btn" @click="createNewChat">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"/>
+              <line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
-            <svg v-else viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-              <path d="M15.29 17.71a.996.996 0 000-1.41L11.41 12l3.88-3.88a.996.996 0 00-1.41-1.41l-4.59 4.59a.996.996 0 000 1.41l4.59 4.59c.38.38 1.02.38 1.41 0z"/>
+            <span>新建对话</span>
+          </button>
+        </div>
+
+        <!-- 核心功能区 -->
+        <div class="nav-section">
+          <div class="section-title">核心功能</div>
+          <el-menu
+            :default-active="activeMenu"
+            class="sidebar-menu"
+            @select="handleMenuSelect"
+          >
+            <el-menu-item index="question-nav-chat">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+              <span>对话辅导</span>
+            </el-menu-item>
+          </el-menu>
+        </div>
+
+        <!-- 个人学习产出区 -->
+        <div class="nav-section">
+          <div class="section-title">个人学习</div>
+          <el-menu
+            :default-active="activeMenu"
+            class="sidebar-menu"
+            @select="handleMenuSelect"
+          >
+            <el-menu-item index="learning-plan">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                <polyline points="22 4 12 14.01 9 11.01"/>
+              </svg>
+              <span>我的计划</span>
+            </el-menu-item>
+            <el-menu-item index="exercise">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+              <span>练习中心</span>
+            </el-menu-item>
+            <el-menu-item index="resource-center">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+              </svg>
+              <span>资源工坊</span>
+            </el-menu-item>
+            <el-menu-item index="learning-resource-network">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="18" cy="5" r="3"/>
+                <circle cx="6" cy="12" r="3"/>
+                <circle cx="18" cy="19" r="3"/>
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+              </svg>
+              <span>知识图谱</span>
+            </el-menu-item>
+          </el-menu>
+        </div>
+
+        <!-- 数据&个人区 -->
+        <div class="nav-section">
+          <div class="section-title">数据&个人</div>
+          <el-menu
+            :default-active="activeMenu"
+            class="sidebar-menu"
+            @select="handleMenuSelect"
+          >
+            <el-menu-item index="dashboard">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="7" height="7"/>
+                <rect x="14" y="3" width="7" height="7"/>
+                <rect x="14" y="14" width="7" height="7"/>
+                <rect x="3" y="14" width="7" height="7"/>
+              </svg>
+              <span>数据看板</span>
+            </el-menu-item>
+            <el-menu-item index="profile-chat">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+              <span>学习画像</span>
+            </el-menu-item>
+          </el-menu>
+        </div>
+
+        <!-- 折叠按钮 -->
+        <div class="sidebar-footer">
+          <button class="collapse-btn" @click="toggleSidebar" :title="isCollapsed ? '展开侧边栏' : '收起侧边栏'">
+            <svg v-if="isCollapsed" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+            <svg v-else viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="15 18 9 12 15 6"/>
             </svg>
           </button>
         </div>
       </aside>
 
+      <!-- 主内容区 -->
       <main :class="['main-content-wrapper', { 'sidebar-collapsed': isCollapsed }]">
         <div class="main-content">
           <router-view />
@@ -84,51 +176,61 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
-import { useRouter, useRoute } from 'vue-router';
-import { Odometer, User, Files, Guide, ChatDotRound, Document, EditPen } from '@element-plus/icons-vue';
+import { ref, computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { useUserStore } from '@/stores/user'
 
-const router = useRouter();
-const route = useRoute();
+const router = useRouter()
+const route = useRoute()
+const userStore = useUserStore()
 
-const isCollapsed = ref(false);
+const isCollapsed = ref(false)
 
 const activeMenu = computed(() => {
-  const path = route.path.split('/').pop() || 'dashboard';
-  return path;
-});
+  const path = route.path.split('/').pop() || 'dashboard'
+  return path
+})
 
 const handleMenuSelect = (index: string) => {
-  router.push(`/${index}`);
-};
+  router.push(`/${index}`)
+}
 
 const goToLogin = () => {
-  router.push('/loginRegister');
-};
+  router.push('/loginRegister')
+}
+
+const handleLogout = () => {
+  userStore.logout()
+  localStorage.removeItem('token')
+  router.push('/loginRegister')
+}
+
+const createNewChat = () => {
+  router.push('/question-nav-chat')
+}
 
 const toggleSidebar = () => {
-  isCollapsed.value = !isCollapsed.value;
-};
+  isCollapsed.value = !isCollapsed.value
+}
 </script>
 
 <style scoped>
 .home-container {
-  min-height: 100vh;
+  height: 100vh;
   background: var(--bg-page);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .home-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 28px;
+  padding: 0 24px;
   height: var(--header-height);
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(12px);
+  background: var(--bg-card);
   border-bottom: 1px solid var(--border-color);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   position: sticky;
   top: 0;
   z-index: 100;
@@ -141,25 +243,25 @@ const toggleSidebar = () => {
 .logo-wrapper {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
 }
 
 .logo-icon {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   background: var(--gradient-primary);
-  border-radius: 14px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #ffffff;
-  box-shadow: 0 8px 24px rgba(194, 65, 12, 0.25);
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .logo-icon:hover {
-  transform: translateY(-2px) scale(1.02);
-  box-shadow: 0 12px 32px rgba(194, 65, 12, 0.35);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(34, 197, 94, 0.4);
 }
 
 .logo-text {
@@ -169,51 +271,125 @@ const toggleSidebar = () => {
 
 .logo-title {
   margin: 0;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
-  background: var(--gradient-primary);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--text-primary);
   line-height: 1.2;
 }
 
 .logo-subtitle {
   font-size: 12px;
-  color: var(--text-placeholder);
+  color: var(--text-secondary);
   margin-top: 2px;
 }
 
 .header-right {
   display: flex;
   align-items: center;
+  gap: 16px;
 }
 
-.login-btn {
-  background: var(--gradient-primary);
-  border: none;
-  color: #ffffff;
-  font-weight: 600;
-  padding: 10px 24px;
-  border-radius: 12px;
-  box-shadow: 0 4px 14px rgba(194, 65, 12, 0.2);
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.icon-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
   transition: all 0.2s ease;
 }
 
-.login-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(194, 65, 12, 0.3);
+.icon-btn:hover {
+  background: var(--primary-bg);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.user-info-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.user-info-wrapper:hover {
+  border-color: var(--primary-color);
+  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.15);
+}
+
+.user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--gradient-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  flex-shrink: 0;
+}
+
+.user-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.user-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.user-status {
+  font-size: 12px;
+  color: var(--primary-color);
+}
+
+.logout-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.logout-btn:hover {
+  background: var(--danger-bg);
+  border-color: var(--danger-color);
+  color: var(--danger-color);
 }
 
 .home-content {
   display: flex;
-  min-height: calc(100vh - var(--header-height));
+  flex: 1;
   position: relative;
+  overflow: hidden;
 }
 
 .sidebar {
   width: var(--sidebar-width);
-  background: #ffffff;
+  background: var(--bg-card);
   border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
@@ -221,177 +397,162 @@ const toggleSidebar = () => {
   left: 0;
   top: var(--header-height);
   bottom: 0;
-  overflow-y: auto;
   z-index: 50;
-  transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: width 0.3s ease;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .sidebar.collapsed {
   width: var(--sidebar-collapsed-width);
 }
 
-.sidebar-header {
-  padding: 16px 12px;
+/* 导航区块 */
+.nav-section {
+  padding: 8px 12px;
   border-bottom: 1px solid var(--border-color);
 }
 
-.sidebar-logo {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.nav-section:last-of-type {
+  border-bottom: none;
 }
 
-.logo-mini {
-  width: 32px;
-  height: 32px;
-  background: var(--gradient-primary);
-  border-radius: 8px;
+/* 新建对话按钮 */
+.new-chat-btn {
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--gradient-primary);
   color: #ffffff;
-}
-
-.logo-text {
-  font-size: 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
   font-weight: 600;
-  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.25);
 }
 
+.new-chat-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(34, 197, 94, 0.35);
+}
+
+.new-chat-btn svg {
+  flex-shrink: 0;
+}
+
+/* 区块标题 */
+.section-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-placeholder);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 8px 8px 4px 8px;
+  margin-bottom: 4px;
+}
+
+/* 菜单样式 */
 .sidebar-menu {
   border: none;
-  padding: 12px 8px;
+  background: transparent;
 }
 
-.sidebar-menu .el-menu-item {
-  margin: 4px 8px;
-  border-radius: 10px;
-  height: 48px;
-  line-height: 48px;
+.sidebar-menu :deep(.el-menu-item) {
+  margin: 2px 0;
+  border-radius: 8px;
+  height: 40px;
+  line-height: 40px;
   font-weight: 500;
   color: var(--text-secondary);
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
+  justify-content: flex-start;
+  padding: 0 12px !important;
 }
 
-.sidebar-menu .el-menu-item:hover {
+.sidebar-menu :deep(.el-menu-item) svg {
+  margin-right: 10px;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sidebar-menu :deep(.el-menu-item):hover {
   background: var(--primary-bg);
   color: var(--primary-color);
 }
 
-.sidebar-menu .el-menu-item.is-active {
+.sidebar-menu :deep(.el-menu-item.is-active) {
   background: var(--gradient-primary);
   color: #ffffff;
-  box-shadow: 0 4px 14px rgba(194, 65, 12, 0.25);
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.25);
 }
 
-.sidebar-menu .el-menu-item.is-active .el-icon {
-  color: #ffffff;
+/* 折叠状态 */
+.sidebar.collapsed .section-title,
+.sidebar.collapsed .new-chat-btn span,
+.sidebar.collapsed .sidebar-menu :deep(.el-menu-item) span {
+  display: none;
 }
 
-.sidebar-menu .el-menu-item .el-icon {
-  font-size: 18px;
-  margin-right: 10px;
-  color: var(--text-secondary);
-  transition: color 0.2s ease;
+.sidebar.collapsed .new-chat-btn {
+  justify-content: center;
+  padding: 10px;
 }
 
+.sidebar.collapsed .sidebar-menu :deep(.el-menu-item) {
+  padding: 0 !important;
+  justify-content: center;
+}
+
+.sidebar.collapsed .sidebar-menu :deep(.el-menu-item) svg {
+  margin-right: 0;
+}
+
+/* 底部折叠按钮 */
 .sidebar-footer {
-  padding: 16px 20px;
-  border-top: 1px solid var(--border-color);
-  background: linear-gradient(180deg, transparent 0%, rgba(239, 246, 255, 0.5) 100%);
   margin-top: auto;
-}
-
-.quick-stats {
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
-  padding: 14px;
-  background: var(--bg-page);
-  border-radius: 14px;
-  border: 1px solid var(--border-color);
-}
-
-.stat-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-
-.stat-value {
-  font-size: 22px;
-  font-weight: 700;
-  background: var(--gradient-primary);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.stat-label {
-  font-size: 12px;
-  color: var(--text-placeholder);
-}
-
-.stat-divider {
-  width: 1px;
-  height: 36px;
-  background: var(--border-color);
+  padding: 12px;
+  border-top: 1px solid var(--border-color);
+  background: linear-gradient(180deg, transparent 0%, rgba(34, 197, 94, 0.05) 100%);
 }
 
 .collapse-btn {
-  width: 36px;
+  width: 100%;
   height: 36px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
-  color: #ffffff;
+  border-radius: 8px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  margin: 0 auto;
-  margin-top: 16px;
-  margin-bottom: 16px;
   transition: all 0.2s ease;
-  border: none;
-  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
-  position: relative;
-  z-index: 10;
 }
 
 .collapse-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(79, 70, 229, 0.4);
+  background: var(--primary-bg);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
 }
 
-.collapse-btn:active {
-  transform: translateY(0);
-  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
-}
-
-.sidebar.collapsed .sidebar-menu .el-menu-item {
-  padding: 0;
-  justify-content: center;
-  margin: 4px 6px;
-}
-
-.sidebar.collapsed .sidebar-menu .el-menu-item span {
-  display: none;
-}
-
-.sidebar.collapsed .sidebar-menu .el-menu-item .el-icon {
-  margin-right: 0;
-  margin-left: 0;
-  font-size: 20px;
-}
-
+/* 主内容区 */
 .main-content-wrapper {
   flex: 1;
   margin-left: var(--sidebar-width);
-  min-height: calc(100vh - var(--header-height));
-  transition: margin-left 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  height: 100%;
+  overflow-y: auto;
+  transition: margin-left 0.3s ease;
 }
 
 .main-content-wrapper.sidebar-collapsed {
@@ -399,23 +560,34 @@ const toggleSidebar = () => {
 }
 
 .main-content {
-  padding: 28px;
+  /* padding: 24px; */
   min-height: 100%;
-  height: calc(100vh - var(--header-height));
-  overflow-y: auto;
-  background: var(--bg-page);
+  box-sizing: border-box;
 }
 
+/* 响应式 */
 @media (max-width: 768px) {
   .sidebar {
     width: var(--sidebar-collapsed-width);
   }
 
-  .sidebar-menu .el-menu-item span {
+  .sidebar .section-title,
+  .sidebar .new-chat-btn span,
+  .sidebar-menu :deep(.el-menu-item) span {
     display: none;
   }
 
-  .sidebar-menu .el-menu-item .el-icon {
+  .sidebar .new-chat-btn {
+    justify-content: center;
+    padding: 10px;
+  }
+
+  .sidebar-menu :deep(.el-menu-item) {
+    padding: 0 !important;
+    justify-content: center;
+  }
+
+  .sidebar-menu :deep(.el-menu-item) svg {
     margin-right: 0;
   }
 
@@ -429,10 +601,6 @@ const toggleSidebar = () => {
 
   .main-content-wrapper {
     margin-left: var(--sidebar-collapsed-width);
-  }
-
-  .main-content {
-    padding: 16px;
   }
 }
 </style>
