@@ -157,10 +157,12 @@ class ExerciseAgent(BaseAgent):
                 normalized, issues = validate_question(result)
                 if issues:
                     logger.warning(f"Question {q_id} has {len(issues)} issue(s): {issues}")
+                normalized["topic"] = topic
                 questions.append(normalized)
             else:
                 mock_q = self._mock_question(q_type, topic)
                 mock_q, _issues = validate_question(mock_q)
+                mock_q["topic"] = topic
                 questions.append(mock_q)
 
         return {"questions": questions, "stage": "generated"}

@@ -80,6 +80,20 @@ class TutorAgent(BaseAgent):
     # ── RAG query construction ──────────────────────────────────
 
     @staticmethod
+    def _extract_text(content: str | list | None) -> str:
+        if isinstance(content, str):
+            return content
+        if not isinstance(content, list):
+            return ""
+        parts = []
+        for item in content:
+            if isinstance(item, dict) and item.get("type") == "text":
+                text = item.get("text", "")
+                if isinstance(text, str):
+                    parts.append(text)
+        return " ".join(parts)
+
+    @staticmethod
     def _build_rag_query(messages: list[dict]) -> str:
         """构建多轮 RAG 检索 query。
 
@@ -87,7 +101,7 @@ class TutorAgent(BaseAgent):
         这类跨轮指代无法被单条消息捕获的问题。
         """
         user_msgs = [
-            m.get("content", "") if isinstance(m, dict) else ""
+            TutorAgent._extract_text(m.get("content", ""))
             for m in messages
             if isinstance(m, dict) and m.get("role") == "user"
         ]

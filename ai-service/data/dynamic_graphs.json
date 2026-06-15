@@ -1,0 +1,61 @@
+{
+  "ai_intro": {
+    "nodes": [
+      {
+        "id": "src_node",
+        "name": "Source",
+        "type": "concept",
+        "mastery": 0.0,
+        "status": "locked",
+        "difficulty": 3,
+        "color": {
+          "bg": "#E8E8ED",
+          "border": "#C4C4CC",
+          "label": "未开始"
+        },
+        "icon": "book",
+        "theme": {
+          "bg": "#E3F2FD",
+          "border": "#2196F3",
+          "text": "#0D47A1"
+        },
+        "recommended_resource_types": [
+          "video",
+          "article",
+          "doc"
+        ]
+      },
+      {
+        "id": "tgt_node",
+        "name": "Target",
+        "type": "concept",
+        "mastery": 0.0,
+        "status": "locked",
+        "difficulty": 3,
+        "color": {
+          "bg": "#E8E8ED",
+          "border": "#C4C4CC",
+          "label": "未开始"
+        },
+        "icon": "book",
+        "theme": {
+          "bg": "#E3F2FD",
+          "border": "#2196F3",
+          "text": "#0D47A1"
+        },
+        "recommended_resource_types": [
+          "video",
+          "article",
+          "doc"
+        ]
+      }
+    ],
+    "edges": [
+      {
+        "source": "src_node",
+        "target": "tgt_node",
+        "relation": "extends"
+      }
+    ]
+  }
+}

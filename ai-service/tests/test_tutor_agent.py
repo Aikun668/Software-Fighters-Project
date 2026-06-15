@@ -1,6 +1,7 @@
 """Tests for TutorAgent: message truncation + multi-turn RAG query + conversation persistence."""
 
 import pytest
+from unittest.mock import AsyncMock, patch
 
 from app.agents.tutor_agent import (
     TutorAgent,

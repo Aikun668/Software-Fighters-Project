@@ -608,6 +608,49 @@ eventSource.onmessage = (event) => {
 
 ---
 
+### 5.5 知识图谱候选节点交互
+
+**触发时机**: 统一聊天 `/api/chat` SSE 流中，AI 在完成回答后可能发送 `knowledge_graph_candidates` 事件。
+
+**SSE 事件格式**:
+```json
+{
+  "type": "content",
+  "stage": "knowledge_graph",
+  "message": "检测到新知识节点候选",
+  "data": {
+    "type": "knowledge_graph_candidates",
+    "question": "检测到以下新概念，是否加入知识图谱？",
+    "primary": [{"id": "cnn_basics", "name": "CNN基础", "type": "concept", ...}],
+    "related": [{"id": "pooling_layers", "name": "池化层", "type": "concept", ...}],
+    "broad": [{"id": "image_processing", "name": "图像处理基础", "type": "concept", ...}],
+    "candidates": [...]  // primary + related + broad 的合集
+  }
+}
+```
+
+**前端交互流程**:
+```
+1. 收到 knowledge_graph_candidates 事件
+2. 弹窗展示候选节点，按 primary/related/broad 分三组
+3. 用户勾选想添加的节点 → 点击「确认加入」
+4. 调用 POST /api/graph/nodes
+   body: {
+     "course_id": "ai_intro",
+     "updates": [{"action": "add_node", "data": {选择节点}}]
+   }
+5. 调用 GET /api/knowledge-graph/{courseId}?user_id=1 刷新图谱
+```
+
+**分组含义**:
+| 分组 | 含义 | 前端展示建议 |
+|------|------|-------------|
+| `primary` | 核心概念，强烈建议加入 | 蓝色标记，默认勾选 |
+| `related` | 相关概念，建议加入 | 默认勾选 |
+| `broad` | 拓展概念，可选 | 默认不勾选 |
+
+---
+
 ## 六、前端对接检查清单
 
 - [ ] SSE 流式接口使用 `fetch + ReadableStream`（非 EventSource，因为需要 POST）
@@ -622,6 +665,7 @@ eventSource.onmessage = (event) => {
 - [ ] `soft_landing.strategy` 为 `regression_check` 时走回归检测两阶段流程
 - [ ] 复习日程 `urgency: high` 用红色标记提醒
 - [ ] 统一聊天入口 `/api/chat` 作为万能输入框
+- [ ] 知识图谱候选节点 `knowledge_graph_candidates` 弹窗确认 → 调 `/graph/nodes` 落地
 - [ ] 所有接口错误处理（网络超时 + AI 服务不可用）
 
 ---

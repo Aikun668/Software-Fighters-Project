@@ -7,12 +7,15 @@ from typing import Any
 
 
 class StreamEventType(str, Enum):
-    STAGE_START = "stage_start"    # 阶段开始
-    STAGE_END = "stage_end"        # 阶段结束
-    PROGRESS = "progress"          # 进度更新
-    ERROR = "error"                # 出错
-    CONTENT = "content"            # 内容块（逐步推送）
-    DONE = "done"                  # 全部完成
+    STAGE_START = "stage_start"
+    STAGE_END = "stage_end"
+    PROGRESS = "progress"
+    ERROR = "error"
+    CONTENT = "content"
+    DONE = "done"
+    CENTER_START = "center_start"
+    CENTER_END = "center_end"
+    INQUIRY = "inquiry"
 
 
 @dataclass
@@ -62,3 +65,49 @@ def content_event(data: Any) -> StreamEvent:
 
 def done_event(data: Any = None) -> StreamEvent:
     return StreamEvent(type=StreamEventType.DONE, data=data)
+
+
+def center_start_event(center: str, message: str, sequence: int = 0) -> StreamEvent:
+    return StreamEvent(
+        type=StreamEventType.CENTER_START,
+        stage=center,
+        message=message,
+        data={"sequence": sequence},
+    )
+
+
+def center_end_event(center: str, message: str, sequence: int = 0) -> StreamEvent:
+    return StreamEvent(
+        type=StreamEventType.CENTER_END,
+        stage=center,
+        message=message,
+        data={"sequence": sequence},
+    )
+
+
+def inquiry_event(question: str, suggested_modes: list[str] | None = None) -> StreamEvent:
+    return StreamEvent(
+        type=StreamEventType.INQUIRY,
+        message=question,
+        data={"suggested_modes": suggested_modes or []},
+    )
+
+
+def knowledge_candidates_event(groups: dict[str, Any]) -> StreamEvent:
+    primary = groups.get("primary", [])
+    related = groups.get("related", [])
+    broad = groups.get("broad", [])
+    all_candidates = groups.get("all", primary + related + broad)
+    return StreamEvent(
+        type=StreamEventType.CONTENT,
+        stage="knowledge_graph",
+        message="检测到新知识节点候选",
+        data={
+            "type": "knowledge_graph_candidates",
+            "question": "检测到以下新概念，是否加入知识图谱？",
+            "primary": primary,
+            "related": related,
+            "broad": broad,
+            "candidates": all_candidates,
+        },
+    )

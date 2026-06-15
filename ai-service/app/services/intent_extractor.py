@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 import re
@@ -15,26 +14,61 @@ logger = logging.getLogger(__name__)
 INTENT_TYPES = Literal[
     "exercise_gen", "resource_gen", "tutor_question",
     "learning_path", "solve_problem", "flashcard_gen",
-    "profile_building", "unknown",
+    "profile_building", "explain", "code_example",
+    "visualize", "knowledge_graph", "diagnose", "unknown",
 ]
+
+INTENT_CENTER_MAP: dict[str, str] = {
+    "tutor_question": "auto",
+    "explain": "auto",
+    "solve_problem": "auto",
+    "diagnose": "auto",
+    "learning_path": "plan",
+    "exercise_gen": "exercise",
+    "resource_gen": "resource",
+    "code_example": "resource",
+    "visualize": "visualization",
+    "knowledge_graph": "visualization",
+    "flashcard_gen": "resource",
+    "profile_building": "auto",
+    "unknown": "auto",
+}
+
+_CENTER_EXECUTION_ORDER = {
+    "plan": 1,
+    "auto": 2,
+    "resource": 3,
+    "exercise": 4,
+    "visualization": 5,
+}
 
 
 class ExerciseParams(BaseModel):
-    topic: str = Field(default="", min_length=1)
+    topic: str = Field(default="AI基础", min_length=1)
     count: int = Field(default=3, ge=1, le=20)
     difficulty: Literal["easy", "medium", "hard"] = Field(default="medium")
 
 
 class ResourceParams(BaseModel):
-    topic: str = Field(default="", min_length=1)
+    topic: str = Field(default="AI基础", min_length=1)
 
 
 class TutorParams(BaseModel):
     question: str = Field(..., min_length=1)
 
 
+class ExplainParams(BaseModel):
+    topic: str = Field(default="AI基础", min_length=1)
+    question: str = Field(default="", min_length=1)
+
+
+class CodeExampleParams(BaseModel):
+    topic: str = Field(default="AI基础", min_length=1)
+    language: str = Field(default="python")
+
+
 class LearningPathParams(BaseModel):
-    topic: str = Field(default="", min_length=1)
+    topic: str = Field(default="AI基础", min_length=1)
     level: Literal["beginner", "intermediate", "advanced"] = Field(default="beginner")
 
 
@@ -43,7 +77,7 @@ class SolveParams(BaseModel):
 
 
 class FlashcardParams(BaseModel):
-    topic: str = Field(default="", min_length=1)
+    topic: str = Field(default="AI基础", min_length=1)
     count: int = Field(default=5, ge=1, le=20)
 
 
@@ -51,14 +85,36 @@ class ProfileBuildingParams(BaseModel):
     message: str = Field(..., min_length=1)
 
 
+class VisualizeParams(BaseModel):
+    topic: str = Field(default="AI基础", min_length=1)
+    viz_type: str = Field(default="auto")
+
+
+class KnowledgeGraphParams(BaseModel):
+    topic: str = Field(default="AI基础", min_length=1)
+    depth: int = Field(default=2, ge=1, le=4)
+
+
+class DiagnoseParams(BaseModel):
+    topic: str = Field(default="AI基础", min_length=1)
+    skills: list[str] = Field(default_factory=list)
+    prior_mastery: dict[str, float] = Field(default_factory=dict)
+    attempts: list[dict] = Field(default_factory=list)
+
+
 PARAMS_BY_INTENT: dict[str, type[BaseModel]] = {
     "exercise_gen": ExerciseParams,
     "resource_gen": ResourceParams,
     "tutor_question": TutorParams,
+    "explain": ExplainParams,
+    "code_example": CodeExampleParams,
     "learning_path": LearningPathParams,
     "solve_problem": SolveParams,
     "flashcard_gen": FlashcardParams,
     "profile_building": ProfileBuildingParams,
+    "visualize": VisualizeParams,
+    "knowledge_graph": KnowledgeGraphParams,
+    "diagnose": DiagnoseParams,
 }
 
 
@@ -85,6 +141,14 @@ class IntentResult:
 
 
 @dataclass
+class MultiIntentResult:
+    intents: list[IntentResult] = field(default_factory=list)
+    is_clear: bool = True
+    inquiry_question: str = ""
+    raw_message: str = ""
+
+
+@dataclass
 class IntentDef:
     intent: INTENT_TYPES
     params_model: type[BaseModel]
@@ -99,7 +163,7 @@ INTENT_REGISTRY: list[IntentDef] = [
         intent="exercise_gen",
         params_model=ExerciseParams,
         prompt="用户想要生成练习题。从消息中提取：topic(主题)、count(题数,默认3)、difficulty(easy/medium/hard,默认medium)",
-        keywords=["出题", "题目", "练习", "做题", "习题", "出几道", "来几道"],
+        keywords=["出题", "题目", "练习", "做题", "习题", "出几道", "来几道", "道题"],
         exclusive_keywords=[],
     ),
     IntentDef(
@@ -110,11 +174,25 @@ INTENT_REGISTRY: list[IntentDef] = [
         exclusive_keywords=["出题", "闪卡", "卡片"],
     ),
     IntentDef(
+        intent="code_example",
+        params_model=CodeExampleParams,
+        prompt="用户想要代码示例。从消息中提取：topic(主题)、language(编程语言,默认python)",
+        keywords=["代码", "例子", "示例", "代码示例", "写一个", "怎么写", "实现"],
+        exclusive_keywords=["出题"],
+    ),
+    IntentDef(
         intent="tutor_question",
         params_model=TutorParams,
         prompt="用户在问一个问题需要答疑。从消息中提取：question(完整问题文本)",
         keywords=["?", "？", "什么", "为什么", "怎么", "如何", "是什么"],
         exclusive_keywords=[],
+    ),
+    IntentDef(
+        intent="explain",
+        params_model=ExplainParams,
+        prompt="用户希望获得某个知识点的讲解。从消息中提取：topic(主题)、question(问题)",
+        keywords=["讲解", "解释", "说明", "介绍一下", "是什么", "原理"],
+        exclusive_keywords=["出题"],
     ),
     IntentDef(
         intent="learning_path",
@@ -138,6 +216,28 @@ INTENT_REGISTRY: list[IntentDef] = [
         exclusive_keywords=[],
     ),
     IntentDef(
+        intent="visualize",
+        params_model=VisualizeParams,
+        prompt="用户希望生成图表、流程图或可视化内容。从消息中提取：topic(主题)",
+        keywords=["画", "图", "图表", "流程图", "可视化", "画一下"],
+        exclusive_keywords=[],
+    ),
+    IntentDef(
+        intent="knowledge_graph",
+        params_model=KnowledgeGraphParams,
+        prompt="用户希望查看知识图谱。从消息中提取：topic(主题)、depth(深度,默认2)",
+        keywords=["知识图谱", "图谱", "关系图", "知识结构"],
+        exclusive_keywords=[],
+    ),
+    IntentDef(
+        intent="diagnose",
+        params_model=DiagnoseParams,
+        prompt="用户希望进行学习诊断或测试自己的掌握情况。从消息中提取：topic(主题)、skills(技能列表)",
+        keywords=["诊断", "测试", "掌握", "薄弱", "测一下", "考核", "测验", "摸底", "检查一下"],
+        exclusive_keywords=[],
+        confidence=0.8,
+    ),
+    IntentDef(
         intent="profile_building",
         params_model=ProfileBuildingParams,
         prompt="用户在介绍自己的学习背景、基础水平或学习目标，应进行画像构建对话",
@@ -154,11 +254,12 @@ INTENT_REGISTRY: list[IntentDef] = [
 
 
 def _build_extraction_prompt() -> str:
-    parts = ["分析用户消息，判断意图并提取参数。返回JSON。\n意图列表："]
+    parts = ["分析用户消息，判断一个或多个意图并提取参数。返回JSON。\n意图列表："]
     for i, d in enumerate(INTENT_REGISTRY, 1):
         parts.append(f"{i}. {d.intent} - {d.prompt}")
     parts.append(f"{len(INTENT_REGISTRY) + 1}. unknown - 无法识别")
-    parts.append('\n返回格式：{"intent":"exercise_gen","params":{"topic":"...","count":5},"confidence":0.95}')
+    parts.append('\n返回格式：{"intents":[{"intent":"exercise_gen","params":{"topic":"...","count":5},"confidence":0.95}],"is_clear":true}')
+    parts.append("is_clear 表示意图是否清晰可执行；若模糊则设为 false。")
     return "\n".join(parts)
 
 
@@ -186,19 +287,17 @@ def _score_intent(message: str, intent_def: IntentDef) -> float:
 
 
 def _extract_topic(message: str) -> str:
-    """从消息中提取主题词。先匹配预定义关键词，失败则基于分词+词长启发式提取。
-    这是 mock 模式的轻量方案——不需要 LLM，但精度有限。适合快速原型阶段。"""
     for kw in TOPIC_KEYWORDS:
         if kw.lower() in message.lower():
             return kw
-    # Fallback: extract CJK char sequences (2-4 chars) and alpha words
     cleaned = re.sub(r"[，。？?.!！\s、；：""''「」【】（）()]+", " ", message)
     for word in ["给我", "生成", "资源", "资料", "关于", "的", "专题",
                   "来几道", "出几道", "几张", "我想", "想要", "帮我", "请",
-                  "一个", "一些", "一道", "几道"]:
+                  "一个", "一些", "一道", "几道", "规划", "路径", "学习路径",
+                  "并", "一下"]:
         cleaned = cleaned.replace(word, " ")
     candidates = re.findall(r"[一-鿿]{2,4}|[a-zA-Z0-9]+", cleaned)
-    return " ".join(candidates[:3])[:30] or message[:30]
+    return " ".join(candidates[:3])[:30] or message[:30] or "AI基础"
 
 
 def _mock_extract_params(intent: INTENT_TYPES, message: str) -> dict:
@@ -234,6 +333,14 @@ def _mock_extract_params(intent: INTENT_TYPES, message: str) -> dict:
     if intent == "profile_building":
         return {"message": message.strip()}
 
+    if intent == "diagnose":
+        return {
+            "topic": _extract_topic(message),
+            "skills": [_extract_topic(message)],
+            "prior_mastery": {},
+            "attempts": [],
+        }
+
     return {}
 
 
@@ -247,84 +354,170 @@ class IntentExtractor:
         if not message or not message.strip():
             return IntentResult(intent="unknown", raw_message=message)
 
+        multi_result = await self.extract_multi(message)
+        if multi_result.intents:
+            return multi_result.intents[0]
+        return IntentResult(intent="unknown", raw_message=message)
+
+    async def extract_multi(
+        self,
+        message: str,
+        max_intents: int = 3,
+        clarity_threshold: float = 0.5,
+    ) -> MultiIntentResult:
+        if not message or not message.strip():
+            return MultiIntentResult(
+                intents=[IntentResult(intent="unknown", raw_message=message)],
+                is_clear=False,
+                inquiry_question="你想了解什么？",
+                raw_message=message,
+            )
+
         if self.use_mock:
-            return self._extract_mock(message)
+            return self._extract_multi_mock(message, max_intents, clarity_threshold)
+        return await self._extract_multi_llm(message, max_intents, clarity_threshold)
 
-        return await self._extract_llm(message)
-
-    def _extract_mock(self, message: str) -> IntentResult:
-        scored = [
-            (_score_intent(message, d), d) for d in INTENT_REGISTRY
-        ]
+    def _extract_multi_mock(
+        self,
+        message: str,
+        max_intents: int,
+        clarity_threshold: float,
+    ) -> MultiIntentResult:
+        scored = [(_score_intent(message, d), d) for d in INTENT_REGISTRY]
         scored.sort(key=lambda x: -x[0])
 
-        best_score, best_def = scored[0]
-
-        if best_score >= 0.3:
-            params = _mock_extract_params(best_def.intent, message)
-            model = PARAMS_BY_INTENT.get(best_def.intent)
-            if model:
-                try:
-                    validated = model(**params)
-                    return IntentResult(
-                        intent=best_def.intent,
-                        params=validated.model_dump(),
-                        confidence=min(best_score * 0.7 + 0.3, 0.95),
-                        raw_message=message,
-                    )
-                except ValidationError as e:
-                    errors = [f"{err['loc'][0]}: {err['msg']}" for err in e.errors()]
-                    return IntentResult(
-                        intent=best_def.intent,
-                        params=params,
-                        confidence=best_score * 0.4,
-                        raw_message=message,
-                        errors=errors,
-                    )
-
-        return IntentResult(
-            intent="tutor_question",
-            params={"question": message.strip()},
-            confidence=0.5,
-            raw_message=message,
-        )
-
-    async def _extract_llm(self, message: str) -> IntentResult:
-        try:
-            llm = get_llm_service()
-            prompt = EXTRACTION_PROMPT + f"\n\n用户消息：{message}\n\n解析意图，返回JSON："
-            response = await llm.chat([{"role": "user", "content": prompt}])
-            data = parse_llm_json(response, fallback={}, expected_key="intent")
-            if not isinstance(data, dict) or "intent" not in data:
-                return IntentResult(intent="unknown", raw_message=message)
-
-            intent = data.get("intent", "unknown")
-            params = data.get("params", {})
-            model = PARAMS_BY_INTENT.get(intent)
+        selected: list[IntentResult] = []
+        for score, intent_def in scored:
+            if score < 0.3:
+                continue
+            params = _mock_extract_params(intent_def.intent, message)
+            model = PARAMS_BY_INTENT.get(intent_def.intent)
             if model:
                 try:
                     validated = model(**params)
                     params = validated.model_dump()
                 except ValidationError as e:
                     errors = [f"{err['loc'][0]}: {err['msg']}" for err in e.errors()]
-                    return IntentResult(
-                        intent=intent,
+                    selected.append(IntentResult(
+                        intent=intent_def.intent,
                         params=params,
-                        confidence=data.get("confidence", 0.0),
+                        confidence=score * 0.4,
                         raw_message=message,
                         errors=errors,
-                    )
-
-            try:
-                conf = float(data.get("confidence", 0.0))
-            except (ValueError, TypeError):
-                conf = 0.0
-            return IntentResult(
-                intent=intent,
+                    ))
+                    continue
+            selected.append(IntentResult(
+                intent=intent_def.intent,
                 params=params,
-                confidence=conf,
+                confidence=min(score * 0.7 + 0.3, 0.95),
+                raw_message=message,
+            ))
+            if len(selected) >= max_intents:
+                break
+
+        if not selected:
+            selected.append(IntentResult(
+                intent="tutor_question",
+                params={"question": message.strip()},
+                confidence=0.5,
+                raw_message=message,
+            ))
+
+        best_confidence = selected[0].confidence
+        is_clear = best_confidence >= clarity_threshold
+
+        return MultiIntentResult(
+            intents=selected,
+            is_clear=is_clear,
+            inquiry_question=self._build_inquiry_question(selected),
+            raw_message=message,
+        )
+
+    async def _extract_multi_llm(
+        self,
+        message: str,
+        max_intents: int,
+        clarity_threshold: float,
+    ) -> MultiIntentResult:
+        try:
+            llm = get_llm_service()
+            prompt = EXTRACTION_PROMPT + f"\n\n用户消息：{message}\n\n解析意图，返回JSON："
+            response = await llm.chat([{"role": "user", "content": prompt}])
+            data = parse_llm_json(response, fallback={}, expected_key="intents")
+
+            if not isinstance(data, dict):
+                return self._fallback_multi(message)
+
+            raw_intents = data.get("intents")
+            if raw_intents is None and "intent" in data:
+                raw_intents = [data]
+            if not isinstance(raw_intents, list):
+                raw_intents = [raw_intents] if isinstance(raw_intents, dict) else []
+
+            selected: list[IntentResult] = []
+            for item in raw_intents[:max_intents]:
+                if not isinstance(item, dict):
+                    continue
+                intent = item.get("intent", "unknown")
+                params = item.get("params", {})
+                model = PARAMS_BY_INTENT.get(intent)
+                if model:
+                    try:
+                        validated = model(**params)
+                        params = validated.model_dump()
+                    except ValidationError as e:
+                        errors = [f"{err['loc'][0]}: {err['msg']}" for err in e.errors()]
+                        selected.append(IntentResult(
+                            intent=intent,
+                            params=params,
+                            confidence=float(item.get("confidence", 0.0)) * 0.5,
+                            raw_message=message,
+                            errors=errors,
+                        ))
+                        continue
+                selected.append(IntentResult(
+                    intent=intent,
+                    params=params,
+                    confidence=float(item.get("confidence", 0.0)),
+                    raw_message=message,
+                ))
+
+            if not selected:
+                return self._fallback_multi(message)
+
+            is_clear = data.get("is_clear", True)
+            if not isinstance(is_clear, bool):
+                is_clear = selected[0].confidence >= clarity_threshold
+
+            return MultiIntentResult(
+                intents=selected,
+                is_clear=is_clear,
+                inquiry_question=data.get("inquiry_question") or self._build_inquiry_question(selected),
                 raw_message=message,
             )
         except Exception as e:
-            logger.error(f"Intent extraction failed: {e}")
-            return IntentResult(intent="unknown", raw_message=message)
+            logger.error(f"Multi-intent extraction failed: {e}")
+            return self._fallback_multi(message)
+
+    def _fallback_multi(self, message: str) -> MultiIntentResult:
+        result = IntentResult(
+            intent="tutor_question",
+            params={"question": message.strip()},
+            confidence=0.5,
+            raw_message=message,
+        )
+        return MultiIntentResult(
+            intents=[result],
+            is_clear=False,
+            inquiry_question=self._build_inquiry_question([result]),
+            raw_message=message,
+        )
+
+    @staticmethod
+    def _build_inquiry_question(intents: list[IntentResult]) -> str:
+        if not intents:
+            return "你想了解什么？"
+        intent_names = [r.intent for r in intents]
+        if len(intent_names) == 1:
+            return f"检测到你可能有【{intent_names[0]}】的需求，需要我帮你处理吗？"
+        return f"检测到你可能有多个需求：{', '.join(intent_names)}，想先处理哪个？"

@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 class CodeState(TypedDict, total=False):
     topic: str
+    code_language: str
     student_profile: dict
     outline: dict
     whiteboard_context: str
@@ -61,6 +62,9 @@ class CodeAgent(BaseAgent):
 
     async def _generate_node(self, state: CodeState) -> dict:
         topic = state.get("topic", "")
+        code_language = state.get("code_language", "python").lower()
+        if code_language not in self._supported_languages():
+            code_language = "python"
         student_profile = state.get("student_profile", {})
         outline = state.get("outline", {})
         whiteboard_context = state.get("whiteboard_context", "")
@@ -78,14 +82,14 @@ class CodeAgent(BaseAgent):
             {
                 "topic": topic,
                 "topic_summary": f"{focus}的代码实操",
-                "objectives": f"通过可运行的代码示例掌握{focus}的核心实现",
+                "objectives": f"通过可运行的{code_language}代码示例掌握{focus}的核心实现",
+                "code_language": code_language,
                 "student_profile": self._format_profile(student_profile),
                 "whiteboard_context": whiteboard_context,
                 "peer_context": peer_context,
             },
         )
 
-        language = "python"
         code = ""
         explanation = ""
 
@@ -96,29 +100,39 @@ class CodeAgent(BaseAgent):
             fallback={},
             validator=self._validate_code,
         )
-        language = result.get("language", "python")
-        code = result.get("code", "")
-        explanation = result.get("explanation", "")
+        language = result.get("language", code_language) if result else code_language
+        code = result.get("code", "") if result else ""
+        explanation = result.get("explanation", "") if result else ""
+
+        if not code:
+            code = self._fallback_code(language, topic)
+            explanation = f"以上为 {language} 基础代码模板，可根据知识点逐步扩展。"
 
         content = self._render_content(topic, language, code, explanation)
-        heading = f"{topic} 代码示例"
+        heading = f"{topic} {language} 代码示例"
 
         blocks = [{"type": "code", "heading": heading, "content": content}]
 
         logger.info(f"CodeAgent generated code ({language}, {len(code)} chars) for topic '{topic}'")
         return {
             "blocks": blocks,
-            "response": f"已生成「{topic}」的代码实操案例。",
+            "response": f"已生成「{topic}」的 {language} 代码实操案例。",
         }
 
+    @staticmethod
+    def _supported_languages() -> list[str]:
+        return ["python", "java", "cpp", "c", "javascript", "typescript", "go", "rust", "sql", "matlab"]
+
     def _render_content(self, topic: str, language: str, code: str, explanation: str) -> str:
-        """渲染为 Markdown fenced code block + 解释"""
         if code:
             return f"```{language}\n{code}\n```\n\n{explanation}"
 
-        # Fallback
+        return self._fallback_code(language, topic)
+
+    @staticmethod
+    def _fallback_code(language: str, topic: str) -> str:
         return (
-            f"```python\n"
+            f"```{language}\n"
             f"# {topic} — 代码示例\n"
             f"# 根据你的学习进度自动生成\n\n"
             f"def example():\n"

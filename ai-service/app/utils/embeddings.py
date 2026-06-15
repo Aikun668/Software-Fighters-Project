@@ -1,11 +1,17 @@
 import logging
+import os
 from typing import Optional
 
+import numpy as np
 from chromadb import Documents, EmbeddingFunction, Embeddings
 
 logger = logging.getLogger(__name__)
 
 _EMBEDDING_FN_CACHE: Optional["BGEZhEmbedding"] = None
+
+# Hugging Face 镜像（国内网络必需，避免下载超时）
+_HF_MIRROR = os.getenv("HF_ENDPOINT", "https://hf-mirror.com")
+os.environ.setdefault("HF_ENDPOINT", _HF_MIRROR)
 
 
 class BGEZhEmbedding(EmbeddingFunction):
@@ -69,3 +75,18 @@ def get_embedding_signature() -> dict:
     if isinstance(fn, BGEZhEmbedding):
         return dict(BGE_SIGNATURE)
     return dict(ONNX_SIGNATURE)
+
+
+def semantic_similarity(a: str, b: str) -> float:
+    """Compute cosine similarity between two texts using the shared embedding model.
+
+    Embeddings are already L2-normalized, so the dot product equals cosine similarity.
+    """
+    if not a.strip() or not b.strip():
+        return 0.0
+
+    fn = get_embedding_fn()
+    embeddings = fn([a, b])
+    vec_a = np.array(embeddings[0], dtype=np.float32)
+    vec_b = np.array(embeddings[1], dtype=np.float32)
+    return float(np.dot(vec_a, vec_b))

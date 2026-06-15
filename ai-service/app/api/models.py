@@ -30,6 +30,11 @@ class ExportPptxRequest(BaseModel):
     title: str = Field(default="AI学习资源", description="PPT 标题")
 
 
+class ExportPdfRequest(BaseModel):
+    content_blocks: list = Field(default_factory=list, description="PDF 内容块")
+    title: str = Field(default="AI学习资源", description="PDF 标题")
+
+
 # ── Tutor ──────────────────────────────────────────────────────
 
 class TutorChatRequest(BaseModel):
@@ -90,6 +95,7 @@ class UnifiedChatRequest(BaseModel):
     style: Optional[Literal["standard", "socratic"]] = Field(default="standard", description="tutor 子风格")
     messages: list[dict] = Field(default_factory=list, description="历史消息列表（Java 传入）")
     student_profile: dict = Field(default_factory=dict, description="学生画像（Java 传入）")
+    images: list[str] = Field(default_factory=list, description="用户上传的图片 URL 列表（Java 传入，可选）")
 
 
 # ── Inquiry ──────────────────────────────────────────────────────
@@ -114,6 +120,77 @@ class KnowledgeGraphNodeRequest(BaseModel):
     masteries: dict[str, float] = Field(default_factory=dict, description="用户各节点掌握度")
     total_exercises: int = Field(default=0, description="该节点练习总数")
     last_practiced: Optional[str] = Field(default=None, description="上次练习时间 ISO 字符串")
+
+
+class GraphExtractRequest(BaseModel):
+    course_id: str = Field(..., min_length=1, description="课程 ID")
+    user_message: str = Field(..., min_length=1, description="用户消息")
+    assistant_reply: str = Field(..., min_length=1, description="助手回复")
+    existing_node_ids: list[str] = Field(default_factory=list, description="已存在的节点 ID 列表")
+
+
+class GraphUpdateRequest(BaseModel):
+    action: Literal["add_node", "add_edge"] = Field(..., description="更新动作类型")
+    data: dict = Field(..., description="动作负载数据")
+
+
+class GraphNodesRequest(BaseModel):
+    course_id: str = Field(..., min_length=1, description="课程 ID")
+    updates: list[GraphUpdateRequest] = Field(default_factory=list, description="节点/边更新列表")
+
+
+class MasteryEvent(BaseModel):
+    node_id: str = Field(..., min_length=1, description="知识图谱节点 ID")
+    event_type: Literal[
+        "resource_viewed", "exercise_done", "exercise_failed", "tutor_question_asked"
+    ] = Field(..., description="学习事件类型")
+    score: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="分数 (exercise_done 时需传)")
+
+
+class MasteryUpdateRequest(BaseModel):
+    course_id: str = Field(default="ai_intro", description="课程 ID")
+    masteries: dict[str, float] = Field(default_factory=dict, description="当前各节点掌握度 {node_id: mastery}")
+    events: list[MasteryEvent] = Field(..., min_length=1, description="学习事件列表")
+
+
+class GraphReloadRequest(BaseModel):
+    """管理员触发热更新骨架。"""
+    pass
+
+
+class GraphProgressRequest(BaseModel):
+    course_id: str = Field(default="ai_intro", description="课程 ID")
+    masteries: dict[str, float] = Field(default_factory=dict, description="各节点掌握度")
+
+
+class GraphPrerequisiteRequest(BaseModel):
+    course_id: str = Field(default="ai_intro", description="课程 ID")
+    node_id: str = Field(..., min_length=1, description="待检查的节点 ID")
+    masteries: dict[str, float] = Field(default_factory=dict, description="各节点掌握度")
+    threshold: float = Field(default=0.6, ge=0.0, le=1.0, description="前置条件通过阈值")
+
+
+class NodeDeleteRequest(BaseModel):
+    course_id: str = Field(default="ai_intro", description="课程 ID")
+
+
+class NodeUpdateRequest(BaseModel):
+    course_id: str = Field(default="ai_intro", description="课程 ID")
+    updates: dict = Field(..., description="要更新的字段 {name?, description?, difficulty?, category?, type?}")
+
+
+class GraphSuggestEdgesRequest(BaseModel):
+    course_id: str = Field(default="ai_intro", description="课程 ID")
+
+
+class GraphMermaidRequest(BaseModel):
+    course_id: str = Field(default="ai_intro", description="课程 ID")
+    masteries: dict[str, float] = Field(default_factory=dict, description="各节点掌握度")
+
+
+class GraphLayeredRequest(BaseModel):
+    course_id: str = Field(default="ai_intro", description="课程 ID")
+    masteries: dict[str, float] = Field(default_factory=dict, description="各节点掌握度")
 
 
 # ── Plans ────────────────────────────────────────────────────────

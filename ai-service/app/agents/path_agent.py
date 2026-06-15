@@ -90,7 +90,7 @@ class PathAgent(BaseAgent):
             for i, ch in enumerate(chapters)
         ]
 
-        concept_graph = self._build_concept_graph(chapters)
+        concept_graph = self._build_concept_graph(chapters, topic=state.get("topic", ""))
 
         return {
             "concept_graph": concept_graph,
@@ -119,12 +119,14 @@ class PathAgent(BaseAgent):
             {"title": f"{subject}体系构建", "learning_objectives": [f"构建{subject}知识体系"], "content_type": "practice", "prerequisites": [f"{subject}项目实战"], "summary": f"{subject}体系"},
         ]
 
-    def _build_concept_graph(self, chapters: list[dict]) -> dict:
-        """从骨架 JSON 加载知识图谱节点和边（不再从 LLM 章节生成）。"""
+    def _build_concept_graph(self, chapters: list[dict], topic: str = "") -> dict:
+        """按主题裁剪知识图谱子图，不再返回全量骨架。"""
         from app.services.graph_service import get_graph_service
 
-        skeleton = get_graph_service().load_skeleton()
-        return {"nodes": skeleton["nodes"], "edges": skeleton["edges"]}
+        gs = get_graph_service()
+        if topic:
+            return gs.get_subgraph_for_topic(topic)
+        return {"nodes": gs.load_skeleton()["nodes"], "edges": gs.load_skeleton()["edges"]}
 
     async def _revise_node(self, state: PathState) -> dict:
         """Revise: LLM 自我审查 + 修正 drafted 路径"""

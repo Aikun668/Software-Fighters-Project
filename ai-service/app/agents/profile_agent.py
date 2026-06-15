@@ -354,23 +354,43 @@ class ProfileAgent(BaseAgent):
             new_val = fragment.get(dim)
             if new_val is None:
                 continue
+            current_value = new_profile.get(dim)
             sc = dict(stability.get(dim, {"value": None, "count": 0, "status": None}))
-            if sc["value"] == new_val:
-                sc["count"] += 1
+
+            if current_value == new_val:
+                sc = {"value": new_val, "count": 0, "status": "confirmed"}
             else:
-                sc = {"value": new_val, "count": 1, "status": "tentative"}
-            if sc["count"] >= STABILITY_N:
-                sc["status"] = "confirmed"
+                if sc.get("value") == new_val:
+                    sc["count"] = sc.get("count", 0) + 1
+                else:
+                    sc = {"value": new_val, "count": 1, "status": "tentative"}
+
+                if sc["count"] >= STABILITY_N:
+                    new_profile[dim] = new_val
+                    sc = {"value": new_val, "count": 0, "status": "confirmed"}
+                    changed = True
+
             stability[dim] = sc
-            if new_val != new_profile.get(dim):
-                new_profile[dim] = new_val
-                changed = True
 
         if stability != (new_profile.get("stability_counter") or {}):
             new_profile["stability_counter"] = stability
             changed = True
 
         return new_profile, changed
+
+    def _apply_merge(self, profile_obj, fragment: dict) -> bool:
+        profile = {d: getattr(profile_obj, d, None) for d in DIMENSIONS}
+        profile["tag_weights"] = getattr(profile_obj, "tag_weights", None)
+        profile["stability_counter"] = getattr(profile_obj, "stability_counter", None)
+        profile["entries"] = getattr(profile_obj, "entries", None)
+        profile = {k: v for k, v in profile.items() if v is not None}
+
+        new_profile, changed = self._apply_merge_in_memory(profile, fragment)
+
+        for k, v in new_profile.items():
+            setattr(profile_obj, k, v)
+
+        return changed
 
     def _merge_in_memory(self, old: dict, fragment: dict) -> tuple[dict, bool]:
         """纯内存合并（兼容旧接口）"""

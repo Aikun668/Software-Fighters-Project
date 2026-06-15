@@ -17,8 +17,6 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, AsyncGenerator
 
-from langgraph.graph import StateGraph
-
 from app.services.llm_service import create_llm, AgentModelProfile, ModelConfig
 from app.utils.prompt_loader import build_prompt
 from app.orchestration.agent_turn_summary import AgentTurnSummary
@@ -209,7 +207,7 @@ class BaseAgent(ABC):
         expected_key: str | None = None,
         fallback: Any = None,
         max_retries: int = 1,
-        validator: "callable | None" = None,
+        validator: "Callable | None" = None,
         llm: "Any | None" = None,
     ) -> Any:
         """
