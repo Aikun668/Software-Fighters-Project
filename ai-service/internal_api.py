@@ -52,6 +52,15 @@ from app.api.models import (
     PlanStatusRequest,
     ReviewScheduleRequest,
     SummaryRequest,
+    CategorizeExerciseRequest,
+    SessionAnalyzeRequest,
+    DashboardRequest,
+    ProfileEnrichRequest,
+    CompleteStepRequest,
+    TodayTasksRequest,
+    ProgressUpdateRequest,
+    NodeStatusChangeRequest,
+    ResourceLinkRequest,
 )
 from app.services.plan_service import get_plan_service
 from app.services.knowledge_extraction import extract_knowledge_nodes
@@ -64,7 +73,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/internal")
 
-USE_CENTER_PIPELINE = os.getenv("USE_CENTER_PIPELINE", "0") == "1"
 _chat_center_singleton = None
 _chat_center_lock = threading.Lock()
 
@@ -74,7 +82,6 @@ _content_agent_singleton = None
 _exercise_agent_singleton = None
 _path_agent_singleton = None
 _mindmap_agent_singleton = None
-_reading_agent_singleton = None
 _code_agent_singleton = None
 _profile_workflow_singleton = None
 _resource_workflow_singleton = None
@@ -87,7 +94,7 @@ def _get_chat_center():
     if _chat_center_singleton is None:
         with _chat_center_lock:
             if _chat_center_singleton is None:
-                _chat_center_singleton = ChatCenter(use_p1_agents=USE_CENTER_PIPELINE)
+                _chat_center_singleton = ChatCenter()
     return _chat_center_singleton
 
 
@@ -141,14 +148,6 @@ def _get_mindmap_agent():
         from app.agents.mindmap_agent import MindMapAgent
         _mindmap_agent_singleton = MindMapAgent(use_mock_llm=_get_mock_flag())
     return _mindmap_agent_singleton
-
-
-def _get_reading_agent():
-    global _reading_agent_singleton
-    if _reading_agent_singleton is None:
-        from app.agents.reading_agent import ReadingAgent
-        _reading_agent_singleton = ReadingAgent(use_mock_llm=_get_mock_flag())
-    return _reading_agent_singleton
 
 
 _solve_agent_singleton = None
@@ -344,11 +343,12 @@ async def profile_chat(body: ProfileChatRequest):
 async def resources_generate(body: ResourceGenRequest):
     topic = body.topic.strip()
     student_profile = body.student_profile
+    resource_type = body.resource_type
 
     workflow = _get_resource_workflow()
 
     async def event_stream():
-        queue: asyncio.Queue = asyncio.Queue()
+        queue: asyncio.Queue = asyncio.Queue(maxsize=256)
         try:
             async def run_workflow():
                 try:
@@ -356,6 +356,7 @@ async def resources_generate(body: ResourceGenRequest):
                         "user_id": body.user_id,
                         "topic": topic,
                         "student_profile": student_profile,
+                        "resource_type": resource_type or "",
                         "event_queue": queue,
                     })
                     await queue.put(done_event({
@@ -445,19 +446,24 @@ async def tutor_chat(body: TutorChatRequest):
 @router.post("/exercise/generate")
 async def exercise_generate(body: ExerciseGenRequest):
     topic = body.topic.strip()
+    knowledge_node_id = body.knowledge_node_id
+    strategy = body.strategy
     count = body.count
     difficulty = body.difficulty
     student_profile = body.student_profile
 
     agent = _get_exercise_agent()
+    display_topic = knowledge_node_id or topic
 
     async def event_stream():
         try:
             await asyncio.sleep(0.3)
-            yield f"data: {json.dumps({'type': 'progress', 'stage': 'plan', 'content': f'正在规划「{topic}」的练习题...'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'progress', 'stage': 'plan', 'content': f'正在规划「{display_topic}」的练习题...'}, ensure_ascii=False)}\n\n"
 
             state = await agent.run({
                 "topic": topic,
+                "knowledge_node_id": knowledge_node_id,
+                "strategy": strategy,
                 "count": count,
                 "difficulty": difficulty,
                 "student_profile": student_profile,
@@ -547,15 +553,21 @@ async def export_pptx(body: ExportPptxRequest):
     return api_success({"filename": os.path.basename(result_path)})
 
 
+_EXPORTS_DIR = os.path.join(os.path.dirname(__file__), "exports")
+_ALLOWED_EXTENSIONS = frozenset({".pptx", ".pdf"})
+
+
 @router.get("/resources/download-pptx")
 async def download_pptx(filename: str = Query(...)):
     safe_name = os.path.basename(filename)
-    output_dir = os.path.join(os.path.dirname(__file__), "exports")
-    file_path = os.path.join(output_dir, safe_name)
-
+    ext = os.path.splitext(safe_name)[1].lower()
+    if ext != ".pptx":
+        return api_error(ErrorCode.VALIDATION_ERROR, "不支持的文件类型", status_code=400)
+    file_path = os.path.join(_EXPORTS_DIR, safe_name)
+    if not os.path.realpath(file_path).startswith(os.path.realpath(_EXPORTS_DIR)):
+        return api_error(ErrorCode.VALIDATION_ERROR, "非法文件路径", status_code=400)
     if not os.path.exists(file_path):
         return api_error(ErrorCode.NOT_FOUND, "文件不存在或已过期", status_code=404)
-
     return FileResponse(
         file_path,
         media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
@@ -588,12 +600,14 @@ async def export_pdf(body: ExportPdfRequest):
 @router.get("/resources/download-pdf")
 async def download_pdf(filename: str = Query(...)):
     safe_name = os.path.basename(filename)
-    output_dir = os.path.join(os.path.dirname(__file__), "exports")
-    file_path = os.path.join(output_dir, safe_name)
-
+    ext = os.path.splitext(safe_name)[1].lower()
+    if ext != ".pdf":
+        return api_error(ErrorCode.VALIDATION_ERROR, "不支持的文件类型", status_code=400)
+    file_path = os.path.join(_EXPORTS_DIR, safe_name)
+    if not os.path.realpath(file_path).startswith(os.path.realpath(_EXPORTS_DIR)):
+        return api_error(ErrorCode.VALIDATION_ERROR, "非法文件路径", status_code=400)
     if not os.path.exists(file_path):
         return api_error(ErrorCode.NOT_FOUND, "文件不存在或已过期", status_code=404)
-
     return FileResponse(
         file_path,
         media_type="application/pdf",
@@ -688,7 +702,7 @@ async def exercise_error_analysis(body: ErrorAnalysisRequest):
 
 @router.post("/exercise/grade")
 async def grade_exercise(body: GradeRequest):
-    from app.services.evaluation_service import grade_choice, grade_short_answer
+    from app.services.evaluation_service import grade_choice, grade_short_answer, grade_code
 
     if body.type == "choice":
         if body.user_answer is None or body.correct_answer is None:
@@ -702,6 +716,16 @@ async def grade_exercise(body: GradeRequest):
             body.choices,
             multi=body.multi,
             points=body.points,
+        )
+    elif body.type == "code":
+        if body.user_answer is None:
+            return api_error(
+                ErrorCode.MISSING_REQUIRED_FIELD, "user_answer is required"
+            )
+        result = await grade_code(
+            body.user_answer,
+            body.reference_answer,
+            body.rubric,
         )
     else:
         if body.user_answer is None:
@@ -726,6 +750,54 @@ async def get_evaluation_report(body: EvaluationReportRequest):
 
     report = generate_report(body.evaluation_results)
     return api_success(report)
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Exercise Categorize
+# ═══════════════════════════════════════════════════════════════════
+
+@router.post("/exercise/categorize")
+async def categorize_exercises(body: CategorizeExerciseRequest):
+    """将练习题匹配到知识图谱节点。"""
+    from app.services.exercise_categorization_service import categorize_exercises as _categorize
+
+    exercises = [ex.model_dump() for ex in body.exercises]
+    results = await _categorize(exercises, body.knowledge_nodes, body.course_id)
+    return api_success({"results": results})
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Exercise Session Analytics
+# ═══════════════════════════════════════════════════════════════════
+
+@router.post("/exercise/session/analyze")
+async def analyze_session(body: SessionAnalyzeRequest):
+    """分析一次练习会话，返回逐知识点报告 + 掌握度更新建议。"""
+    from app.services.exercise_analytics_service import analyze_session as _analyze
+
+    records = [r.model_dump() for r in body.records]
+    result = _analyze(records, body.masteries, body.course_id)
+    return api_success(result)
+
+
+@router.post("/exercise/dashboard")
+async def exercise_dashboard(body: DashboardRequest):
+    """练习仪表盘：练习统计 + 薄弱/强项 + 推荐节点。"""
+    from app.services.exercise_analytics_service import get_dashboard as _dashboard
+
+    records = [r.model_dump() for r in body.recent_records]
+    result = _dashboard(body.user_id, body.masteries, records, body.course_id)
+    return api_success(result)
+
+
+@router.post("/exercise/profile/enrich")
+async def enrich_profile(body: ProfileEnrichRequest):
+    """练习数据反哺学生画像：合并薄弱点、强项、技能等级。"""
+    from app.services.exercise_profile_service import enrich_profile as _enrich
+
+    records = [r.model_dump() for r in body.recent_records]
+    result = _enrich(body.user_id, body.student_profile, records, body.session_analysis)
+    return api_success(result)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -971,56 +1043,638 @@ async def get_layered_graph(body: GraphLayeredRequest):
 
 @router.post("/plans/create-from-path")
 async def create_plan_from_path(body: CreatePlanFromPathRequest):
-    """一键生成学习路径。返回 steps + concept_graph，Java 自行创建 plan。"""
+    """一键生成学习计划。
+
+    走新管线：GoalAgent → DecomposeAgent → ScheduleAgent。
+    生成后自动为每个 step 匹配知识图谱节点（knowledge_node_id）。
+    """
     try:
         user_id = body.user_id
         course_id = body.course_id
         student_profile = body.student_profile
+        topic = body.topic or ""
 
-        path_workflow = _get_path_workflow()
-        path_state = await path_workflow.run({
-            "user_id": user_id,
+        # ── 管线：Goal → Decompose → Schedule ─────────────────
+        from app.agents.goal_agent import GoalAgent
+        from app.agents.decompose_agent import DecomposeAgent
+        from app.agents.schedule_agent import ScheduleAgent
+
+        mock = _get_mock_flag()
+        goal_agent = GoalAgent(use_mock_llm=mock)
+        decompose_agent = DecomposeAgent(use_mock_llm=mock)
+        schedule_agent = ScheduleAgent(use_mock_llm=mock)
+
+        # Step 1: Goal extraction
+        goal_state = await goal_agent.run({
+            "input": topic,
+            "context": "",
             "student_profile": student_profile,
-            "topic": body.topic or "",
         })
+        goal = {
+            "goal_title": goal_state.get("goal_title", topic),
+            "target_topic": goal_state.get("target_topic", topic),
+            "target_level": goal_state.get("target_level", "understand"),
+            "deadline": goal_state.get("deadline", ""),
+            "motivation": goal_state.get("motivation", ""),
+            "constraints": goal_state.get("constraints", []),
+        }
 
-        steps = path_state.get("steps", [])
-        concept_graph = path_state.get("concept_graph", {})
+        # Step 2: Decomposition
+        effective_topic = goal.get("target_topic") or topic
+        decompose_state = await decompose_agent.run({
+            "topic": effective_topic,
+            "context": topic,
+            "student_profile": student_profile,
+        })
+        decomposition = {
+            "macro_topics": decompose_state.get("macro_topics", []),
+            "micro_skills": decompose_state.get("micro_skills", []),
+            "prerequisites": decompose_state.get("prerequisites", []),
+        }
+
+        # Step 3: Schedule generation
+        schedule_state = await schedule_agent.run({
+            "goal": goal,
+            "decomposition": decomposition,
+            "student_profile": student_profile,
+            "existing_plan": {},
+        })
+        steps = schedule_state.get("steps", [])
 
         if not steps:
             return api_error(
-                ErrorCode.GENERATION_FAILED, "未能生成学习路径，请确认画像已构建", status_code=400
+                ErrorCode.GENERATION_FAILED, "未能生成学习计划，请确认输入更具体", status_code=400
             )
 
-        # 为每个 step 匹配 knowledge_node_id
-        node_map = {}
-        for node in concept_graph.get("nodes", []):
-            node_map[node.get("name", "")] = node.get("id", "")
-            node_map[node.get("label", "")] = node.get("id", "")
+        # ── Step enrichment: 匹配 knowledge_node_id ────────────
+        plan_steps = await _enrich_steps_with_nodes(steps, course_id)
 
-        plan_steps = []
-        for i, step in enumerate(steps):
-            topic = step.get("topic", "")
-            knowledge_node_id = node_map.get(topic, "")
-            plan_steps.append({
-                "step_order": i + 1,
-                "topic": topic,
-                "knowledge_node_id": knowledge_node_id,
-                "status": step.get("status", "pending"),
-                "estimated_days": step.get("estimated_days", 1),
-                "topic_difficulty": 3,
-            })
+        # ── Normalize milestones: 兼容字符串格式 → {milestone_id, after_step, description} ──
+        raw_milestones = schedule_state.get("milestones", [])
+        milestones = _normalize_milestones(raw_milestones, len(plan_steps))
 
         return api_success({
             "course_id": course_id,
-            "total_steps": len(steps),
+            "total_steps": len(plan_steps),
             "steps": plan_steps,
-            "concept_graph": concept_graph,
-            "summary": path_state.get("response", ""),
+            "title": schedule_state.get("plan_title", f"{effective_topic}学习计划"),
+            "milestones": milestones,
+            "estimated_days": schedule_state.get("estimated_days", 7),
+            "daily_capacity": schedule_state.get("daily_capacity", 3),
+            "concept_graph": decomposition,
+            "summary": schedule_state.get("response", ""),
         })
     except Exception as e:
         logger.error(f"Failed to create plan from path: {e}", exc_info=True)
         return api_error(ErrorCode.INTERNAL_ERROR, "创建学习计划失败，请稍后重试", status_code=500)
+
+
+async def _enrich_steps_with_nodes(steps: list[dict], course_id: str) -> list[dict]:
+    """用知识图谱节点匹配每个 step 的 topic，打上 knowledge_node_id + suggested_resource_types。
+
+    先用图谱已有节点精确匹配（name/id），匹配不到的用 LLM 分类兜底。
+    """
+    from app.services.exercise_categorization_service import categorize_exercises
+
+    # Collect all graph nodes
+    try:
+        graph_service = _get_graph_service()
+        all_nodes = graph_service.load_skeleton().get("nodes", [])
+        dynamic_nodes = graph_service._all_nodes(course_id)
+    except Exception as exc:
+        logger.warning(f"Graph service unavailable during step enrichment: {exc}")
+        all_nodes = []
+        dynamic_nodes = []
+    node_lookup: dict[str, str] = {}
+    node_category: dict[str, str] = {}
+    for n in dynamic_nodes:
+        name = (n.get("name") or "").strip().lower()
+        nid = (n.get("id") or "").strip()
+        if name and nid:
+            node_lookup[name] = nid
+            node_category[name] = (n.get("category") or "").strip()
+
+    def _suggest_resources(topic: str, category: str) -> list[str]:
+        """根据知识点类别建议资源类型。"""
+        cat_lower = category.lower()
+        if cat_lower in ("基础", "foundation", "概念", "concept"):
+            return ["document", "mindmap", "exercise"]
+        elif cat_lower in ("算法", "algorithm", "代码", "code"):
+            return ["document", "code_demo", "exercise", "mindmap"]
+        elif cat_lower in ("应用", "application", "实战", "practice"):
+            return ["document", "case_study", "code_demo", "exercise"]
+        elif cat_lower in ("数学", "math", "理论", "theory"):
+            return ["document", "formula_sheet", "exercise"]
+        else:
+            return ["document", "mindmap", "exercise"]
+
+    # Try exact match first, collect unknowns for LLM classification
+    unknowns: list[dict] = []
+    plan_steps: list[dict] = []
+    for i, step in enumerate(steps):
+        topic = (step.get("topic") or "").strip()
+        matched_id = node_lookup.get(topic.lower(), "")
+        matched_cat = node_category.get(topic.lower(), "")
+
+        if matched_id:
+            plan_steps.append({
+                "step_order": i + 1,
+                "topic": topic,
+                "knowledge_node_id": matched_id,
+                "status": step.get("status", "pending"),
+                "estimated_days": step.get("estimated_days", 1),
+                "topic_difficulty": step.get("topic_difficulty", 3),
+                "suggested_resource_types": _suggest_resources(topic, matched_cat),
+            })
+        else:
+            unknowns.append({"index": i, "topic": topic, "step": step})
+
+    # LLM classification for unmatched steps
+    if unknowns and all_nodes:
+        slim_nodes = [{"id": n.get("id",""), "name": n.get("name",""), "description": n.get("description","")} for n in all_nodes]
+        exercises = [{"question": u["topic"], "answer": "", "question_type": "short_answer"} for u in unknowns]
+        try:
+            results = await categorize_exercises(exercises, slim_nodes, course_id)
+            result_map = {r["index"]: r.get("knowledge_node_id", "") for r in results}
+        except Exception as exc:
+            logger.warning(f"Step enrichment LLM fallback failed: {exc}")
+            result_map = {}
+
+        for u in unknowns:
+            step = u["step"]
+            nid = result_map.get(u["index"], "")
+            plan_steps.append({
+                "step_order": u["index"] + 1,
+                "topic": u["topic"],
+                "knowledge_node_id": nid,
+                "status": step.get("status", "pending"),
+                "estimated_days": step.get("estimated_days", 1),
+                "topic_difficulty": step.get("topic_difficulty", 3),
+                "suggested_resource_types": _suggest_resources(u["topic"], ""),
+            })
+
+    # Sort by step_order
+    plan_steps.sort(key=lambda s: s["step_order"])
+    return plan_steps
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Complete Step — 完成学习步骤后触发巩固
+# ═══════════════════════════════════════════════════════════════════
+
+@router.post("/plans/{plan_id}/complete-step")
+async def complete_plan_step(plan_id: int, body: CompleteStepRequest):
+    """完成一个学习步骤后调用：生成巩固练习题。
+
+    返回值包含 questions 和 recommended_action，前端据此展示「做两道题巩固」。
+    Java 拿到 questions 后存入练习库（带 knowledge_node_id），用户作答后走 exercise 闭环。
+    """
+    try:
+        step = body.step
+        step_topic = step.get("topic", "")
+        knowledge_node_id = step.get("knowledge_node_id", "")
+        plan = body.plan
+        all_steps = body.steps
+
+        # 判断是否最后一两步 → 生成综合性复习题
+        completed = plan.get("completed_steps", 0)
+        total = plan.get("total_steps", len(all_steps))
+        is_near_end = total > 0 and (completed / total) >= 0.8
+
+        mock = _get_mock_flag()
+        from app.agents.exercise_agent import ExerciseAgent
+        exercise_agent = ExerciseAgent(use_mock_llm=mock)
+
+        agent_state = await exercise_agent.run({
+            "topic": step_topic,
+            "knowledge_node_id": knowledge_node_id or None,
+            "strategy": "review",
+            "count": 3 if is_near_end else 2,
+            "difficulty": "medium",
+            "student_profile": {},
+            "purpose": "consolidation",  # 触发 warmup 条件 → 轻松语气
+        })
+
+        questions = agent_state.get("questions", [])
+
+        return api_success({
+            "step_order": step.get("step_order"),
+            "step_completed": True,
+            "recommended_action": "comprehensive_review" if is_near_end else "consolidation",
+            "questions": questions,
+            "message": (
+                "你已经接近计划尾声，来做几道综合题检验整体掌握情况！"
+                if is_near_end
+                else f"完成「{step_topic}」的学习，来做 {len(questions)} 道题巩固一下吧"
+            ),
+        })
+    except Exception as e:
+        logger.error(f"Failed to complete step: {e}", exc_info=True)
+        return api_error(ErrorCode.INTERNAL_ERROR, "生成巩固练习失败", status_code=500)
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Today's Tasks — 今日学习任务 + 资源关联
+# ═══════════════════════════════════════════════════════════════════
+
+@router.post("/plans/{plan_id}/today")
+async def get_today_tasks(plan_id: int, body: TodayTasksRequest):
+    """返回今日应完成的步骤 + 每个步骤的资源建议。
+
+    计算逻辑：
+    1. 根据 plan.start_date + 累计 estimated_days 推算出「今天」对应的步骤区间
+    2. 返回这些步骤的详情（含 knowledge_node_id + suggested_resource_types）
+    3. 若 Java 传入 masteries，附带各节点的掌握度信息
+    """
+    from datetime import date, datetime as dt
+
+    try:
+        plan = body.plan
+        steps = body.steps
+
+        if not plan:
+            return api_error(ErrorCode.NOT_FOUND, "计划不存在", status_code=404)
+
+        # 确定起点日期
+        start_str = body.start_date or plan.get("start_date") or plan.get("created_at")
+        if start_str:
+            try:
+                if isinstance(start_str, str):
+                    start_date = dt.fromisoformat(start_str.replace("Z", "+00:00")).date()
+                else:
+                    start_date = date.today()
+            except (ValueError, TypeError):
+                start_date = date.today()
+        else:
+            start_date = date.today()
+
+        today = date.today()
+        day_index = (today - start_date).days
+        if day_index < 0:
+            day_index = 0
+
+        # 按累计 estimated_days 划分每天的步骤
+        cumulative = 0
+        today_steps: list[dict] = []
+        completed_steps = plan.get("completed_steps") or 0
+        total_steps = len(steps) if steps else plan.get("total_steps", 0)
+
+        for s in sorted(steps, key=lambda x: x.get("step_order", 999)):
+            step_order = s.get("step_order", 0)
+            est = max(s.get("estimated_days", 1), 1)
+
+            # 判断该 step 是否属于今天
+            step_start_day = cumulative
+            step_end_day = cumulative + est
+
+            if step_start_day <= day_index < step_end_day:
+                nid = s.get("knowledge_node_id", "")
+                today_steps.append({
+                    "step_order": step_order,
+                    "topic": s.get("topic", ""),
+                    "knowledge_node_id": nid,
+                    "status": s.get("status", "pending"),
+                    "estimated_days": est,
+                    "topic_difficulty": s.get("topic_difficulty", 3),
+                    "suggested_resource_types": s.get("suggested_resource_types", ["document", "exercise"]),
+                    "day_progress": day_index - step_start_day + 1,
+                    "day_total": est,
+                    "current_mastery": body.masteries.get(nid) if nid else None,
+                })
+
+            cumulative = step_end_day
+
+        # 若 today_steps 为空（计划已完成 / 超出范围），返回最近的未完成步骤
+        if not today_steps and completed_steps < total_steps:
+            pending = [s for s in steps if s.get("status") not in ("completed",)]
+            if pending:
+                s = pending[0]
+                nid = s.get("knowledge_node_id", "")
+                today_steps.append({
+                    "step_order": s.get("step_order", 0),
+                    "topic": s.get("topic", ""),
+                    "knowledge_node_id": nid,
+                    "status": s.get("status", "pending"),
+                    "estimated_days": s.get("estimated_days", 1),
+                    "topic_difficulty": s.get("topic_difficulty", 3),
+                    "suggested_resource_types": s.get("suggested_resource_types", ["document", "exercise"]),
+                    "day_progress": 1,
+                    "day_total": 1,
+                    "current_mastery": body.masteries.get(nid) if nid else None,
+                    "note": "计划进度落后，显示下一个待完成步骤",
+                })
+
+        # 资源生成建议 — 为每个今日步骤提供可直接调用的 resource prompt
+        resource_suggestions = []
+        for ts in today_steps:
+            resource_suggestions.append({
+                "step_order": ts["step_order"],
+                "topic": ts["topic"],
+                "knowledge_node_id": ts.get("knowledge_node_id"),
+                "resource_types": ts.get("suggested_resource_types", []),
+                "gen_prompt": f"请为「{ts['topic']}」生成学习资源，难度等级 {ts.get('topic_difficulty', 3)}/5",
+            })
+
+        return api_success({
+            "plan_id": plan_id,
+            "today": today.isoformat(),
+            "day_index": day_index,
+            "total_days_elapsed": day_index + 1,
+            "steps_due_today": today_steps,
+            "resource_suggestions": resource_suggestions,
+            "next_milestone": _compute_next_milestone(plan, completed_steps),
+            "summary": (
+                f"今日有 {len(today_steps)} 个学习步骤"
+                if today_steps
+                else "今日无待完成步骤，继续保持！"
+            ),
+        })
+    except Exception as e:
+        logger.error(f"Failed to get today tasks: {e}", exc_info=True)
+        return api_error(ErrorCode.INTERNAL_ERROR, "获取今日任务失败", status_code=500)
+
+
+def _compute_next_milestone(plan: dict, completed_steps: int) -> dict | None:
+    """计算下一个里程碑信息。兼容字符串格式 milestone。"""
+    milestones = plan.get("milestones") or []
+    if not milestones:
+        return None
+    if isinstance(milestones[0], str):
+        return None
+    for m in sorted(milestones, key=lambda x: x.get("after_step", 999) if isinstance(x, dict) else 999):
+        if not isinstance(m, dict):
+            continue
+        if m.get("after_step", 0) > completed_steps:
+            return {
+                "milestone_id": m.get("milestone_id", ""),
+                "description": m.get("description", ""),
+                "after_step": m.get("after_step", 0),
+                "steps_remaining": m.get("after_step", 0) - completed_steps,
+            }
+    return None
+
+
+def _normalize_milestones(raw: list, total_steps: int) -> list[dict]:
+    """将 ScheduleAgent 返回的里程碑标准化为 {milestone_id, after_step, description}。
+
+    输入可能是字符串列表（LLM 直接输出）或已是正确格式。
+    """
+    if not raw:
+        return []
+    if isinstance(raw[0], dict) and "milestone_id" in raw[0]:
+        return raw
+    normalized = []
+    n = len(raw)
+    for i, item in enumerate(raw):
+        desc = item if isinstance(item, str) else item.get("description", str(item))
+        after_step = round(total_steps * (i + 1) / (n + 1))
+        normalized.append({
+            "milestone_id": f"m{i + 1}",
+            "after_step": after_step,
+            "description": desc,
+        })
+    return normalized
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Progress Update — 更新步骤进度 + 计算掌握度变化
+# ═══════════════════════════════════════════════════════════════════
+
+@router.post("/plans/{plan_id}/progress")
+async def update_plan_progress(plan_id: int, body: ProgressUpdateRequest):
+    """Java 在用户完成步骤学习/练习后调用。Python 计算掌握度变化并返回更新后的步骤列表。
+
+    匹配前端对接文档 3.5 节规范。
+    """
+    try:
+        plan = body.plan
+        steps = body.steps
+        masteries = body.masteries or {}
+
+        if not plan:
+            return api_error(ErrorCode.NOT_FOUND, "计划不存在", status_code=404)
+
+        plan_service = get_plan_service()
+
+        # ── 定位目标步骤 ─────────────────────────────
+        target_step = None
+        step_idx = -1
+        for i, s in enumerate(steps):
+            if body.step_id is not None and body.step_id > 0 and s.get("id") == body.step_id:
+                target_step = s
+                step_idx = i
+                break
+            if body.step_order is not None and body.step_order > 0 and s.get("step_order") == body.step_order:
+                target_step = s
+                step_idx = i
+                break
+
+        if target_step is None:
+            return api_error(ErrorCode.NOT_FOUND, f"步骤 step_id={body.step_id} step_order={body.step_order} 不存在", status_code=404)
+
+        # ── 计算掌握度变化 ───────────────────────────
+        knowledge_node_id = target_step.get("knowledge_node_id", "")
+        old_mastery = masteries.get(knowledge_node_id, target_step.get("mastery_current", 0.5)) if knowledge_node_id else 0.5
+
+        event_type = "exercise_done" if body.activity_type in ("exercise", "quiz") else "resource_viewed"
+        new_mastery = plan_service.update_mastery(
+            old_mastery,
+            event_type,
+            score=body.score
+        )
+
+        mastery_updates: dict[str, dict] = {}
+        if knowledge_node_id:
+            mastery_updates[knowledge_node_id] = {
+                "old_mastery": old_mastery,
+                "new_mastery": new_mastery,
+                "delta": round(new_mastery - old_mastery, 2),
+                "event_type": event_type,
+            }
+
+        # ── 更新步骤状态 ─────────────────────────────
+        updated_steps = list(steps)  # shallow copy
+        updated_target = dict(target_step)
+        updated_target["status"] = body.status
+        if body.score is not None:
+            updated_target["score"] = body.score
+        updated_target["mastery_current"] = new_mastery
+        updated_target["activity_type"] = body.activity_type
+        updated_target["duration_minutes"] = body.duration_minutes
+        if step_idx >= 0:
+            updated_steps[step_idx] = updated_target
+
+        # ── 里程碑进度 ─────────────────────────────
+        completed_count = sum(1 for s in updated_steps if s.get("status") == "completed")
+        next_milestone = _compute_next_milestone(plan, completed_count)
+
+        return api_success({
+            "plan_id": plan_id,
+            "updated_step": {
+                "step_order": updated_target.get("step_order"),
+                "topic": updated_target.get("topic"),
+                "knowledge_node_id": knowledge_node_id,
+                "status": body.status,
+                "score": body.score,
+                "mastery_current": new_mastery,
+                "activity_type": body.activity_type,
+                "duration_minutes": body.duration_minutes,
+            },
+            "mastery_updates": mastery_updates,
+            "completed_steps": completed_count,
+            "total_steps": plan.get("total_steps", len(steps)),
+            "progress_pct": round(completed_count / max(plan.get("total_steps", len(steps)), 1) * 100),
+            "next_milestone": next_milestone,
+            "updated_steps": updated_steps,
+        })
+    except Exception as e:
+        logger.error(f"Failed to update progress: {e}", exc_info=True)
+        return api_error(ErrorCode.INTERNAL_ERROR, "更新进度失败", status_code=500)
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Node Status Change — 图谱节点状态变化 → 计划联动
+# ═══════════════════════════════════════════════════════════════════
+
+@router.post("/plans/{plan_id}/node-status-change")
+async def on_node_status_change(plan_id: int, body: NodeStatusChangeRequest):
+    """图谱节点状态变化时同步计划。Java 调此端点获取计划的调整建议。
+
+    场景：
+    - 节点被掌握（mastered）→ 计划中对应步骤可标记为 completed
+    - 节点被遗忘（forgotten）→ 计划中对应步骤需重新安排复习
+    - 节点被解锁（learning）→ 计划中对应步骤可从 locked 变为 pending
+    """
+    try:
+        plan = body.plan
+        steps = body.steps
+        node_id = body.node_id
+        new_status = body.new_status
+        old_status = body.old_status
+        masteries = body.masteries or {}
+
+        if not plan or not steps:
+            return api_error(ErrorCode.NOT_FOUND, "计划或步骤数据缺失", status_code=404)
+
+        plan_service = get_plan_service()
+
+        # ── 找到 node_id 对应的计划步骤 ─────────────
+        affected_steps: list[dict] = []
+        unaffected_steps: list[dict] = []
+        for s in steps:
+            sid = s.get("knowledge_node_id", "")
+            if sid == node_id:
+                affected_steps.append(s)
+            else:
+                unaffected_steps.append(s)
+
+        plan_actions: list[dict] = []
+        updated_steps = list(steps)
+
+        for s in affected_steps:
+            old_step_status = s.get("status", "")
+            current_mastery = masteries.get(node_id, s.get("mastery_current", 0.5))
+
+            if new_status == "mastered":
+                new_step_status = "completed"
+                action_msg = f"步骤「{s.get('topic')}」对应节点已掌握，建议标记为完成"
+                plan_actions.append({
+                    "step_order": s.get("step_order"),
+                    "topic": s.get("topic"),
+                    "action": "mark_completed",
+                    "old_status": old_step_status,
+                    "new_status": new_step_status,
+                    "message": action_msg,
+                })
+
+            elif new_status == "forgotten":
+                new_step_status = "review"
+                # 计算衰减后的掌握度
+                decayed = plan_service.estimate_decay(
+                    current_mastery, days_since_review=14,
+                    topic_difficulty=s.get("topic_difficulty", 3),
+                )
+                action_msg = f"步骤「{s.get('topic')}」对应节点已遗忘（掌握度 {decayed}），建议安排复习"
+                plan_actions.append({
+                    "step_order": s.get("step_order"),
+                    "topic": s.get("topic"),
+                    "action": "schedule_review",
+                    "old_status": old_step_status,
+                    "new_status": new_step_status,
+                    "decayed_mastery": decayed,
+                    "message": action_msg,
+                })
+
+            elif new_status == "learning" and old_status in ("locked", ""):
+                new_step_status = "pending"
+                action_msg = f"步骤「{s.get('topic')}」前置条件满足，已解锁"
+                plan_actions.append({
+                    "step_order": s.get("step_order"),
+                    "topic": s.get("topic"),
+                    "action": "unlock_step",
+                    "old_status": old_step_status,
+                    "new_status": new_step_status,
+                    "message": action_msg,
+                })
+
+            elif new_status == "locked":
+                new_step_status = "locked"
+                action_msg = f"步骤「{s.get('topic')}」前置条件不满足，已重新锁定"
+                plan_actions.append({
+                    "step_order": s.get("step_order"),
+                    "topic": s.get("topic"),
+                    "action": "lock_step",
+                    "old_status": old_step_status,
+                    "new_status": new_step_status,
+                    "message": action_msg,
+                })
+            else:
+                continue
+
+            # 更新步骤
+            for i, us in enumerate(updated_steps):
+                if us.get("step_order") == s.get("step_order"):
+                    updated_steps[i] = {**us, "status": new_step_status, "mastery_current": current_mastery}
+                    break
+
+        # ── 检查是否所有步骤已完成 → 计划可关闭 ────
+        completed_count = sum(1 for s in updated_steps if s.get("status") == "completed")
+        total = len(updated_steps)
+        plan_status = plan.get("status", "active")
+        if completed_count >= total and plan_status != "completed":
+            plan_status = "completed"
+            plan_actions.append({
+                "step_order": 0,
+                "topic": "",
+                "action": "complete_plan",
+                "old_status": plan.get("status"),
+                "new_status": "completed",
+                "message": "所有步骤已完成，建议将计划标记为完成",
+            })
+
+        next_milestone = _compute_next_milestone(plan, completed_count)
+
+        return api_success({
+            "plan_id": plan_id,
+            "node_id": node_id,
+            "new_status": new_status,
+            "affected_steps_count": len(affected_steps),
+            "plan_actions": plan_actions,
+            "updated_steps": updated_steps,
+            "plan_status": plan_status,
+            "completed_steps": completed_count,
+            "total_steps": total,
+            "progress_pct": round(completed_count / max(total, 1) * 100),
+            "next_milestone": next_milestone,
+            "summary": (
+                f"节点状态变更影响 {len(affected_steps)} 个计划步骤"
+                if affected_steps
+                else "此节点状态变更不影响当前计划的步骤"
+            ),
+        })
+    except Exception as e:
+        logger.error(f"Failed to handle node status change: {e}", exc_info=True)
+        return api_error(ErrorCode.INTERNAL_ERROR, "节点状态联动失败", status_code=500)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1104,15 +1758,29 @@ async def _get_plan_status_core(plan_id: int, body: PlanStatusRequest):
                 step_dict["decayed_mastery"] = decayed
             steps_data.append(step_dict)
 
+        # ── Milestone progress ─────────────────────────────
+        completed_steps = plan.get("completed_steps") or 0
+        next_milestone = _compute_next_milestone(plan, completed_steps)
+        milestone_progress = None
+        if next_milestone:
+            milestone_progress = {
+                "current": completed_steps,
+                "target": next_milestone["after_step"],
+                "remaining": next_milestone["steps_remaining"],
+                "pct": round(completed_steps / next_milestone["after_step"] * 100) if next_milestone["after_step"] > 0 else 100,
+            }
+
         return api_success({
             "plan_id": plan.get("id"),
             "user_id": plan.get("user_id"),
             "status": plan.get("status"),
             "total_steps": plan.get("total_steps"),
-            "completed_steps": plan.get("completed_steps"),
+            "completed_steps": completed_steps,
             "days_idle": days_idle,
             "soft_landing": soft_landing,
             "steps": steps_data,
+            "next_milestone": next_milestone,
+            "milestone_progress": milestone_progress,
         })
     except Exception as e:
         logger.error(f"Failed to get plan status: {e}")
@@ -1337,39 +2005,12 @@ def _get_intent_extractor() -> IntentExtractor:
     return _intent_extractor
 
 
-_INTENT_MODE_MAP: dict[str, str] = {
-    "exercise_gen": "exercise",
-    "resource_gen": "resource",
-    "tutor_question": "tutor",
-    "learning_path": "research",
-    "solve_problem": "solve",
-    "flashcard_gen": "research",
-    "profile_building": "tutor",
-    "unknown": "tutor",
-}
-
-
-def _build_confirmation(intent: str, confidence: float) -> str | None:
-    hints: dict[str, str] = {
-        "exercise_gen": "检测到你可能想练习，需要切换到出题模式吗？",
-        "resource_gen": "检测到你可能想生成学习资源，需要切换吗？",
-        "solve_problem": "检测到你可能想解题，需要切换到解题模式吗？",
-        "learning_path": "检测到你可能想规划学习路径，需要切换吗？",
-        "flashcard_gen": "检测到你可能想深入学习，需要切换吗？",
-    }
-    if confidence < 0.8 and intent in hints:
-        return hints[intent]
-    return None
-
-
 @router.post("/api/chat")
 async def unified_chat(body: UnifiedChatRequest):
-    if USE_CENTER_PIPELINE:
-        return await _unified_chat_center_pipeline(body)
-    return await _unified_chat_legacy(body)
+    return await _unified_chat(body)
 
 
-async def _unified_chat_center_pipeline(body: UnifiedChatRequest):
+async def _unified_chat(body: UnifiedChatRequest):
     message = body.message.strip()
     history = body.messages
     user_msg = {"role": "user", "content": message}
@@ -1389,308 +2030,56 @@ async def _unified_chat_center_pipeline(body: UnifiedChatRequest):
     )
 
     async def event_stream():
+        assistant_content = ""
+        pending_done: list[str] = []
+
         try:
             async for event in chat_center.execute(plan):
-                yield event.to_sse()
+                if event.type == "content" and event.data:
+                    if isinstance(event.data, str):
+                        assistant_content += event.data
+                    elif isinstance(event.data, dict):
+                        assistant_content += event.data.get("content", "")
+                sse = event.to_sse()
+
+                # Defer DONE event so recommendation can be inserted before it
+                if event.type == "done":
+                    pending_done.append(sse)
+                    continue
+
+                yield sse
         except Exception as e:
             logger.error(f"Center pipeline error: {e}")
             yield f"data: {json.dumps({'type': 'error', 'content': '处理失败，请稍后重试'}, ensure_ascii=False)}\n\n"
             yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
-
-    return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
-
-
-async def _unified_chat_legacy(body: UnifiedChatRequest):
-    message = body.message.strip()
-    user_id = body.user_id
-    mode = body.mode
-    conversation_id = body.conversation_id
-    style = body.style or "standard"
-    student_profile = body.student_profile
-    history = body.messages
-
-    intent_meta: dict | None = None
-
-    if mode != "auto":
-        effective_mode = mode
-    else:
-        extractor = _get_intent_extractor()
-        result = await extractor.extract(message)
-        effective_mode = _INTENT_MODE_MAP.get(result.intent, "tutor")
-        intent_meta = {
-            "detected_intent": result.intent,
-            "confidence": result.confidence,
-            "raw_message": result.raw_message,
-        }
-        if _build_confirmation(result.intent, result.confidence):
-            intent_meta["confirmation_question"] = _build_confirmation(
-                result.intent, result.confidence
-            )
-
-    user_msg = {"role": "user", "content": message}
-    messages = history + [user_msg]
-
-    if effective_mode == "resource":
-        return await _resource_mode_dispatch(message, user_id, student_profile)
-    elif effective_mode == "solve":
-        return await _unified_solve_chat(message, messages, student_profile, conversation_id)
-    elif effective_mode == "exercise":
-        return await _unified_exercise_chat(message, messages, student_profile, conversation_id)
-    elif effective_mode == "research":
-        return await _unified_research_chat(message, messages, student_profile, conversation_id, user_id)
-    else:
-        return await _unified_tutor_chat(message, messages, student_profile, conversation_id, style, intent_meta)
-
-
-# ── 资源模式分流 ─────────────────────────────────────────────────
-
-async def _resource_mode_dispatch(message: str, user_id: int, student_profile: dict):
-    """资源模式：先过 InquiryService 检查需求清晰度。"""
-    inquiry = _get_inquiry_service()
-    result = await inquiry.check(message, student_profile)
-
-    if result.is_clear:
-        return await resources_generate(ResourceGenRequest(
-            topic=result.clarified_topic,
-            user_id=user_id,
-            student_profile=student_profile,
-        ))
-
-    return api_success({
-        "type": "inquiry",
-        "is_clear": False,
-        "clarified_topic": result.clarified_topic,
-        "questions": result.questions,
-        "rationale": result.rationale,
-    })
-
-
-# ── Unified Dispatch: tutor ──────────────────────────────────────
-
-async def _unified_tutor_chat(
-    message: str, messages: list[dict], student_profile: dict,
-    conversation_id: int | None, style: str = "standard",
-    intent_meta: dict | None = None,
-):
-    """答疑模式"""
-    # 计算苏格拉底追问轮次
-    socratic_round = 0
-    if style == "socratic":
-        socratic_round = sum(
-            1 for m in messages[-20:]
-            if m.get("role") == "assistant" and m.get("mode") == "tutor:socratic"
-        )
-
-    agent = _get_tutor_agent()
-
-    async def event_stream():
-        try:
-            state = await agent.run({
-                "messages": messages,
-                "student_profile": student_profile,
-                "style": style,
-                "socratic_round": socratic_round,
-            })
-
-            # 意图提示
-            if intent_meta:
-                hint = intent_meta.get("confirmation_question")
-                if hint:
-                    yield f"data: {json.dumps({'type': 'intent_hint', 'content': hint, 'detected_intent': intent_meta.get('detected_intent'), 'confidence': intent_meta.get('confidence')}, ensure_ascii=False)}\n\n"
-
-            response = state.get("response", "")
-            domain = state.get("domain", "")
-            if response:
-                for chunk in _sse_stream_chunks(response):
-                    await asyncio.sleep(0.03)
-                    yield f"data: {json.dumps({'type': 'token', 'content': chunk}, ensure_ascii=False)}\n\n"
-
-            # 后台画像提取，结果放进 done event
-            profile_delta = None
-            if response:
-                try:
-                    p_agent = _get_profile_agent()
-                    result = await p_agent.extract_and_merge(student_profile, messages)
-                    if result.get("changed"):
-                        profile_delta = result.get("profile")
-                except Exception as exc:
-                    logger.warning("Background profile extract failed: %s", exc)
-
-            done_payload: dict = {"type": "done", "domain": domain}
-            if conversation_id:
-                done_payload["conversation_id"] = conversation_id
-            if profile_delta:
-                done_payload["profile_delta"] = profile_delta
-            yield f"data: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
-
-        except Exception as e:
-            logger.error(f"Unified tutor chat error: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'content': '答疑失败，请稍后重试'}, ensure_ascii=False)}\n\n"
-            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
-
-    return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
-
-
-# ── Unified Dispatch: solve ──────────────────────────────────────
-
-async def _unified_solve_chat(
-    message: str, messages: list[dict], student_profile: dict,
-    conversation_id: int | None,
-):
-    """解题模式"""
-    context_parts = []
-    for m in messages[-6:]:
-        role_label = "学生" if m.get("role") == "user" else "AI"
-        ctx = m.get("content", "")[:200]
-        context_parts.append(f"[{role_label}]: {ctx}")
-    context = "\n".join(context_parts)
-
-    agent = _get_solve_agent()
-
-    async def event_stream():
-        try:
-            state = await agent.run({
-                "question": message,
-                "context": context,
-            })
-
-            steps = state.get("steps", [])
-            if steps:
-                yield f"data: {json.dumps({'type': 'steps', 'content': steps}, ensure_ascii=False)}\n\n"
-
-            solution = state.get("solution", "")
-            if solution:
-                for chunk in _sse_stream_chunks(solution):
-                    await asyncio.sleep(0.03)
-                    yield f"data: {json.dumps({'type': 'token', 'content': chunk}, ensure_ascii=False)}\n\n"
-
-            confidence = state.get("confidence_score")
-            if confidence is not None:
-                yield f"data: {json.dumps({'type': 'confidence', 'score': confidence}, ensure_ascii=False)}\n\n"
-
-            done_payload: dict = {"type": "done"}
-            if conversation_id:
-                done_payload["conversation_id"] = conversation_id
-            yield f"data: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
-
-        except Exception as e:
-            logger.error(f"Unified solve chat error: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'content': '解题失败，请稍后重试'}, ensure_ascii=False)}\n\n"
-            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
-
-    return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
-
-
-# ── Unified Dispatch: exercise ───────────────────────────────────
-
-async def _unified_exercise_chat(
-    message: str, messages: list[dict], student_profile: dict,
-    conversation_id: int | None,
-):
-    """练习模式"""
-    extractor = _get_intent_extractor()
-    intent_result = await extractor.extract(message)
-    topic = intent_result.params.get("topic", message)
-    count = min(intent_result.params.get("count", 3), 10)
-    difficulty = intent_result.params.get("difficulty", "medium")
-
-    agent = _get_exercise_agent()
-
-    async def event_stream():
-        try:
-            yield f"data: {json.dumps({'type': 'progress', 'stage': 'plan', 'content': f'正在为「{topic}」准备{count}道{difficulty}难度的练习题...'}, ensure_ascii=False)}\n\n"
-
-            state = await agent.run({
-                "topic": topic,
-                "count": count,
-                "difficulty": difficulty,
-                "student_profile": student_profile,
-            })
-
-            questions = state.get("questions", [])
-            yield f"data: {json.dumps({'type': 'progress', 'stage': 'generate', 'content': f'已生成 {len(questions)} 道题目'}, ensure_ascii=False)}\n\n"
-
-            done_payload: dict = {
-                "type": "done",
-                "questions": questions,
-            }
-            if conversation_id:
-                done_payload["conversation_id"] = conversation_id
-            yield f"data: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
-
-        except Exception as e:
-            logger.error(f"Unified exercise chat error: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'content': '练习题生成失败'}, ensure_ascii=False)}\n\n"
-            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
-
-    return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
-
-
-# ── Unified Dispatch: research ───────────────────────────────────
-
-async def _unified_research_chat(
-    message: str, messages: list[dict], student_profile: dict,
-    conversation_id: int | None, user_id: int,
-):
-    """研究模式：学习路径规划。先检查需求清晰度，模糊时先追问。"""
-    extractor = _get_intent_extractor()
-    intent_result = await extractor.extract(message)
-    topic = intent_result.params.get("topic", message)
-
-    inquiry = _get_inquiry_service()
-    check_result = await inquiry.check(message, student_profile)
-
-    path_workflow = _get_path_workflow()
-
-    async def event_stream():
-        if not check_result.is_clear:
-            yield f"data: {json.dumps({
-                'type': 'inquiry',
-                'is_clear': False,
-                'clarified_topic': check_result.clarified_topic or topic,
-                'questions': check_result.questions,
-                'rationale': check_result.rationale,
-            }, ensure_ascii=False)}\n\n"
-            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
             return
+
+        # Check for exercise recommendation (before DONE)
         try:
-            yield f"data: {json.dumps({'type': 'progress', 'stage': 'path', 'content': f'正在为「{topic}」规划学习路径...'}, ensure_ascii=False)}\n\n"
+            if assistant_content.strip():
+                extracted = await extract_knowledge_nodes(
+                    course_id="ai_intro",
+                    user_message=message,
+                    assistant_reply=assistant_content[:2000],
+                )
+                primary_nodes = extracted.get("primary", [])
+                if primary_nodes:
+                    node = primary_nodes[0]
+                    from app.events.types import recommendation_event
+                    rec = recommendation_event(
+                        knowledge_node_id=node.get("id", ""),
+                        node_name=node.get("name", ""),
+                    )
+                    yield rec.to_sse()
+        except Exception as exc:
+            logger.warning(f"Recommendation check skipped: {exc}")
 
-            path_state = await path_workflow.run({
-                "user_id": user_id,
-                "student_profile": student_profile,
-                "topic": topic,
-            })
+        # Yield deferred DONE event(s)
+        for sse in pending_done:
+            yield sse
 
-            steps = path_state.get("steps", [])
-            concept_graph = path_state.get("concept_graph", {})
-            path_summary = path_state.get("response", "")
-
-            yield f"data: {json.dumps({'type': 'path', 'steps': steps}, ensure_ascii=False)}\n\n"
-
-            if path_summary:
-                for chunk in _sse_stream_chunks(path_summary):
-                    await asyncio.sleep(0.02)
-                    yield f"data: {json.dumps({'type': 'token', 'content': chunk}, ensure_ascii=False)}\n\n"
-
-            done_payload: dict = {
-                "type": "done",
-                "mode": "research",
-                "plan": {
-                    "title": f"{topic}学习计划",
-                    "topic": topic,
-                    "total_steps": len(steps),
-                    "steps": steps,
-                    "concept_graph": concept_graph,
-                }
-            }
-            if conversation_id:
-                done_payload["conversation_id"] = conversation_id
-            yield f"data: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
-
-        except Exception as e:
-            logger.error(f"Unified research chat error: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'content': '研究模式暂时不可用'}, ensure_ascii=False)}\n\n"
+        # Guarantee a DONE event if none was emitted
+        if not pending_done:
             yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
@@ -1717,18 +2106,19 @@ async def inquiry_resolve(body: InquiryResolveRequest):
     topic = resolved.get("topic", body.original_message)
     context_note = resolved.get("context_note", "")
     suggested_types = resolved.get("suggested_types", [])
+    # 取第一个推荐类型作为 resource_type（单 Agent 路由）
+    primary_type = suggested_types[0] if suggested_types else None
 
     logger.info(
-        "Inquiry resolved: topic=%s, types=%s, answer_count=%d",
-        topic, suggested_types, len(body.answers),
+        "Inquiry resolved: topic=%s, types=%s, primary=%s, answer_count=%d",
+        topic, suggested_types, primary_type, len(body.answers),
     )
 
     enriched_profile = dict(student_profile)
     enriched_profile["_inquiry_context"] = context_note
-    enriched_profile["_suggested_types"] = suggested_types
 
     async def event_stream():
-        queue: asyncio.Queue = asyncio.Queue()
+        queue: asyncio.Queue = asyncio.Queue(maxsize=256)
         try:
             async def run_workflow():
                 try:
@@ -1737,8 +2127,8 @@ async def inquiry_resolve(body: InquiryResolveRequest):
                         "user_id": body.user_id,
                         "topic": topic,
                         "student_profile": enriched_profile,
+                        "resource_type": primary_type or "",
                         "event_queue": queue,
-                        "suggested_types": suggested_types,
                     })
                     await queue.put(done_event({
                         "content_blocks": state.get("content_blocks", []),

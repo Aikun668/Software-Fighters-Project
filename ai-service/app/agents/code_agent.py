@@ -21,6 +21,8 @@ class CodeState(TypedDict, total=False):
     code_language: str
     student_profile: dict
     outline: dict
+    diagnosis: bool
+    error_context: str
     whiteboard_context: str
     peer_context: str
     blocks: list[dict]
@@ -67,6 +69,8 @@ class CodeAgent(BaseAgent):
             code_language = "python"
         student_profile = state.get("student_profile", {})
         outline = state.get("outline", {})
+        diagnosis = state.get("diagnosis", False)
+        error_context = state.get("error_context", "")
         whiteboard_context = state.get("whiteboard_context", "")
         peer_context = state.get("peer_context", "")
 
@@ -76,6 +80,17 @@ class CodeAgent(BaseAgent):
         focus = code_related[0].get("focus", topic) if code_related else topic
 
         sys_prompt = self._load_extra_prompt("system.yaml", key="system")
+        if diagnosis:
+            try:
+                from app.utils.prompt_loader import _resolve_path
+                with open(_resolve_path("code_agent/diagnosis_template.md"), "r", encoding="utf-8") as f:
+                    diag_raw = f.read()
+                # 去掉 {{#if diagnosis}}...{{/if}} 条件标记，直接注入
+                import re as _re
+                diag_clean = _re.sub(r'\{\{#if diagnosis\}\}|\{\{/if\}\}', '', diag_raw).strip()
+                sys_prompt = sys_prompt + "\n\n" + diag_clean
+            except Exception:
+                pass
         user_tpl = self._load_extra_prompt("system.yaml", key="user_template")
         user_prompt = interpolate_variables(
             user_tpl,

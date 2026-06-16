@@ -94,24 +94,26 @@ class FlashCardAgent(BaseAgent):
         }
 
     async def _generate_node(self, state: FlashCardState) -> dict:
-        """调用 LLM 生成闪卡问答对"""
+        """调用 LLM 生成闪卡问答对。无 content_blocks 时直接从 topic 生成。"""
         topic = state.get("topic", "")
         key_concepts = state.get("key_concepts", [])
         content_summary = state.get("content_summary", "")
+        student_profile = state.get("student_profile", {})
 
         if not key_concepts:
-            logger.info(f"No key concepts for '{topic}', returning empty flashcards")
-            return self._build_output([])
+            logger.info(f"No key concepts extracted for '{topic}', generating cards from topic directly")
 
         sys_prompt = self._load_extra_prompt("system.yaml", key="system")
         user_tpl = self._load_extra_prompt("system.yaml", key="user_template")
+        concept_text = "、".join(key_concepts) if key_concepts else f"请围绕「{topic}」自动提取 5-8 个核心概念并生成对应卡片"
+        summary_text = content_summary if content_summary else f"关于{topic}的知识讲解"
         user_prompt = interpolate_variables(
             user_tpl,
             {
                 "topic": topic,
-                "content_summary": content_summary,
-                "key_concepts": "、".join(key_concepts),
-                "student_profile": "（暂无学生画像，按默认难度生成）",
+                "content_summary": summary_text,
+                "key_concepts": concept_text,
+                "student_profile": self._format_profile(student_profile),
             },
         )
 
@@ -159,6 +161,8 @@ class FlashCardAgent(BaseAgent):
 
     def _build_fallback_cards(self, topic: str, key_concepts: list[str]) -> list[dict]:
         """从关键概念静态构建闪卡（fallback 路径）"""
+        if not key_concepts:
+            key_concepts = [f"{topic}核心概念", f"{topic}基本原理", f"{topic}关键应用"]
         cards = []
         for concept in key_concepts[:MAX_CARDS]:
             cards.append({

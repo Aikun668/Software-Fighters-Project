@@ -87,6 +87,72 @@ async def grade_short_answer(user_answer: str, reference_answer: str, rubric: st
                 "ai_comment": "", "key_points_matched": [], "key_points_missed": []}
 
 
+async def grade_code(user_code: str, reference_solution: str = "", test_cases: str = "") -> dict:
+    """LLM 批改代码题：语法、逻辑、边界case 三维评分。"""
+    if not user_code or not user_code.strip():
+        return {
+            "type": "code",
+            "correct": False,
+            "score": 0,
+            "earned": 0,
+            "max_score": 100,
+            "feedback": "未提交代码",
+            "syntax_ok": False,
+            "logic_ok": False,
+            "edge_cases_ok": False,
+            "ai_comment": "",
+        }
+
+    prompt = f"""你是一位严格的编程导师。请评估以下学生代码。
+
+【题目要求 / 参考解答】
+{reference_solution or "（未提供，请根据代码本身质量评估）"}
+
+【测试用例】
+{test_cases or "（未提供）"}
+
+【学生代码】
+{sanitize_for_llm(user_code)}
+
+请从三个维度评估并以 JSON 格式输出（只输出 JSON）：
+{{
+  "score": <0-100的整数>,
+  "syntax_ok": <true/false, 语法/缩进是否基本正确>,
+  "logic_ok": <true/false, 算法思路是否正确>,
+  "edge_cases_ok": <true/false, 边界条件是否处理>,
+  "feedback": "<简评：指出优点+具体改进建议>"
+}}"""
+
+    try:
+        llm = get_llm_service()
+        response = await llm.chat([{"role": "user", "content": prompt}])
+        result = parse_llm_json(response, fallback={}, expected_key="score")
+        if not isinstance(result, dict) or "score" not in result:
+            logger.warning(f"LLM code judge returned invalid response: {str(response)[:100]}")
+            return {
+                "type": "code", "correct": False, "score": 0, "earned": 0, "max_score": 100,
+                "feedback": "评分失败", "syntax_ok": False, "logic_ok": False,
+                "edge_cases_ok": False, "ai_comment": "",
+            }
+        result["type"] = "code"
+        result["score"] = int(result.get("score", 0))
+        result["earned"] = result["score"]
+        result["max_score"] = 100
+        result["correct"] = result["score"] >= 60
+        result["ai_comment"] = result.get("feedback", "")
+        result.setdefault("syntax_ok", False)
+        result.setdefault("logic_ok", False)
+        result.setdefault("edge_cases_ok", False)
+        return result
+    except Exception as e:
+        logger.error(f"LLM code judge error: {e}")
+        return {
+            "type": "code", "correct": False, "score": 0, "earned": 0, "max_score": 100,
+            "feedback": "评分服务暂时不可用，请稍后重试",
+            "syntax_ok": False, "logic_ok": False, "edge_cases_ok": False, "ai_comment": "",
+        }
+
+
 async def evaluate_session(answers: list[dict]) -> dict:
     results = []
     total_score = 0

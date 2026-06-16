@@ -103,6 +103,14 @@ PROFILE_FLASHCARD = AgentModelProfile(
     default=ModelConfig(temperature=0.6, max_tokens=4096),
 )
 
+PROFILE_INTERACTIVE_DIAGRAM = AgentModelProfile(
+    default=ModelConfig(temperature=0.5, max_tokens=8192),
+)
+
+PROFILE_PROJECT = AgentModelProfile(
+    default=ModelConfig(temperature=0.7, max_tokens=4096),
+)
+
 
 # ═══════════════════════════════════════════════════════════════
 # Factory

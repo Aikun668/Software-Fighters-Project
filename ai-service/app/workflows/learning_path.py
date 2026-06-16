@@ -100,8 +100,9 @@ class LearningPathWorkflow(BaseWorkflow):
             if not topic:
                 return step
             try:
-                content_state = {"topic": topic, "student_profile": student_profile}
-                result = await self.content_agent._plan_node(content_state)
+                result = await self.content_agent.plan_outline(
+                    topic, student_profile,
+                )
                 outline = result.get("outline", {})
                 intro = outline.get("intro", f"{topic}的核心知识点")
                 return {**step, "resource_id": None, "preview": intro[:120]}

@@ -16,6 +16,7 @@ class ContentState(TypedDict, total=False):
     topic: str
     student_profile: dict
     outline: dict
+    comparison: bool
     current_section: str
     stage: str
     content_blocks: list[dict]
@@ -38,6 +39,14 @@ class ContentAgent(BaseAgent):
         self.use_mock_llm = use_mock_llm
         if not hasattr(self, "plan_llm"):
             self.plan_llm = create_llm(temperature=0.3, use_mock=use_mock_llm)
+
+    async def plan_outline(self, topic: str, student_profile: dict | None = None) -> dict:
+        """公开 API：规划内容大纲。供 ResourceGenWorkflow / LearningPathWorkflow 调用。"""
+        state: ContentState = {
+            "topic": topic,
+            "student_profile": student_profile or {},
+        }
+        return await self._plan_node(state)
 
     def create_turn_summary(
         self, state: dict, output: dict
@@ -156,6 +165,19 @@ class ContentAgent(BaseAgent):
         subsections = outline.get("subsections", [])
         intro = outline.get("intro", f"{topic}介绍")
         student_profile = state.get("student_profile", {})
+        comparison = state.get("comparison", False)
+
+        # 对比模式：加载对比分析专用指令
+        comparison_instructions = ""
+        if comparison:
+            try:
+                from app.utils.prompt_loader import _resolve_path
+                with open(_resolve_path("content_agent/comparison_template.md"), "r", encoding="utf-8") as f:
+                    comp_raw = f.read()
+                import re as _re
+                comparison_instructions = _re.sub(r'\{\{#if comparison\}\}|\{\{/if\}\}', '', comp_raw).strip()
+            except Exception:
+                pass
 
         content_blocks = []
         content_blocks.append({"type": "section", "heading": "概述", "content": intro})
@@ -171,6 +193,8 @@ class ContentAgent(BaseAgent):
             sys_prompt, user_tpl, expected_key, block_type, fallback = self._route_block_prompt(
                 heading, role, focus, topic
             )
+            if comparison_instructions:
+                sys_prompt = sys_prompt + "\n\n" + comparison_instructions
 
             user_prompt = interpolate_variables(
                 user_tpl,
@@ -184,14 +208,17 @@ class ContentAgent(BaseAgent):
                 },
             )
 
-            result = await self._call_llm_json(
-                system_prompt=sys_prompt,
-                user_prompt=user_prompt,
-                expected_key=expected_key,
-                fallback={},
-            )
-
-            content = self._render_block_content(role, heading, focus, topic, result, fallback)
+            try:
+                result = await self._call_llm_json(
+                    system_prompt=sys_prompt,
+                    user_prompt=user_prompt,
+                    expected_key=expected_key,
+                    fallback={},
+                )
+                content = self._render_block_content(role, heading, focus, topic, result, fallback)
+            except Exception:
+                logger.exception(f"Block generation failed for '{heading}', using fallback")
+                content = fallback
             content_blocks.append({"type": block_type, "heading": heading, "content": content})
 
         # 关键要点

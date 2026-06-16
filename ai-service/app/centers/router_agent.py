@@ -14,12 +14,10 @@ logger = logging.getLogger(__name__)
 
 class RouterAgent:
     MODE_TO_INTENT: dict[str, str] = {
-        "tutor": "tutor_question",
+        "plan": "learning_path",
         "resource": "resource_gen",
-        "solve": "solve_problem",
         "exercise": "exercise_gen",
-        "research": "learning_path",
-        "diagnose": "diagnose",
+        "visualization": "visualize",
     }
 
     def __init__(self, intent_extractor: IntentExtractor | None = None):

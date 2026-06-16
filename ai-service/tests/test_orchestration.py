@@ -163,100 +163,109 @@ class TestDirector:
         director = Director()
         decision = await director.route("Python基础")
         assert isinstance(decision, RouteDecision)
-        assert "content" in decision.selected_agents
+        assert decision.agent_name in ("content", "code", "mindmap", "project", "flashcard", "interactive_diagram")
         assert decision.strategy in ("rule", "llm")
 
     @pytest.mark.asyncio
-    async def test_rule_route_python_topic(self):
+    async def test_rule_route_code_topic(self):
         director = Director()
-        decision = await director.route("Python函数和类")
+        decision = await director.route("怎么写一个排序算法的代码示例")
         assert decision.strategy == "rule"
-        assert "code" in decision.selected_agents
-        assert "exercise" in decision.selected_agents
+        assert decision.agent_name == "code"
 
     @pytest.mark.asyncio
     async def test_rule_route_theory_topic(self):
         director = Director()
         decision = await director.route("机器学习理论概述")
-        agents = decision.selected_agents
-        assert "content" in agents
-        assert "reading" in agents or "mindmap" in agents
+        assert decision.agent_name in ("content", "mindmap")
 
     @pytest.mark.asyncio
     async def test_rule_route_ml_topic(self):
         director = Director()
-        decision = await director.route("深度学习与神经网络")
-        agents = decision.selected_agents
-        assert "code" in agents
-        assert "reading" in agents
+        decision = await director.route("深度学习与神经网络代码")
+        assert decision.agent_name in ("code", "content")
 
     @pytest.mark.asyncio
-    async def test_low_knowledge_base_skips_code(self):
+    async def test_rule_route_project_topic(self):
         director = Director()
-        decision = await director.route(
-            "Python编程",
-            student_profile={"knowledge_base": 20},
-        )
-        assert "code" not in decision.selected_agents
+        decision = await director.route("从零搭建一个CNN图像分类项目")
+        assert decision.agent_name == "project"
 
     @pytest.mark.asyncio
-    async def test_high_knowledge_base_keeps_code(self):
+    async def test_rule_route_mindmap_topic(self):
         director = Director()
-        decision = await director.route(
-            "Python编程",
-            student_profile={"knowledge_base": 70},
-        )
-        assert "code" in decision.selected_agents
+        decision = await director.route("梳理一下机器学习的知识框架")
+        assert decision.agent_name == "mindmap"
 
     @pytest.mark.asyncio
-    async def test_visual_learner_includes_mindmap(self):
+    async def test_rule_route_flashcard_topic(self):
         director = Director()
-        decision = await director.route(
-            "数据分析方法",
-            student_profile={
-                "interest_direction": "visual, interactive"
-            },
-        )
-        assert "mindmap" in decision.selected_agents
+        decision = await director.route("背一下反向传播的核心要点")
+        assert decision.agent_name == "flashcard"
 
     @pytest.mark.asyncio
-    async def test_content_is_always_selected(self):
+    async def test_rule_route_interactive_diagram_topic(self):
         director = Director()
-        for topic in [
-            "Python", "机器学习", "数据结构", "量子物理", "unknown_xyz",
-        ]:
-            decision = await director.route(topic)
-            assert "content" in decision.selected_agents, (
-                f"content missing for topic '{topic}'"
-            )
+        decision = await director.route("CNN架构的动态可视化演示")
+        assert decision.agent_name == "interactive_diagram"
 
-    def test_default_route_returns_all(self):
+    @pytest.mark.asyncio
+    async def test_resource_type_direct_route(self):
         director = Director()
-        decision = director._default_route("some_unmatched_topic")
-        assert len(decision.selected_agents) >= 4
-        assert decision.strategy == "llm"
+        decision = await director.route("任意主题", resource_type="code")
+        assert decision.agent_name == "code"
+        assert decision.strategy == "type_direct"
 
-    def test_default_agents_present(self):
+    @pytest.mark.asyncio
+    async def test_resource_type_direct_route_project(self):
         director = Director()
-        for agent in director.DEFAULT_AGENTS:
-            assert agent in ("content", "exercise", "mindmap", "reading", "code", "flashcard")
+        decision = await director.route("随便什么", resource_type="project")
+        assert decision.agent_name == "project"
+        assert decision.strategy == "type_direct"
+
+    @pytest.mark.asyncio
+    async def test_comparison_sub_type_detected(self):
+        director = Director()
+        decision = await director.route("对比一下CNN和RNN的区别")
+        assert decision.sub_type == "comparison"
+
+    @pytest.mark.asyncio
+    async def test_diagnosis_sub_type_detected(self):
+        director = Director()
+        decision = await director.route("这个bug怎么排查和修复")
+        assert decision.sub_type == "diagnosis"
+
+    @pytest.mark.asyncio
+    async def test_default_agent_is_content(self):
+        director = Director()
+        decision = await director.route("xyzzy_unmatched_abc")
+        assert decision.agent_name == "content"
 
 
 class TestRouteDecision:
     def test_default_values(self):
         rd = RouteDecision()
-        assert rd.selected_agents == []
+        assert rd.agent_name == "content"
         assert rd.rationale == ""
         assert rd.strategy == ""
 
-    def test_with_agents(self):
+    def test_with_agent(self):
         rd = RouteDecision(
-            selected_agents=["content", "exercise"],
+            agent_name="code",
             rationale="test",
             strategy="rule",
         )
-        assert len(rd.selected_agents) == 2
+        assert rd.agent_name == "code"
         assert rd.strategy == "rule"
+
+    def test_with_sub_type(self):
+        rd = RouteDecision(
+            agent_name="content",
+            sub_type="comparison",
+            rationale="对比分析",
+            strategy="rule",
+        )
+        assert rd.sub_type == "comparison"
 
 
 class TestDirectorLLMRoute:
@@ -267,19 +276,42 @@ class TestDirectorLLMRoute:
         """无关键词匹配的 topic 触发 LLM 路由"""
         director = Director()
         decision = await director.route("量子计算与量子信息")
-        # 不断言 strategy（mock LLM 返回可能不标准），但确保不抛异常
         assert isinstance(decision, RouteDecision)
-        assert "content" in decision.selected_agents
-        assert len(decision.selected_agents) > 0
+        assert decision.agent_name in ("content", "code", "mindmap", "project", "flashcard", "interactive_diagram")
 
     @pytest.mark.asyncio
     async def test_llm_route_fallback_on_error(self):
-        """LLM 路由失败时回退到默认全 Agent 集合"""
+        """LLM 路由失败时回退到默认 Agent"""
         director = Director()
-        # 用不带任何关键词的 topic 确保走 LLM 路径
         decision = await director.route("xyzzy_unmatched_abc")
         assert isinstance(decision, RouteDecision)
-        assert len(decision.selected_agents) >= 1
+        assert decision.agent_name == "content"
+
+
+class TestDirectorLLMRouteEdgeCases:
+    """LLM 路由边界情况"""
+
+    @pytest.mark.asyncio
+    async def test_llm_route_for_unknown_topic_returns_default(self):
+        """未匹配任何关键词时走 LLM 路由"""
+        director = Director()
+        decision = await director.route("xyzzy_unmatched_topic_abc")
+        assert decision.agent_name in ("content", "code", "mindmap", "project", "flashcard", "interactive_diagram")
+
+    @pytest.mark.asyncio
+    async def test_llm_route_with_empty_topic(self):
+        """空 topic 的边界情况"""
+        director = Director()
+        decision = await director.route("")
+        assert decision.agent_name == "content"
+
+    @pytest.mark.asyncio
+    async def test_llm_route_non_ascii_topic(self):
+        """非 ASCII topic（中文）"""
+        director = Director()
+        decision = await director.route("机器学习")
+        assert decision.strategy == "rule"  # 关键词命中
+        assert decision.agent_name in ("content", "code")
 
 
 class TestContentAgentTurnSummary:
@@ -332,23 +364,32 @@ class TestContentAgentTurnSummary:
 
 
 class TestDirectorThreshold:
-    """硬编码阈值配置化验证"""
+    """Director 基础配置验证"""
 
-    def test_code_kb_threshold_is_configurable(self):
+    def test_supported_agents_exist(self):
         director = Director()
-        assert hasattr(director, "CODE_KB_THRESHOLD")
-        assert director.CODE_KB_THRESHOLD == 30
+        from app.orchestration.director import SUPPORTED_AGENTS
+        assert "content" in SUPPORTED_AGENTS
+        assert "code" in SUPPORTED_AGENTS
+        assert "interactive_diagram" in SUPPORTED_AGENTS
+        assert "project" in SUPPORTED_AGENTS
+        assert "mindmap" in SUPPORTED_AGENTS
+        assert "flashcard" in SUPPORTED_AGENTS
+        assert len(SUPPORTED_AGENTS) == 6
 
 
-class TestResourceGenTimeout:
-    """超时控制验证"""
+class TestResourceGenConfig:
+    """资源生成配置验证"""
 
-    @pytest.mark.asyncio
-    async def test_timeout_constant_exists(self):
-        from app.workflows import resource_gen
+    def test_agent_labels_exist(self):
+        from app.workflows.resource_gen import AGENT_LABELS
 
-        assert hasattr(resource_gen, "AGENT_TIMEOUT")
-        assert resource_gen.AGENT_TIMEOUT > 0
+        assert "content" in AGENT_LABELS
+        assert "code" in AGENT_LABELS
+        assert "interactive_diagram" in AGENT_LABELS
+        assert "project" in AGENT_LABELS
+        assert "mindmap" in AGENT_LABELS
+        assert "flashcard" in AGENT_LABELS
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -426,6 +467,9 @@ class TestPresetProfiles:
             "PROFILE_CODE",
             "PROFILE_MINDMAP",
             "PROFILE_READING",
+            "PROFILE_FLASHCARD",
+            "PROFILE_INTERACTIVE_DIAGRAM",
+            "PROFILE_PROJECT",
         ]:
             assert hasattr(llm_service, name), f"Missing preset: {name}"
 
@@ -514,10 +558,11 @@ class TestResourceGenProfiles:
 
         wf = ResourceGenWorkflow()
         assert wf.content_agent._model_profile is not None
-        assert wf.exercise_agent._model_profile is not None
         assert wf.code_agent._model_profile is not None
         assert wf.mindmap_agent._model_profile is not None
-        assert wf.reading_agent._model_profile is not None
+        assert wf.flashcard_agent._model_profile is not None
+        assert wf.project_agent._model_profile is not None
+        assert wf.interactive_diagram_agent._model_profile is not None
 
     def test_workflow_director_has_profile(self):
         from app.workflows.resource_gen import ResourceGenWorkflow
@@ -525,10 +570,11 @@ class TestResourceGenProfiles:
         wf = ResourceGenWorkflow()
         assert wf.director._model_profile is not None
 
-    def test_workflow_agents_with_profile_have_plan_llm(self):
+    def test_workflow_agent_map_covers_all_types(self):
         from app.workflows.resource_gen import ResourceGenWorkflow
+        from app.orchestration.director import SUPPORTED_AGENTS
 
         wf = ResourceGenWorkflow()
-        # ContentAgent 和 ExerciseAgent 的 profile 包含 plan
-        assert hasattr(wf.content_agent, "plan_llm")
-        assert hasattr(wf.exercise_agent, "plan_llm")
+        for agent_name in SUPPORTED_AGENTS:
+            assert agent_name in wf._agent_map, f"Missing agent in map: {agent_name}"
+            assert wf._agent_map[agent_name] is not None

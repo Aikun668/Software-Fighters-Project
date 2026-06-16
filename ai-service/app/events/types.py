@@ -16,6 +16,7 @@ class StreamEventType(str, Enum):
     CENTER_START = "center_start"
     CENTER_END = "center_end"
     INQUIRY = "inquiry"
+    RECOMMENDATION = "recommendation"
 
 
 @dataclass
@@ -109,5 +110,24 @@ def knowledge_candidates_event(groups: dict[str, Any]) -> StreamEvent:
             "related": related,
             "broad": broad,
             "candidates": all_candidates,
+        },
+    )
+
+
+def recommendation_event(
+    knowledge_node_id: str,
+    node_name: str,
+    message: str = "",
+) -> StreamEvent:
+    """SSE 推荐练习事件：聊天中检测到知识点后推送给前端渲染「去练习」按钮。"""
+    return StreamEvent(
+        type=StreamEventType.RECOMMENDATION,
+        stage="exercise",
+        message=message or f"检测到知识点「{node_name}」，要去练习一下吗？",
+        data={
+            "type": "exercise_recommendation",
+            "knowledge_node_id": knowledge_node_id,
+            "node_name": node_name,
+            "action": "add_to_practice",
         },
     )

@@ -8,15 +8,11 @@ logger = logging.getLogger(__name__)
 class PlanCenter:
     def __init__(
         self,
-        path_workflow=None,
-        inquiry_service=None,
         goal_agent=None,
         decompose_agent=None,
         schedule_agent=None,
         adjustment_agent=None,
     ):
-        self.path_workflow = path_workflow
-        self.inquiry_service = inquiry_service
         self.goal_agent = goal_agent
         self.decompose_agent = decompose_agent
         self.schedule_agent = schedule_agent
@@ -25,21 +21,16 @@ class PlanCenter:
     async def execute(self, task: CenterTask) -> CenterResult:
         context = task.context or {}
         student_profile = context.get("student_profile", {})
-        user_id = context.get("user_id", 1)
         topic = task.params.get("topic") or task.input
 
         if task.intent == "adjust_plan" and self.adjustment_agent is not None:
             return await self._run_adjustment(task, student_profile)
 
-        if self.goal_agent is not None and self.schedule_agent is not None:
-            return await self._run_new_plan(task, user_id, topic, student_profile)
-
-        return await self._run_legacy_plan(task, user_id, topic, student_profile)
+        return await self._run_new_plan(task, topic, student_profile)
 
     async def _run_new_plan(
         self,
         task: CenterTask,
-        user_id: int,
         topic: str,
         student_profile: dict,
     ) -> CenterResult:
@@ -147,73 +138,5 @@ class PlanCenter:
                 event_type="error",
                 error="计划调整失败",
                 agent="AdjustmentAgent",
-                sequence=task.sequence,
-            )
-
-    async def _run_legacy_plan(
-        self,
-        task: CenterTask,
-        user_id: int,
-        topic: str,
-        student_profile: dict,
-    ) -> CenterResult:
-        try:
-            from app.services.inquiry_service import InquiryService
-            from app.workflows.learning_path import LearningPathWorkflow
-
-            inquiry = self.inquiry_service or InquiryService()
-            check_result = await inquiry.check(task.input, student_profile)
-
-            if not check_result.is_clear:
-                return CenterResult(
-                    mode="plan",
-                    intent=task.intent,
-                    event_type="inquiry",
-                    payload={
-                        "type": "inquiry",
-                        "is_clear": False,
-                        "clarified_topic": check_result.clarified_topic or topic,
-                        "questions": check_result.questions,
-                        "rationale": check_result.rationale,
-                    },
-                    agent="InquiryService",
-                    sequence=task.sequence,
-                )
-
-            workflow = self.path_workflow or LearningPathWorkflow()
-            path_state = await workflow.run({
-                "user_id": user_id,
-                "student_profile": student_profile,
-                "topic": topic,
-            })
-
-            steps = path_state.get("steps", [])
-            concept_graph = path_state.get("concept_graph", {})
-            response = path_state.get("response", "")
-
-            return CenterResult(
-                mode="plan",
-                intent=task.intent,
-                event_type="plan",
-                payload={
-                    "type": "plan",
-                    "title": f"{topic}学习计划",
-                    "topic": topic,
-                    "total_steps": len(steps),
-                    "steps": steps,
-                    "concept_graph": concept_graph,
-                    "summary": response,
-                },
-                agent="LearningPathWorkflow",
-                sequence=task.sequence,
-            )
-        except Exception as e:
-            logger.error(f"PlanCenter failed: {e}")
-            return CenterResult(
-                mode="plan",
-                intent=task.intent,
-                event_type="error",
-                error="路径规划失败",
-                agent="LearningPathWorkflow",
                 sequence=task.sequence,
             )

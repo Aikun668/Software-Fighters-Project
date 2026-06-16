@@ -13,6 +13,8 @@ logger = logging.getLogger(__name__)
 
 class ExerciseState(TypedDict, total=False):
     topic: str
+    knowledge_node_id: str | None
+    strategy: str | None
     count: int
     difficulty: str
     student_profile: dict
@@ -54,11 +56,25 @@ class ExerciseAgent(BaseAgent):
     async def _plan_node(self, state: ExerciseState) -> dict:
         """规划题目蓝图"""
         topic = state.get("topic", "")
+        knowledge_node_id = state.get("knowledge_node_id")
+        strategy = state.get("strategy")
         count = state.get("count", 3)
         difficulty = state.get("difficulty", "medium")
         student_profile = state.get("student_profile", {})
         purpose = state.get("purpose", "")
         weak_points = student_profile.get("weak_points", [])
+
+        # Derive topic from node_id if not explicitly given
+        effective_topic = topic or (knowledge_node_id or "")
+
+        strategy_hint = ""
+        if strategy == "weakness":
+            strategy_hint = "侧重用户薄弱的知识子概念，适当降低难度以建立信心。"
+            difficulty = "easy"
+        elif strategy == "review":
+            strategy_hint = "生成与常见错题同类但不同问法的变体题，帮助巩固。"
+        elif strategy == "new":
+            strategy_hint = "生成全新题目，覆盖用户尚未接触的知识点或更高难度。"
 
         conditions = {"warmup": purpose == "warmup_not_exam"}
         plan_system = build_prompt(
@@ -68,11 +84,12 @@ class ExerciseAgent(BaseAgent):
         user_prompt = interpolate_variables(
             plan_user_tpl,
             {
-                "topic": topic,
+                "topic": effective_topic,
                 "count": str(count),
                 "difficulty": difficulty,
                 "weak_points": ", ".join(weak_points) if weak_points else "无",
                 "purpose": purpose,
+                "strategy_hint": strategy_hint,
             },
         )
 
@@ -85,8 +102,9 @@ class ExerciseAgent(BaseAgent):
         )
         plan = result.get("templates", [])
         if not plan:
+            types = ["choice", "short_answer", "code"]
             plan = [
-                {"question_id": f"q_{i+1}", "topic": topic, "question_type": "choice" if i % 2 == 0 else "short_answer", "difficulty": difficulty}
+                {"question_id": f"q_{i+1}", "topic": effective_topic, "question_type": types[i % 3], "difficulty": difficulty}
                 for i in range(count)
             ]
 
@@ -120,6 +138,7 @@ class ExerciseAgent(BaseAgent):
 
         plan = state.get("plan", [])
         purpose = state.get("purpose", "")
+        knowledge_node_id = state.get("knowledge_node_id")
         questions = []
 
         conditions = {"warmup": purpose == "warmup_not_exam"}
@@ -158,11 +177,15 @@ class ExerciseAgent(BaseAgent):
                 if issues:
                     logger.warning(f"Question {q_id} has {len(issues)} issue(s): {issues}")
                 normalized["topic"] = topic
+                if knowledge_node_id:
+                    normalized["knowledge_node_id"] = knowledge_node_id
                 questions.append(normalized)
             else:
                 mock_q = self._mock_question(q_type, topic)
                 mock_q, _issues = validate_question(mock_q)
                 mock_q["topic"] = topic
+                if knowledge_node_id:
+                    mock_q["knowledge_node_id"] = knowledge_node_id
                 questions.append(mock_q)
 
         return {"questions": questions, "stage": "generated"}
@@ -180,6 +203,14 @@ class ExerciseAgent(BaseAgent):
                 },
                 "correct_answer": "A",
                 "explanation": f"选项A正确描述了{topic}的典型应用。",
+            }
+        if q_type == "code":
+            return {
+                "question_type": "code",
+                "question": f"请编写代码实现{topic}的核心逻辑，要求函数签名正确且包含必要的注释。",
+                "options": None,
+                "correct_answer": f"# 参考实现\ndef {topic.lower().replace(' ', '_')}(input_data):\n    # TODO: 实现{topic}的核心逻辑\n    pass",
+                "explanation": f"代码需要正确实现{topic}的算法流程，注意边界条件处理。",
             }
         return {
             "question_type": "short_answer",

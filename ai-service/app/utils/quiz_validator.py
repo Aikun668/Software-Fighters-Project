@@ -13,7 +13,7 @@
 
 from typing import Any
 
-_VALID_TYPES: frozenset[str] = frozenset({"choice", "short_answer"})
+_VALID_TYPES: frozenset[str] = frozenset({"choice", "short_answer", "code"})
 _CHOICE_KEYS: tuple[str, ...] = ("A", "B", "C", "D")
 
 
@@ -56,6 +56,10 @@ def _normalize(q: dict[str, Any]) -> dict[str, Any]:
             out["correct_answer"] = _align_answer_key(out["options"], out["correct_answer"])
     else:
         out["options"] = None
+
+    # Preserve code-specific fields through normalization
+    if "knowledge_node_id" in q:
+        out["knowledge_node_id"] = str(q["knowledge_node_id"] or "").strip() or None
 
     return out
 
@@ -109,6 +113,9 @@ def _collect_issues(q: dict[str, Any]) -> list[str]:
             issues.append("choice_options_must_be_a_to_d")
         if correct.upper() not in _CHOICE_KEYS:
             issues.append("choice_correct_answer_must_be_option_key")
+    elif qtype == "code":
+        # Code questions: correct_answer is reference solution, no options needed
+        pass
     else:
         if isinstance(options, dict) and options:
             issues.append("non_choice_must_not_have_options")

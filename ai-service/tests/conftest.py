@@ -1,4 +1,5 @@
 import asyncio
+import os
 import pytest
 from unittest.mock import patch
 
@@ -7,6 +8,34 @@ from dotenv import load_dotenv
 load_dotenv()
 
 pytestmark = pytest.mark.asyncio(loop_scope="function")
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--real-llm",
+        action="store_true",
+        default=False,
+        help="Run tests against real LLM instead of mock",
+    )
+    parser.addoption(
+        "--use-real-llm",
+        action="store_true",
+        default=bool(os.environ.get("USE_REAL_LLM")),
+        help="Run tests against real LLM (env: USE_REAL_LLM=1)",
+    )
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "real_llm: test requires real LLM call")
+
+
+def pytest_collection_modifyitems(config, items):
+    if config.getoption("--real-llm") or config.getoption("--use-real-llm"):
+        return
+    skip_real_llm = pytest.mark.skip(reason="needs --real-llm flag or USE_REAL_LLM=1")
+    for item in items:
+        if "real_llm" in item.keywords:
+            item.add_marker(skip_real_llm)
 
 @pytest.fixture(autouse=True)
 def mock_sleep():

@@ -1,13 +1,23 @@
 plan_system: |
   你是出题规划器。基于探索结果，给出题目蓝图。
   {{#if warmup}}你正在帮助一位刚刚回归学习的学生"热身"。你的目标是确认ta是否还记得这些知识点，而不是考倒ta。{{/if}}
-  输出 JSON：{"templates": [{"question_id": "q_1", "topic": "...", "question_type": "...", "difficulty": "..."}]}
+
+  题型选择规则：
+  - choice: 概念理解/辨析题，适合考察定义、区别、应用场景判断
+  - short_answer: 原理阐述/分析题，适合考察深度理解和表达能力
+  - code: 编程实现题，适合考察算法实现、代码编写能力（仅当知识点涉及编码时使用）
+
+  难度分布建议：easy : medium : hard = 2 : 5 : 3
+  题型分布建议：choice : short_answer : code = 3 : 4 : 3
+
+  输出 JSON：{"templates": [{"question_id": "q_1", "topic": "...", "question_type": "choice|short_answer|code", "difficulty": "easy|medium|hard"}]}
 
 plan_user: |
   知识点：{topic}
   题目数量：{count}
   难度：{difficulty}
   薄弱点：{weak_points}
+  {strategy_hint}
   {purpose}
 
   请输出规划 JSON。
@@ -26,7 +36,16 @@ quiz_system: |
   - 不要出"以下哪项不是"、"以下哪项错误"这种否定型题目
   - 选项不超过4个
   {{/if}}
-  输出 JSON：{"question_type": "...", "question": "...", "options": {"A":"..."}, "correct_answer": "...", "explanation": "..."}
+
+  题型特定要求：
+  - choice: 必须提供 A/B/C/D 四个选项，correct_answer 填选项字母。explanation 详细解释每个选项。
+  - short_answer: options 为 null，correct_answer 写完整参考答案。explanation 补充易忽略的要点。
+  - code: options 为 null，correct_answer 写参考代码实现。explanation 包含算法思路、关键步骤说明、常见错误提醒。
+
+  输出 JSON：
+  - choice: {"question_type":"choice","question":"...","options":{"A":"...","B":"...","C":"...","D":"..."},"correct_answer":"B","explanation":"..."}
+  - short_answer: {"question_type":"short_answer","question":"...","options":null,"correct_answer":"参考答案...","explanation":"..."}
+  - code: {"question_type":"code","question":"请编写代码实现...","options":null,"correct_answer":"def solution(...):\n    ...","explanation":"算法思路：..."}
 
 quiz_user: |
   题目模板：

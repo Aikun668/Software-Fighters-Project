@@ -40,8 +40,6 @@ class AutoCenter:
 
         if intent == "solve_problem":
             return await self._run_solve(task, messages, student_profile)
-        if intent == "explain":
-            return await self._run_explain(task, student_profile)
         if intent == "diagnose":
             return await self._run_diagnose(task, student_profile)
         if intent == "profile_building":
@@ -84,126 +82,6 @@ class AutoCenter:
                 agent="TutorAgent",
                 sequence=task.sequence,
             )
-
-    async def _run_explain(
-        self,
-        task: CenterTask,
-        student_profile: dict,
-    ) -> CenterResult:
-        topic = task.params.get("topic") or task.input
-        code_language = task.params.get("language", "python")
-
-        if self._is_broad_topic(topic):
-            return await self._run_decompose_then_explain(task, topic, student_profile, code_language)
-
-        agent = self.layered_explain_agent or LayeredExplainAgent()
-        try:
-            state = await agent.run({
-                "topic": topic,
-                "context": task.input,
-                "student_profile": student_profile,
-                "code_language": code_language,
-            })
-            return CenterResult(
-                mode="auto",
-                intent=task.intent,
-                event_type="content",
-                payload={
-                    "response": state.get("response", ""),
-                    "intuition_layer": state.get("intuition_layer", {}),
-                    "formal_layer": state.get("formal_layer", {}),
-                    "code_layer": state.get("code_layer", {}),
-                    "synthesis": state.get("synthesis", ""),
-                    "blocks": self._build_explain_blocks(state),
-                },
-                agent="LayeredExplainAgent",
-                sequence=task.sequence,
-            )
-        except Exception as e:
-            logger.error(f"AutoCenter explain failed: {e}")
-            return CenterResult(
-                mode="auto",
-                intent=task.intent,
-                event_type="error",
-                error="讲解失败",
-                agent="LayeredExplainAgent",
-                sequence=task.sequence,
-            )
-
-    async def _run_decompose_then_explain(
-        self,
-        task: CenterTask,
-        topic: str,
-        student_profile: dict,
-        code_language: str,
-    ) -> CenterResult:
-        decompose = self.decompose_agent or DecomposeAgent()
-        try:
-            d_state = await decompose.run({
-                "topic": topic,
-                "context": task.input,
-                "student_profile": student_profile,
-            })
-        except Exception as e:
-            logger.error(f"AutoCenter decompose failed: {e}")
-            return CenterResult(
-                mode="auto",
-                intent=task.intent,
-                event_type="error",
-                error="知识分解失败",
-                agent="DecomposeAgent",
-                sequence=task.sequence,
-            )
-
-        micro_skills = d_state.get("micro_skills", [])
-        focus_skill = micro_skills[0].get("name", topic) if micro_skills else topic
-
-        explain = self.layered_explain_agent or LayeredExplainAgent()
-        try:
-            e_state = await explain.run({
-                "topic": focus_skill,
-                "context": task.input,
-                "student_profile": student_profile,
-                "code_language": code_language,
-            })
-        except Exception as e:
-            logger.error(f"AutoCenter layered explain failed: {e}")
-            return CenterResult(
-                mode="auto",
-                intent=task.intent,
-                event_type="content",
-                payload={
-                    "response": d_state.get("response", ""),
-                    "macro_topics": d_state.get("macro_topics", []),
-                    "micro_skills": micro_skills,
-                    "prerequisites": d_state.get("prerequisites", []),
-                },
-                agent="DecomposeAgent",
-                sequence=task.sequence,
-            )
-
-        return CenterResult(
-            mode="auto",
-            intent=task.intent,
-            event_type="content",
-            payload={
-                "response": (
-                    f"{d_state.get('summary', '')}\n\n"
-                    f"下面以「{focus_skill}」为例，为你做三层讲解：\n\n"
-                    f"{e_state.get('response', '')}"
-                ),
-                "macro_topics": d_state.get("macro_topics", []),
-                "micro_skills": micro_skills,
-                "prerequisites": d_state.get("prerequisites", []),
-                "intuition_layer": e_state.get("intuition_layer", {}),
-                "formal_layer": e_state.get("formal_layer", {}),
-                "code_layer": e_state.get("code_layer", {}),
-                "synthesis": e_state.get("synthesis", ""),
-                "blocks": self._build_explain_blocks(e_state),
-            },
-            agent="DecomposeAgent+LayeredExplainAgent",
-            sequence=task.sequence,
-        )
 
     async def _run_diagnose(
         self,
@@ -325,38 +203,3 @@ class AutoCenter:
                 sequence=task.sequence,
             )
 
-    @staticmethod
-    def _is_broad_topic(topic: str) -> bool:
-        broad_terms = {
-            "概述", "基础", "导论", "入门", "是什么", "简介",
-            "机器学习", "深度学习", "人工智能", "神经网络",
-            "计算机视觉", "自然语言处理", "强化学习",
-        }
-        return any(term in topic for term in broad_terms) or len(topic) <= 8
-
-    @staticmethod
-    def _build_explain_blocks(state: dict) -> list[dict]:
-        blocks = []
-        intuition = state.get("intuition_layer", {})
-        formal = state.get("formal_layer", {})
-        code = state.get("code_layer", {})
-        if intuition.get("analogy"):
-            blocks.append({
-                "type": "text",
-                "heading": "直觉理解",
-                "content": f"{intuition.get('analogy')}\n\n核心直觉：{intuition.get('key_idea', '')}",
-            })
-        if formal.get("definition"):
-            blocks.append({
-                "type": "text",
-                "heading": "形式化定义",
-                "content": f"{formal.get('definition')}\n\n{formal.get('formula', '')}".strip(),
-            })
-        if code.get("code"):
-            language = code.get("language", "python")
-            blocks.append({
-                "type": "code",
-                "heading": f"{language} 代码示例",
-                "content": f"```{language}\n{code.get('code')}\n```\n\n{code.get('description', '')}".strip(),
-            })
-        return blocks

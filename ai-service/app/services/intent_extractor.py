@@ -14,13 +14,12 @@ logger = logging.getLogger(__name__)
 INTENT_TYPES = Literal[
     "exercise_gen", "resource_gen", "tutor_question",
     "learning_path", "solve_problem", "flashcard_gen",
-    "profile_building", "explain", "code_example",
+    "profile_building", "code_example",
     "visualize", "knowledge_graph", "diagnose", "unknown",
 ]
 
 INTENT_CENTER_MAP: dict[str, str] = {
     "tutor_question": "auto",
-    "explain": "auto",
     "solve_problem": "auto",
     "diagnose": "auto",
     "learning_path": "plan",
@@ -35,11 +34,11 @@ INTENT_CENTER_MAP: dict[str, str] = {
 }
 
 _CENTER_EXECUTION_ORDER = {
-    "plan": 1,
-    "auto": 2,
+    "auto": 1,
+    "visualization": 2,
     "resource": 3,
     "exercise": 4,
-    "visualization": 5,
+    "plan": 5,
 }
 
 
@@ -55,11 +54,6 @@ class ResourceParams(BaseModel):
 
 class TutorParams(BaseModel):
     question: str = Field(..., min_length=1)
-
-
-class ExplainParams(BaseModel):
-    topic: str = Field(default="AI基础", min_length=1)
-    question: str = Field(default="", min_length=1)
 
 
 class CodeExampleParams(BaseModel):
@@ -106,7 +100,6 @@ PARAMS_BY_INTENT: dict[str, type[BaseModel]] = {
     "exercise_gen": ExerciseParams,
     "resource_gen": ResourceParams,
     "tutor_question": TutorParams,
-    "explain": ExplainParams,
     "code_example": CodeExampleParams,
     "learning_path": LearningPathParams,
     "solve_problem": SolveParams,
@@ -188,13 +181,6 @@ INTENT_REGISTRY: list[IntentDef] = [
         exclusive_keywords=[],
     ),
     IntentDef(
-        intent="explain",
-        params_model=ExplainParams,
-        prompt="用户希望获得某个知识点的讲解。从消息中提取：topic(主题)、question(问题)",
-        keywords=["讲解", "解释", "说明", "介绍一下", "是什么", "原理"],
-        exclusive_keywords=["出题"],
-    ),
-    IntentDef(
         intent="learning_path",
         params_model=LearningPathParams,
         prompt="用户想要个性化学习路径规划。从消息中提取：topic(主题)、level(beginner/intermediate/advanced,默认beginner)",
@@ -254,16 +240,50 @@ INTENT_REGISTRY: list[IntentDef] = [
 
 
 def _build_extraction_prompt() -> str:
-    parts = ["分析用户消息，判断一个或多个意图并提取参数。返回JSON。\n意图列表："]
+    parts = [
+        "分析用户消息，判断一个或多个意图并提取参数。返回JSON。",
+        "",
+        "重要规则：",
+        "1. 只提取用户明确表达的意图，不要推测或添加额外意图",
+        "2. 用户说'解题/求解/算'→只提取 solve_problem，不要额外加 exercise_gen",
+        "3. 用户说'诊断/摸底/测一下'→只提取 diagnose，不要额外加 tutor_question 或 solve_problem",
+        "4. 用户说'出题/练习'→只提取 exercise_gen，不要额外加 solve_problem",
+        "5. 只有当用户一句话中明确包含多个不同诉求时（如'解释一下XX再出几道题'），才提取多个意图",
+        "6. 普通问答/闲聊/概念解释 → 只提取 tutor_question，不要附加其他意图",
+        "",
+        "意图列表：",
+    ]
     for i, d in enumerate(INTENT_REGISTRY, 1):
         parts.append(f"{i}. {d.intent} - {d.prompt}")
     parts.append(f"{len(INTENT_REGISTRY) + 1}. unknown - 无法识别")
-    parts.append('\n返回格式：{"intents":[{"intent":"exercise_gen","params":{"topic":"...","count":5},"confidence":0.95}],"is_clear":true}')
+    parts.append('')
+    parts.append('返回格式：{"intents":[{"intent":"exercise_gen","params":{"topic":"...","count":5},"confidence":0.95}],"is_clear":true}')
     parts.append("is_clear 表示意图是否清晰可执行；若模糊则设为 false。")
     return "\n".join(parts)
 
 
 EXTRACTION_PROMPT = _build_extraction_prompt()
+
+# 意图互斥组：同组内只保留置信度最高的那个，过滤 LLM 噪声
+# 注意：不要把跨功能域的意图放在同组，否则会误杀真多意图
+_MUTEX_GROUPS: list[set[str]] = [
+    {"solve_problem", "exercise_gen"},                 # 解题 vs 出题
+    {"diagnose", "tutor_question", "solve_problem"},   # 诊断 vs 答疑 vs 解题
+]
+
+
+def _apply_mutex_filter(intents: list["IntentResult"]) -> list["IntentResult"]:
+    """后置互斥过滤：LLM 多输出的意图进入同组时只留最高置信度。"""
+    if len(intents) <= 1:
+        return intents
+
+    result: list[IntentResult] = list(intents)
+    for group in _MUTEX_GROUPS:
+        matched = [i for i in result if i.intent in group]
+        if len(matched) > 1:
+            best = max(matched, key=lambda i: i.confidence)
+            result = [i for i in result if i not in matched or i is best]
+    return result
 
 
 def _score_intent(message: str, intent_def: IntentDef) -> float:
@@ -374,8 +394,13 @@ class IntentExtractor:
             )
 
         if self.use_mock:
-            return self._extract_multi_mock(message, max_intents, clarity_threshold)
-        return await self._extract_multi_llm(message, max_intents, clarity_threshold)
+            result = self._extract_multi_mock(message, max_intents, clarity_threshold)
+        else:
+            result = await self._extract_multi_llm(message, max_intents, clarity_threshold)
+
+        # 后置互斥过滤：LLM 多输出的意图进同组只留最高置信度
+        result.intents = _apply_mutex_filter(result.intents)
+        return result
 
     def _extract_multi_mock(
         self,

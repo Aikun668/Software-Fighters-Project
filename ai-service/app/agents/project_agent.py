@@ -78,6 +78,19 @@ class ProjectAgent(BaseAgent):
             "tech_stack": result.get("tech_stack", []),
             "time_estimate": result.get("time_estimate", ""),
             "response": result.get("response", f"已为「{topic}」设计微型练习项目。"),
+            "blocks": [{
+                "type": "project",
+                "heading": result.get("project_title", f"{topic}微型实践项目"),
+                "content": {
+                    "title": result.get("project_title", ""),
+                    "difficulty": result.get("difficulty", "beginner"),
+                    "description": result.get("description", ""),
+                    "learning_objectives": result.get("learning_objectives", []),
+                    "milestones": result.get("milestones", []),
+                    "tech_stack": result.get("tech_stack", []),
+                    "time_estimate": result.get("time_estimate", ""),
+                },
+            }],
         }
 
     @staticmethod
