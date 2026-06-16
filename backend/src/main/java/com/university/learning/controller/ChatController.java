@@ -1,15 +1,21 @@
 package com.university.learning.controller;
 
 import com.university.learning.client.PythonClient;
+import com.university.learning.dto.UnifiedChatRequest;
 import com.university.learning.entity.Conversation;
+import com.university.learning.entity.LearningPlan;
 import com.university.learning.entity.Message;
+import com.university.learning.entity.PlanStep;
 import com.university.learning.entity.Resource;
 import com.university.learning.entity.StudentProfile;
 import com.university.learning.service.IConversationService;
+import com.university.learning.service.ILearningPlanService;
 import com.university.learning.service.IMessageService;
+import com.university.learning.service.IPlanStepService;
 import com.university.learning.service.IResourceService;
 import com.university.learning.service.IStudentProfileService;
 import com.university.learning.utils.UserHolder;
+import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -42,17 +48,18 @@ public class ChatController {
     private final IConversationService conversationService;
     private final IMessageService messageService;
     private final IStudentProfileService profileService;
+    private final ILearningPlanService planService;
+    private final IPlanStepService stepService;
 
     /**
-     * 统一对话入口
-     * 请求体: { "message": "...", "conversation_id": 1(可选) }
+     * 统一对话入口，AI自动识别意图（tutor/resource/exercise/solve/research）。
      */
+    @Operation(summary = "统一对话入口", description ="支持的意图：tutor(答疑)、resource(生成资源)、exercise(练习题)、solve(解题)、research(路径规划)")
     @PostMapping
-    public SseEmitter chat(@RequestBody Map<String, Object> request) {
+    public SseEmitter chat(@RequestBody UnifiedChatRequest request) {
         Long userId = getUserId();
-        String message = (String) request.get("message");
-        Long conversationId = request.get("conversation_id") != null
-                ? Long.valueOf(request.get("conversation_id").toString()) : null;
+        String message = request.getMessage();
+        Long conversationId = request.getConversation_id();
 
         // 1. 获取或创建会话
         Conversation conversation = getOrCreateConversation(userId, conversationId, message);
@@ -72,7 +79,8 @@ public class ChatController {
         Map<String, Object> profileMap = buildProfileMap(userId);
 
         // 5. 调用AI（mode=auto，AI自动识别意图）
-        return pythonClient.unifiedChatStream(userId, message, finalConvId, profileMap, history, (doneData) -> {
+        return pythonClient.unifiedChatStream(userId, message, finalConvId, profileMap, history,
+                request.getImages(), request.getStyle(), (doneData) -> {
             log.info("Chat done回调: convId={}, doneKeys={}", finalConvId, doneData.keySet());
             Object inner = doneData.get("data");
             if (inner instanceof Map) {
@@ -82,7 +90,11 @@ public class ChatController {
             String detectedMode = detectMode(doneData);
             log.info("Chat 检测到模式: {}", detectedMode);
             saveAiResponse(finalConvId, doneData, detectedMode);
-            saveGeneratedContent(userId, doneData);
+            // 追问模式跳过内容落库，避免把追问问题当成习题/资源入库
+            if (!"inquiry".equals(detectedMode)) {
+                saveGeneratedContent(userId, message, doneData);
+            }
+            saveResearchPlan(userId, doneData, detectedMode);
             saveProfileDelta(userId, doneData);
             updateConversationTitle(finalConvId, message);
         });
@@ -136,8 +148,15 @@ public class ChatController {
 
     /** 检测AI实际使用的模式（从done事件中推断） */
     private String detectMode(Map<String, Object> doneData) {
-        // inquiry模式：Python返回追问（非SSE JSON响应）
-        if ("inquiry".equals(doneData.get("type"))) {
+        // research模式：done事件中 mode:"research" 或 含有plan字段
+        if ("research".equals(doneData.get("mode"))
+                || doneData.get("plan") instanceof Map
+                || doneData.get("_path_steps") instanceof List) {
+            return "research";
+        }
+        // inquiry模式：Python返回追问
+        if (doneData.get("is_clear") == Boolean.FALSE
+                || "inquiry".equals(doneData.get("type"))) {
             return "inquiry";
         }
         // 检查嵌套的data字段（resource模式用StreamEvent包装）
@@ -201,22 +220,10 @@ public class ChatController {
         String text = (String) doneData.get("_response_text");
         if (text != null && !text.isEmpty()) return text;
 
-        // 2. Inquiry追问响应：格式化追问问题
-        if ("inquiry".equals(doneData.get("type"))) {
-            Object qs = doneData.get("questions");
-            if (qs instanceof List && !((List<?>) qs).isEmpty()) {
-                StringBuilder sb = new StringBuilder("请确认以下信息：\n");
-                for (Object q : (List<?>) qs) {
-                    if (q instanceof Map) {
-                        Map<?, ?> m = (Map<?, ?>) q;
-                        Object question = m.get("question");
-                        sb.append("- ").append(question != null ? question : q).append("\n");
-                    }
-                }
-                return sb.toString();
-            }
-            Object topic = doneData.get("clarified_topic");
-            return topic != null ? topic.toString() : "请提供更详细的学习需求";
+        // 2. Inquiry追问响应
+        if (doneData.get("is_clear") == Boolean.FALSE
+                || "inquiry".equals(doneData.get("type"))) {
+            return formatInquiryText(doneData);
         }
 
         // 3. done事件顶层的response字段
@@ -228,7 +235,19 @@ public class ChatController {
         text = (String) inner.getOrDefault("response", "");
         if (!text.isEmpty()) return text;
 
-        // 5. resource/exercise模式没有流式文字时，给个描述
+        // 5. research模式：从plan字段提取summary
+        Object planObj = doneData.get("plan");
+        if (planObj instanceof Map) {
+            Map<?, ?> plan = (Map<?, ?>) planObj;
+            int totalSteps = plan.get("total_steps") instanceof Number
+                    ? ((Number) plan.get("total_steps")).intValue() : 0;
+            return "已为您规划「" + plan.get("title") + "」学习路径，共 " + totalSteps + " 步，请查看";
+        }
+        if (doneData.get("_path_steps") instanceof List) {
+            return "已为您规划学习路径，请查看";
+        }
+
+        // 6. resource/exercise模式没有流式文字时，给个描述
         if (hasContent(doneData, "content_blocks") || hasContent(inner, "content_blocks")) {
             return "已生成学习资源，请查看";
         }
@@ -242,12 +261,14 @@ public class ChatController {
     // ==================== 内容落库 ====================
 
     /**
-     * 保存AI自动生成的资源/习题到数据库
-     * 兼容两种done事件格式：
-     *   resource模式: {type:"done", data:{content_blocks:[...], questions:[...]}}
-     *   exercise模式: {type:"done", questions:[...]}
+     * 保存AI自动生成的资源/习题到数据库。
+     * topic 优先级：模型返回(inner.data.topic) > 模型返回(doneData.topic) > 用户消息 > "未知主题"
+     *
+     * @param userId      用户ID
+     * @param userMessage 用户原始消息，作为 topic 的最后兜底
+     * @param doneData    AI 模型返回的 done 事件数据
      */
-    private void saveGeneratedContent(Long userId, Map<String, Object> doneData) {
+    private void saveGeneratedContent(Long userId, String userMessage, Map<String, Object> doneData) {
         try {
             Map<String, Object> inner = getInnerData(doneData);
 
@@ -258,9 +279,8 @@ public class ChatController {
             log.info("saveGeneratedContent: hasContentBlocks={}, hasQuestions={}, innerKeys={}",
                     contentBlocks != null, questions != null, inner.keySet());
 
-            // 提取主题
-            String topic = (String) inner.getOrDefault("topic",
-                    doneData.getOrDefault("topic", "未知主题"));
+            // 提取主题：逐级 fallback，getOrDefault 不防 null 值，所以显式判空
+            String topic = extractTopic(inner, doneData, userMessage);
 
             // 保存学习资源
             if (contentBlocks != null && !contentBlocks.isEmpty()) {
@@ -269,7 +289,8 @@ public class ChatController {
                     resource.setUserId(userId);
                     resource.setType((String) block.getOrDefault("type", "course_doc"));
                     resource.setTopic(topic);
-                    resource.setTitle((String) block.getOrDefault("title", topic));
+                    // title 优先取模型返回的标题，回退到 topic
+                    resource.setTitle(firstNonNull((String) block.get("title"), topic));
                     resource.setContentJson(block);
                     resourceService.save(resource);
                 }
@@ -297,6 +318,30 @@ public class ChatController {
         }
     }
 
+    /**
+     * 按优先级提取 topic：inner.topic > doneData.topic > 用户消息 > "未知主题"。
+     * 不使用 getOrDefault，因为 key 存在但值为 null 时 getOrDefault 返回 null。
+     */
+    private String extractTopic(Map<String, Object> inner, Map<String, Object> doneData, String userMessage) {
+        String topic = (String) inner.get("topic");
+        if (topic == null) {
+            topic = (String) doneData.get("topic");
+        }
+        if (topic == null && userMessage != null && !userMessage.isBlank()) {
+            // 用户消息截取前 30 字符作为主题兜底
+            topic = userMessage.length() > 30 ? userMessage.substring(0, 30) : userMessage;
+        }
+        if (topic == null) {
+            topic = "未知主题";
+        }
+        return topic;
+    }
+
+    /** 返回第一个非 null 的值，类似 SQL COALESCE。 */
+    private String firstNonNull(String a, String b) {
+        return a != null ? a : b;
+    }
+
     /** 从顶层和嵌套data中提取列表字段，优先取非空的 */
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> extractList(Map<String, Object> top,
@@ -311,6 +356,110 @@ public class ChatController {
             return (List<Map<String, Object>>) val;
         }
         return null;
+    }
+
+    /**
+     * 保存AI自动生成的学习计划（research意图）
+     * Python done事件结构: { "type":"done", "mode":"research",
+     *   "plan": { "title", "topic", "total_steps", "steps":[...], "concept_graph":{...} } }
+     */
+    @SuppressWarnings("unchecked")
+    private void saveResearchPlan(Long userId, Map<String, Object> doneData, String mode) {
+        if (!"research".equals(mode)) return;
+
+        // 优先取 done事件中的 plan 字段，其次取 SSE 捕获的 _path_steps
+        Object planObj = doneData.get("plan");
+        List<Map<String, Object>> steps;
+        String title;
+        String topic;
+
+        if (planObj instanceof Map) {
+            Map<String, Object> plan = (Map<String, Object>) planObj;
+            steps = (List<Map<String, Object>>) plan.get("steps");
+            title = (String) plan.getOrDefault("title", "学习计划");
+            topic = (String) plan.getOrDefault("topic", "");
+        } else {
+            // 兜底：从_path_steps取
+            Object stepsObj = doneData.get("_path_steps");
+            if (!(stepsObj instanceof List)) return;
+            steps = (List<Map<String, Object>>) stepsObj;
+            title = "学习计划";
+            topic = "";
+        }
+
+        if (steps == null || steps.isEmpty()) return;
+
+        try {
+            LearningPlan plan = new LearningPlan()
+                    .setUserId(userId)
+                    .setCourseId("ai_intro")
+                    .setTitle(title)
+                    .setStatus("in_progress")
+                    .setTotalSteps(steps.size())
+                    .setCompletedSteps(0);
+            planService.save(plan);
+
+            // concept_graph 节点映射：name → id
+            Map<String, String> nodeIdMap = new HashMap<>();
+            if (planObj instanceof Map) {
+                Map<String, Object> planMap = (Map<String, Object>) planObj;
+                Object cg = planMap.get("concept_graph");
+                if (cg instanceof Map) {
+                    Object nodes = ((Map<?, ?>) cg).get("nodes");
+                    if (nodes instanceof List) {
+                        for (Object n : (List<?>) nodes) {
+                            if (n instanceof Map) {
+                                Map<?, ?> nm = (Map<?, ?>) n;
+                                String name = (String) nm.get("name");
+                                String nid = (String) nm.get("id");
+                                if (name != null && nid != null) nodeIdMap.put(name, nid);
+                            }
+                        }
+                    }
+                }
+            }
+
+            for (Map<String, Object> s : steps) {
+                String stepTopic = (String) s.getOrDefault("topic", "");
+                PlanStep step = new PlanStep()
+                        .setPlanId(plan.getId())
+                        .setNodeId(nodeIdMap.getOrDefault(stepTopic, ""))
+                        .setTopic(stepTopic)
+                        .setOrder(toInt(s.get("order"), 0))
+                        .setStatus((String) s.getOrDefault("status", "pending"))
+                        .setNodeType("learn")
+                        .setEstimatedDays(toInt(s.get("estimated_days"), 1))
+                        .setTopicDifficulty(3);
+                stepService.save(step);
+            }
+
+            log.info("AI自动生成学习计划已保存: userId={}, planId={}, topic={}, steps={}",
+                    userId, plan.getId(), topic, steps.size());
+        } catch (Exception e) {
+            log.error("保存AI学习计划失败: userId={}", userId, e);
+        }
+    }
+
+    /** 格式化inquiry追问文字 */
+    @SuppressWarnings("unchecked")
+    private String formatInquiryText(Map<String, Object> doneData) {
+        Object qs = doneData.get("questions");
+        if (qs instanceof List && !((List<?>) qs).isEmpty()) {
+            StringBuilder sb = new StringBuilder("请确认以下信息：\n");
+            for (Object q : (List<?>) qs) {
+                if (q instanceof Map) {
+                    Map<?, ?> m = (Map<?, ?>) q;
+                    Object text = m.get("text");
+                    if (text == null) text = m.get("question");
+                    if (text != null) sb.append("- ").append(text).append("\n");
+                } else if (q instanceof String) {
+                    sb.append("- ").append(q).append("\n");
+                }
+            }
+            return sb.toString();
+        }
+        Object topic = doneData.get("clarified_topic");
+        return topic != null ? "请确认您想学习「" + topic + "」相关内容？" : "请提供更详细的学习需求";
     }
 
     /** 构建学生画像Map */
@@ -375,6 +524,14 @@ public class ChatController {
         } catch (Exception e) {
             log.error("被动保存画像失败: userId={}", userId, e);
         }
+    }
+
+    private int toInt(Object value, int defaultValue) {
+        if (value instanceof Number) return ((Number) value).intValue();
+        if (value instanceof String) {
+            try { return Integer.parseInt((String) value); } catch (NumberFormatException e) { }
+        }
+        return defaultValue;
     }
 
     private Integer toInteger(Object value) {

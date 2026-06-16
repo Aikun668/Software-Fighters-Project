@@ -4,6 +4,7 @@ import com.university.learning.common.Result;
 import com.university.learning.entity.NodeMastery;
 import com.university.learning.service.IKnowledgeGraphService;
 import com.university.learning.service.INodeMasteryService;
+import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -12,10 +13,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * 知识图谱接口 — 纯Java，不调Python
- * 颜色/状态渲染由前端根据 mastery 值自行计算
- */
 @Slf4j
 @RestController
 @RequestMapping("/api/knowledge-graph")
@@ -25,10 +22,7 @@ public class KnowledgeGraphController {
     private final IKnowledgeGraphService graphService;
     private final INodeMasteryService masteryService;
 
-    /**
-     * 获取完整知识图谱（节点+边+用户掌握度）
-     * GET /api/knowledge-graph/ai_intro?user_id=1
-     */
+    @Operation(summary = "获取课程知识图谱", description = "返回节点+边+用户掌握度，courseId 如 ai_intro")
     @GetMapping("/{courseId}")
     public Result getGraph(@PathVariable String courseId, @RequestParam Long userId) {
         Map<String, Float> masteries = buildMasteryMap(userId, courseId);
@@ -36,11 +30,8 @@ public class KnowledgeGraphController {
         return Result.ok(graph);
     }
 
-    /**
-     * 获取节点卡片详情
-     * GET /api/knowledge-graph/{courseId}/nodes/{nodeId}?user_id=1
-     */
-    @GetMapping("/{courseId}/nodes/{nodeId}")
+    @Operation(summary = "获取节点详情卡片", description = "返回节点信息、前置/后置依赖关系、学习表现")
+    @GetMapping("/{courseId}/node/{nodeId}")
     public Result getNodeCard(@PathVariable String courseId,
                               @PathVariable String nodeId,
                               @RequestParam Long userId,
@@ -55,10 +46,7 @@ public class KnowledgeGraphController {
         return Result.ok(card);
     }
 
-    /**
-     * 获取用户掌握度（纯查库）
-     * GET /api/knowledge-graph/masteries/{courseId}?user_id=1
-     */
+    @Operation(summary = "获取用户掌握度分布", description = "返回各节点掌握度 map + 整体分布统计")
     @GetMapping("/masteries/{courseId}")
     public Result getMasteries(@PathVariable String courseId, @RequestParam Long userId) {
         Map<String, Float> map = buildMasteryMap(userId, courseId);

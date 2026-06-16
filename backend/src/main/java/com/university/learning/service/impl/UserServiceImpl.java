@@ -1,8 +1,9 @@
 package com.university.learning.service.impl;
 
+import cn.hutool.captcha.CaptchaUtil;
+import cn.hutool.captcha.LineCaptcha;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.lang.UUID;
-import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.university.learning.common.Result;
@@ -12,9 +13,7 @@ import com.university.learning.dto.UserDTO;
 import com.university.learning.entity.User;
 import com.university.learning.mapper.UserMapper;
 import com.university.learning.service.IUserService;
-import com.university.learning.utils.RegexUtils;
 import jakarta.annotation.Resource;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -27,7 +26,6 @@ import java.util.concurrent.TimeUnit;
 import static com.university.learning.utils.RedisConstants.*;
 
 @Service
-@Slf4j
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IUserService {
 
     @Resource
@@ -35,150 +33,114 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 
     @Resource
     private StringRedisTemplate stringRedisTemplate;
-    @Override
-    public Result sendCode(String phone, String type) {
-        if (!(type.equals("login") || type.equals("register"))){
-            return Result.fail("参数错误");
-        }
-        String codeKey = (type.equals("login") ? LOGIN_CODE_KEY : Register_CODE_KEY) + phone;
-
-
-        // 1. 校验手机号
-        if (RegexUtils.isPhoneInvalid(phone)) {
-            // 不符合 返回错误
-            return Result.fail("手机号格式错误");
-        }
-
-        // 2. 符合，生成验证码
-        String code = RandomUtil.randomNumbers(6);
-        // 3. 保存验证码到 redis
-        stringRedisTemplate.opsForValue().set(codeKey, code,LOGIN_CODE_TTL, TimeUnit.MINUTES);
-        //5.发送验证码
-        log.debug("发送验证码成功,验证码:{}",code);
-
-        return Result.ok();
-    }
-
-
 
     @Override
-    public Result loginByCode(LoginFormDTO loginForm) {
-        //1.校验手机号
-        String phone = loginForm.getPhone();
-        if (RegexUtils.isPhoneInvalid(phone)){
-            //2.如果不符合，返回错误信息
-            return Result.fail("手机格式错误");
-        }
-        String key = LOGIN_CODE_KEY+phone;
-        //2.校验验证码
-        String cacheCode = stringRedisTemplate.opsForValue().get(key);
-        String code = loginForm.getCode();
-        if (cacheCode==null ||  ! cacheCode.equals(code)){
-            //3.不一致，报错
-            return Result.fail("验证码错误");
-        }
-        stringRedisTemplate.delete(key);
+    public Result generateCaptcha() {
+        LineCaptcha captcha = CaptchaUtil.createLineCaptcha(200, 100, 4, 20);
+        String code = captcha.getCode();
+        String key = UUID.randomUUID().toString(true);
 
-        //4.一致，根据手机号查询用户
-        User user=query().eq("phone",phone).one();
+        stringRedisTemplate.opsForValue().set(CAPTCHA_KEY + key, code, CAPTCHA_TTL, TimeUnit.MINUTES);
 
-        //5.判断用户是否存在
-        if (user==null){
-            //6.不存在，创建新用户 并保存
-            return Result.fail("用户不存在，请先注册");
-        }
-        //7.保存用户信息到redis
-        String token = UUID.randomUUID().toString(true);
-        String tokenKey = LOGIN_USER_KEY+token;
-        UserDTO userDTO = BeanUtil.copyProperties(user, UserDTO.class);
-
-        Map<String, Object> userMap = new HashMap<>();
-        userMap.put("id", userDTO.getId().toString());
-        userMap.put("userName", userDTO.getUsername());
-        userMap.put("avatar", userDTO.getAvatarUrl());
-
-        stringRedisTemplate.opsForHash().putAll(tokenKey, userMap);
-        //设置token有效期
-        stringRedisTemplate.expire(tokenKey,LOGIN_USER_TTL,TimeUnit.MINUTES);
-        return Result.ok(token);
+        Map<String, String> data = new HashMap<>();
+        data.put("captchaKey", key);
+        data.put("captchaImage", captcha.getImageBase64Data());
+        return Result.ok(data);
     }
 
     @Override
-    public Result loginByPassword(LoginFormDTO loginForm) {
-        //1.校验手机号
-        String phone = loginForm.getPhone();
-        if (RegexUtils.isPhoneInvalid(phone)){
-            //2.如果不符合，返回错误信息
-            return Result.fail("手机格式错误");
-        }
-        User user=query().eq("phone",phone).one();
-        if (user==null){
-            //3.不存在，返回错误信息
-            return Result.fail("用户不存在，请先注册");
-        }
-        String truePassword = user.getPassword();
+    public Result login(LoginFormDTO loginForm) {
+        String username = loginForm.getUsername();
         String password = loginForm.getPassword();
 
-        //2.校验密码
-        if (!passwordEncoder.matches(password,truePassword)){
-            //3.不一致，返回错误信息
+        if (StrUtil.isBlank(username)) {
+            return Result.fail("用户名不能为空");
+        }
+        if (StrUtil.isBlank(password)) {
+            return Result.fail("密码不能为空");
+        }
+
+        User user = query().eq("username", username).one();
+        if (user == null) {
+            return Result.fail("用户不存在，请先注册");
+        }
+
+        if (!passwordEncoder.matches(password, user.getPassword())) {
             return Result.fail("密码错误");
         }
-        //7.保存用户信息到redis
+
         String token = UUID.randomUUID().toString(true);
-        String tokenKey = LOGIN_USER_KEY+token;
+        String tokenKey = LOGIN_USER_KEY + token;
         UserDTO userDTO = BeanUtil.copyProperties(user, UserDTO.class);
 
         Map<String, Object> userMap = new HashMap<>();
         userMap.put("id", userDTO.getId().toString());
-        userMap.put("nickName", userDTO.getUsername());
-        userMap.put("icon", userDTO.getAvatarUrl());
+        userMap.put("username", userDTO.getUsername());
+        userMap.put("avatarUrl", userDTO.getAvatarUrl());
 
         stringRedisTemplate.opsForHash().putAll(tokenKey, userMap);
-        //设置token有效期
-        stringRedisTemplate.expire(tokenKey,LOGIN_USER_TTL,TimeUnit.MINUTES);
-        return Result.ok(token);
+        stringRedisTemplate.expire(tokenKey, LOGIN_USER_TTL, TimeUnit.MINUTES);
 
+        // 返回 token + 用户信息
+        Map<String, Object> loginResult = new HashMap<>();
+        loginResult.put("token", token);
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("id", user.getId());
+        userInfo.put("username", user.getUsername());
+        userInfo.put("avatarUrl", user.getAvatarUrl());
+        userInfo.put("role", user.getRole());
+        loginResult.put("userInfo", userInfo);
+        return Result.ok(loginResult);
     }
 
     @Override
     public Result register(RegisterFormDTO registerForm) {
-        String phone = registerForm.getPhone();
-        if (RegexUtils.isPhoneInvalid(phone)){
-            return Result.fail("手机格式错误");
-        }
-        User user=query().eq("phone",phone).one();
-        if (user !=null){
-            return Result.fail("用户已存在");
-        }
-        if (StrUtil.isBlank(registerForm.getUsername())){
-            return Result.fail("昵称不能为空");
-        }
-
+        String username = registerForm.getUsername();
         String password = registerForm.getPassword();
         String passwordConfirm = registerForm.getPasswordConfirm();
-        if (!password.equals(passwordConfirm)){
-            return Result.fail("密码不一致");
+
+        if (StrUtil.isBlank(username)) {
+            return Result.fail("用户名不能为空");
         }
-        // 校验验证码
-        String key= Register_CODE_KEY+phone;
-        String code = stringRedisTemplate.opsForValue().get(key);
-        if (code==null || !code.equals(registerForm.getCode())){
+        if (username.length() < 2 || username.length() > 20) {
+            return Result.fail("用户名长度需在2-20位之间");
+        }
+
+        User exist = query().eq("username", username).one();
+        if (exist != null) {
+            return Result.fail("用户名已存在");
+        }
+
+        if (StrUtil.isBlank(password) || password.length() < 6) {
+            return Result.fail("密码长度至少6位");
+        }
+        if (!password.equals(passwordConfirm)) {
+            return Result.fail("两次输入的密码不一致");
+        }
+
+        // 校验图片验证码
+        String captchaKey = registerForm.getCaptchaKey();
+        String captchaCode = registerForm.getCaptchaCode();
+        if (StrUtil.isBlank(captchaKey) || StrUtil.isBlank(captchaCode)) {
+            return Result.fail("请输入验证码");
+        }
+        String cachedCode = stringRedisTemplate.opsForValue().get(CAPTCHA_KEY + captchaKey);
+        if (cachedCode == null) {
+            return Result.fail("验证码已过期，请重新获取");
+        }
+        if (!captchaCode.equalsIgnoreCase(cachedCode)) {
             return Result.fail("验证码错误");
         }
-        stringRedisTemplate.delete(key);
-        user = new User()
-                .setUsername(registerForm.getUsername())
-                .setPhone(phone)
+        stringRedisTemplate.delete(CAPTCHA_KEY + captchaKey);
+
+        User user = new User()
+                .setUsername(username)
                 .setPassword(passwordEncoder.encode(password))
                 .setStatus(1)
                 .setCreatedAt(LocalDateTime.now())
                 .setUpdatedAt(LocalDateTime.now());
 
         save(user);
-
         return Result.ok("注册成功");
     }
-
-
 }

@@ -8,16 +8,9 @@ import com.university.learning.entity.User;
 
 public interface IUserService extends IService<User> {
 
+    Result generateCaptcha();
 
-    Result sendCode(String phone, String  type);
-
-
-
-
-    Result loginByCode(LoginFormDTO loginForm);
-
-
-    Result loginByPassword(LoginFormDTO loginForm);
+    Result login(LoginFormDTO loginForm);
 
     Result register(RegisterFormDTO registerForm);
 }

@@ -24,22 +24,31 @@ public class StudentProfileServiceImpl extends ServiceImpl<StudentProfileMapper,
         );
     }
 
+    /**
+     * 保存或更新画像，只覆盖非 null 字段，已有有效值不会被冲掉
+     */
     @Override
-    public StudentProfile saveOrUpdateProfile(Long userId, StudentProfile profile) {
-        StudentProfile existProfile = this.getByUserId(userId);
+    public StudentProfile saveOrUpdateProfile(Long userId, StudentProfile incoming) {
+        StudentProfile exist = this.getByUserId(userId);
 
-        if (existProfile != null) {
-            profile.setId(existProfile.getId());
-            profile.setUserId(userId);
-            profile.setUpdatedAt(LocalDateTime.now());
-            this.updateById(profile);
+        if (exist != null) {
+            // 只合并非 null 字段，保留 DB 中已有的有效值
+            if (incoming.getKnowledgeBase() != null) exist.setKnowledgeBase(incoming.getKnowledgeBase());
+            if (incoming.getCognitiveStyle() != null) exist.setCognitiveStyle(incoming.getCognitiveStyle());
+            if (incoming.getLearningGoal() != null) exist.setLearningGoal(incoming.getLearningGoal());
+            if (incoming.getWeakPoints() != null) exist.setWeakPoints(incoming.getWeakPoints());
+            if (incoming.getLearningPace() != null) exist.setLearningPace(incoming.getLearningPace());
+            if (incoming.getInterestDirection() != null) exist.setInterestDirection(incoming.getInterestDirection());
+            if (incoming.getRawProfileJson() != null) exist.setRawProfileJson(incoming.getRawProfileJson());
+            exist.setUpdatedAt(LocalDateTime.now());
+            this.updateById(exist);
             log.info("更新画像: userId={}", userId);
-            return profile;
+            return exist;
         } else {
-            profile.setUserId(userId);
-            this.save(profile);
+            incoming.setUserId(userId);
+            this.save(incoming);
             log.info("创建画像: userId={}", userId);
-            return profile;
+            return incoming;
         }
     }
 }

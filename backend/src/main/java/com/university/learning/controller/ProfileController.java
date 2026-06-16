@@ -9,6 +9,7 @@ import com.university.learning.service.IConversationService;
 import com.university.learning.service.IMessageService;
 import com.university.learning.service.IStudentProfileService;
 import com.university.learning.utils.UserHolder;
+import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -17,9 +18,6 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * 学生画像接口 — 集成会话存储
- */
 @Slf4j
 @RestController
 @RequestMapping("/api/profile")
@@ -31,10 +29,7 @@ public class ProfileController {
     private final IConversationService conversationService;
     private final IMessageService messageService;
 
-    /**
-     * 画像构建对话（SSE流式 + 自动存库）
-     * 请求体: { "messages": [{"role":"user","content":"..."}], "conversation_id": 1 }
-     */
+    @Operation(summary = "画像构建对话", description = "通过 AI 引导式对话构建学生学习画像(SSE 流式)，对话结束自动保存画像")
     @PostMapping("/chat")
     public SseEmitter chatBuildProfile(@RequestBody Map<String, Object> request) {
         Long userId = getUserId();
@@ -42,11 +37,9 @@ public class ProfileController {
         @SuppressWarnings("unchecked")
         List<Map<String, String>> messages = (List<Map<String, String>>) request.get("messages");
 
-        // 获取或创建画像专用会话
         Conversation conversation = getOrCreateProfileConversation(userId);
         final Long convId = conversation.getId();
 
-        // 保存用户消息
         if (messages != null) {
             for (Map<String, String> msg : messages) {
                 if ("user".equals(msg.get("role"))) {
@@ -59,10 +52,8 @@ public class ProfileController {
             }
         }
 
-        // 加载历史上下文
         List<Map<String, Object>> history = loadHistory(convId, 50);
 
-        // 调用AI + 回调保存画像和回复
         return pythonClient.buildProfileStream(userId, messages, (profileData) -> {
             saveProfileToDb(userId, profileData);
             saveAiResponse(convId, profileData);
@@ -70,19 +61,25 @@ public class ProfileController {
         });
     }
 
-    /** 画像完整度查询 */
+    @Operation(summary = "查询画像完整度")
     @GetMapping("/status")
     public Result getProfileStatus() {
         try {
             Long userId = getUserId();
-            Map<String, Object> status = pythonClient.getProfileStatus(userId);
+            // 获取学生画像快照，传给 Python 做完整度检测
+            StudentProfile profile = profileService.getByUserId(userId);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> profileMap = profile != null && profile.getRawProfileJson() instanceof Map
+                    ? (Map<String, Object>) profile.getRawProfileJson()
+                    : null;
+            Map<String, Object> status = pythonClient.getProfileStatus(userId, profileMap);
             return Result.ok(status);
         } catch (Exception e) {
             return Result.fail(e.getMessage());
         }
     }
 
-    /** 获取学生画像 */
+    @Operation(summary = "获取学生画像")
     @GetMapping("/{userId}")
     public Result getProfile(@PathVariable Long userId) {
         StudentProfile profile = profileService.getByUserId(userId);
@@ -92,18 +89,13 @@ public class ProfileController {
         return Result.ok(profile);
     }
 
-    // ==================== 私有方法 ====================
-
-    /** 获取或创建画像专用会话 */
     private Conversation getOrCreateProfileConversation(Long userId) {
-        // 查找已有的活跃画像会话
         List<Conversation> list = conversationService.listByUserId(userId);
         for (Conversation conv : list) {
             if ("active".equals(conv.getStatus()) && "画像构建".equals(conv.getTitle())) {
                 return conv;
             }
         }
-        // 新建
         Conversation conv = new Conversation()
                 .setUserId(userId)
                 .setTitle("画像构建")
@@ -112,7 +104,6 @@ public class ProfileController {
         return conv;
     }
 
-    /** 加载历史消息 */
     private List<Map<String, Object>> loadHistory(Long conversationId, int limit) {
         List<Message> messages = messageService.listByConversationId(conversationId);
         if (messages.size() > limit) {
@@ -126,7 +117,6 @@ public class ProfileController {
         }).collect(Collectors.toList());
     }
 
-    /** 保存AI回复 */
     private void saveAiResponse(Long conversationId, Map<String, Object> doneData) {
         try {
             String response = (String) doneData.get("_response_text");
@@ -147,12 +137,10 @@ public class ProfileController {
         }
     }
 
-    /** 更新会话标题 */
     private void updateConversationTitle(Long conversationId) {
         try {
             Conversation conv = conversationService.getById(conversationId);
             if (conv != null && "画像构建".equals(conv.getTitle())) {
-                // 检查画像是否已构建完成
                 StudentProfile profile = profileService.getByUserId(conv.getUserId());
                 if (profile != null && profile.getKnowledgeBase() != null && profile.getKnowledgeBase() > 0) {
                     conv.setTitle("画像构建完成");
@@ -166,28 +154,28 @@ public class ProfileController {
         }
     }
 
-    /** 保存画像到数据库 */
     private void saveProfileToDb(Long userId, Map<String, Object> data) {
         try {
             StudentProfile profile = new StudentProfile();
             profile.setUserId(userId);
 
-            if (data.containsKey("knowledge_base")) {
+            // 只设非 null 值，避免把 DB 中已有的有效值覆盖为 null
+            if (data.get("knowledge_base") != null) {
                 profile.setKnowledgeBase(toInteger(data.get("knowledge_base")));
             }
-            if (data.containsKey("cognitive_style")) {
+            if (data.get("cognitive_style") != null) {
                 profile.setCognitiveStyle((String) data.get("cognitive_style"));
             }
-            if (data.containsKey("learning_goal")) {
+            if (data.get("learning_goal") != null) {
                 profile.setLearningGoal((String) data.get("learning_goal"));
             }
-            if (data.containsKey("weak_points")) {
+            if (data.get("weak_points") != null) {
                 profile.setWeakPoints(data.get("weak_points"));
             }
-            if (data.containsKey("learning_pace")) {
+            if (data.get("learning_pace") != null) {
                 profile.setLearningPace((String) data.get("learning_pace"));
             }
-            if (data.containsKey("interest_direction")) {
+            if (data.get("interest_direction") != null) {
                 profile.setInterestDirection(data.get("interest_direction"));
             }
 

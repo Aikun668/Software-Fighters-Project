@@ -3,15 +3,13 @@ package com.university.learning.controller;
 import com.university.learning.common.Result;
 import com.university.learning.entity.LearningActivity;
 import com.university.learning.service.ILearningActivityService;
+import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
 
-/**
- * 学习活动记录接口
- */
 @RestController
 @RequestMapping("/api/learning-activities")
 @RequiredArgsConstructor
@@ -19,7 +17,7 @@ public class LearningActivityController {
 
     private final ILearningActivityService activityService;
 
-    /** 创建一条学习活动记录 */
+    @Operation(summary = "创建学习活动记录", description = "记录 exercise/review/study 类型的学习活动")
     @PostMapping
     public Result create(@RequestBody Map<String, Object> body) {
         Long userId = Long.valueOf(body.get("user_id").toString());
@@ -34,7 +32,7 @@ public class LearningActivityController {
         return Result.ok(Map.of("id", activity.getId()));
     }
 
-    /** 获取最近的学习活动记录列表 */
+    @Operation(summary = "最近学习活动列表", description = "获取用户最近的学习活动，带主题信息")
     @GetMapping
     public Result listRecent(@RequestParam Long userId,
                              @RequestParam(defaultValue = "20") int limit) {
@@ -42,14 +40,14 @@ public class LearningActivityController {
         return Result.ok(list);
     }
 
-    /** 获取用户学习活动统计摘要 */
+    @Operation(summary = "学习活动统计", description = "统计总学习时长、完成练习数、平均得分等")
     @GetMapping("/stats")
     public Result getStats(@RequestParam Long userId) {
         Map<String, Object> stats = activityService.getStats(userId);
         return Result.ok(stats);
     }
 
-    /** 获取用户得分趋势（按日期聚合） */
+    @Operation(summary = "得分趋势", description = "按日期聚合的每日平均得分，默认最近30天")
     @GetMapping("/score-trend")
     public Result getScoreTrend(@RequestParam Long userId,
                                 @RequestParam(defaultValue = "30") int days) {
@@ -57,7 +55,7 @@ public class LearningActivityController {
         return Result.ok(trend);
     }
 
-    /** 获取用户总练习次数 */
+    @Operation(summary = "练习总次数")
     @GetMapping("/count-exercises")
     public Result countExercises(@RequestParam Long userId) {
         Long count = activityService.countExercises(userId);

@@ -1,34 +1,41 @@
 package com.university.learning.controller;
 
+import com.university.learning.client.PythonClient;
 import com.university.learning.common.Result;
+import com.university.learning.utils.UserHolder;
+import com.university.learning.dto.*;
 import com.university.learning.entity.LearningPlan;
+import com.university.learning.entity.NodeMastery;
 import com.university.learning.entity.PlanStep;
 import com.university.learning.service.ILearningPlanService;
+import com.university.learning.service.INodeMasteryService;
 import com.university.learning.service.IPlanStepService;
+import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
 
-/**
- * 学习计划与步骤接口
- */
+@Slf4j
 @RestController
 @RequiredArgsConstructor
 public class LearningPlanController {
 
     private final ILearningPlanService planService;
     private final IPlanStepService stepService;
+    private final PythonClient pythonClient;
+    private final INodeMasteryService masteryService;
 
-    /** 创建学习计划（含步骤列表） */
+    @Operation(summary = "创建学习计划", description = "创建计划并批量添加步骤，事务保证原子性")
     @PostMapping("/api/plans")
     @Transactional(rollbackFor = Exception.class)
-    public Result createPlan(@RequestBody Map<String, Object> body) {
-        Long userId = Long.valueOf(body.get("user_id").toString());
-        String courseId = (String) body.get("course_id");
-        String title = (String) body.get("title");
+    public Result createPlan(@RequestBody CreatePlanRequest body) {
+        Long userId = UserHolder.getUser().getId();
+        String courseId = body.getCourse_id();
+        String title = body.getTitle();
 
         LearningPlan plan = new LearningPlan()
                 .setUserId(userId)
@@ -36,15 +43,13 @@ public class LearningPlanController {
                 .setTitle(title)
                 .setStatus("in_progress");
 
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> stepsData = (List<Map<String, Object>>) body.get("steps");
+        List<Map<String, Object>> stepsData = body.getSteps();
 
         int totalSteps = stepsData != null ? stepsData.size() : 0;
         plan.setTotalSteps(totalSteps);
         plan.setCompletedSteps(0);
         planService.save(plan);
 
-        // 批量创建步骤
         if (stepsData != null) {
             for (Map<String, Object> stepData : stepsData) {
                 PlanStep step = new PlanStep()
@@ -59,7 +64,6 @@ public class LearningPlanController {
             }
         }
 
-        // 返回含步骤列表的计划
         plan.setTotalSteps(totalSteps);
         List<PlanStep> steps = stepService.listByPlanId(plan.getId());
         Map<String, Object> result = Map.of(
@@ -75,7 +79,7 @@ public class LearningPlanController {
         return Result.ok(result);
     }
 
-    /** 获取计划详情（含步骤列表） */
+    @Operation(summary = "获取计划详情", description = "返回计划信息及步骤列表")
     @GetMapping("/api/plans/{id}")
     public Result getPlan(@PathVariable Long id, @RequestParam Long userId) {
         LearningPlan plan = planService.getById(id);
@@ -96,7 +100,7 @@ public class LearningPlanController {
         return Result.ok(result);
     }
 
-    /** 更新计划 */
+    @Operation(summary = "更新计划", description = "可更新标题、状态(in_progress/completed/paused)")
     @PutMapping("/api/plans/{id}")
     public Result updatePlan(@PathVariable Long id, @RequestBody Map<String, Object> body) {
         LearningPlan plan = planService.getById(id);
@@ -109,14 +113,14 @@ public class LearningPlanController {
         return Result.ok(plan);
     }
 
-    /** 获取计划的所有步骤 */
+    @Operation(summary = "获取计划步骤列表")
     @GetMapping("/api/plans/{planId}/steps")
     public Result getSteps(@PathVariable Long planId) {
         List<PlanStep> steps = stepService.listByPlanId(planId);
         return Result.ok(steps);
     }
 
-    /** 在指定位置插入新步骤 */
+    @Operation(summary = "插入新步骤", description = "在计划中新增一个步骤，并更新计划总步数")
     @PostMapping("/api/plans/{planId}/steps")
     public Result insertStep(@PathVariable Long planId, @RequestBody Map<String, Object> body) {
         PlanStep step = new PlanStep()
@@ -129,7 +133,6 @@ public class LearningPlanController {
                 .setDepth(toInt(body.get("depth"), 0));
         stepService.save(step);
 
-        // 更新计划总步骤数
         LearningPlan plan = planService.getById(planId);
         if (plan != null) {
             plan.setTotalSteps(plan.getTotalSteps() + 1);
@@ -138,7 +141,7 @@ public class LearningPlanController {
         return Result.ok(step);
     }
 
-    /** 更新单个步骤 */
+    @Operation(summary = "更新步骤", description = "更新步骤状态(pending/in_progress/completed/locked)或排序位置")
     @PutMapping("/api/plan-steps/{stepId}")
     public Result updateStep(@PathVariable Long stepId, @RequestBody Map<String, Object> body) {
         PlanStep step = stepService.getById(stepId);
@@ -151,7 +154,7 @@ public class LearningPlanController {
         return Result.ok(step);
     }
 
-    /** 将指定order之后的所有步骤order+1（用于中间插入腾出空位） */
+    @Operation(summary = "步骤排序位移", description = "将指定 order 后的所有步骤 order+1，用于中间插入腾空位")
     @PostMapping("/api/plans/{planId}/steps/shift")
     public Result shiftSteps(@PathVariable Long planId, @RequestBody Map<String, Object> body) {
         int afterOrder = toInt(body.get("after_order"), 0);
@@ -159,7 +162,7 @@ public class LearningPlanController {
         return Result.ok(Map.of("shifted", true));
     }
 
-    /** 锁定指定节点的所有后继步骤 */
+    @Operation(summary = "锁定后继步骤", description = "锁定指定节点的所有依赖后继节点(depends_on 关系的下游)")
     @PostMapping("/api/plans/{planId}/steps/lock-successors")
     public Result lockSuccessors(@PathVariable Long planId, @RequestBody Map<String, Object> body) {
         String nodeId = (String) body.get("node_id");
@@ -167,7 +170,7 @@ public class LearningPlanController {
         return Result.ok(Map.of("locked_ids", lockedIds));
     }
 
-    /** 处理节点状态变更（原子操作：锁定后继 + 腾空位 + 插入复习步骤 + 更新计数） */
+    @Operation(summary = "节点状态变更(原子)", description = "原子操作：锁定后继 + 插入复习步骤 + 更新计划进度计数")
     @PostMapping("/api/plans/node-status-change")
     @Transactional(rollbackFor = Exception.class)
     public Result onNodeStatusChange(@RequestBody Map<String, Object> body) {
@@ -176,7 +179,6 @@ public class LearningPlanController {
         String newStatus = (String) body.get("new_status");
         Long planId = body.get("plan_id") != null ? Long.valueOf(body.get("plan_id").toString()) : null;
 
-        // 查找用户当前 in_progress 的计划
         LearningPlan plan;
         if (planId != null) {
             plan = planService.getById(planId);
@@ -187,7 +189,6 @@ public class LearningPlanController {
             return Result.fail(404, "没有进行中的学习计划");
         }
 
-        // 查找对应的步骤并更新状态
         List<PlanStep> steps = stepService.listByPlanId(plan.getId());
         Long updatedStepId = null;
         for (PlanStep step : steps) {
@@ -203,10 +204,8 @@ public class LearningPlanController {
             return Result.fail(404, "步骤不存在");
         }
 
-        // 锁定后继步骤
         List<Long> lockedStepIds = stepService.lockSuccessors(plan.getId(), nodeId);
 
-        // 腾出空位并插入复习步骤
         stepService.shiftAfterOrder(plan.getId(), 0);
         PlanStep reviewStep = new PlanStep()
                 .setPlanId(plan.getId())
@@ -218,7 +217,6 @@ public class LearningPlanController {
                 .setDepth(0);
         stepService.save(reviewStep);
 
-        // 更新计划计数
         if ("completed".equals(newStatus)) {
             plan.setCompletedSteps(plan.getCompletedSteps() + 1);
         }
@@ -232,6 +230,201 @@ public class LearningPlanController {
                 "new_review_step_id", reviewStep.getId()
         );
         return Result.ok(result);
+    }
+
+    // ==================== 对接 Python AI 的计划接口 ====================
+
+    /**
+     * 查询计划状态（含软着陆触发检测）。
+     * Java 从 DB 读取 plan + steps，传入 Python 做分析。
+     */
+    @Operation(summary = "查询计划状态", description = "含软着陆触发检测（continue/warmup/regression_check）")
+    @GetMapping("/api/plans/{planId}/status")
+    public Result getPlanStatus(@PathVariable Long planId, @RequestParam Long userId) {
+        try {
+            LearningPlan plan = planService.getById(planId);
+            if (plan == null) {
+                return Result.fail(404, "计划不存在");
+            }
+            List<PlanStep> steps = stepService.listByPlanId(planId);
+
+            Map<String, Object> planData = planToMap(plan);
+            List<Map<String, Object>> stepsData = stepsToMapList(steps);
+
+            Map<String, Object> status = pythonClient.getPlanStatusById(planId, planData, stepsData);
+            return Result.ok(status);
+        } catch (Exception e) {
+            return Result.fail(e.getMessage());
+        }
+    }
+
+    /**
+     * 获取今日学习任务 + 资源建议。
+     */
+    @Operation(summary = "今日任务", description = "返回今日应完成的步骤+资源建议")
+    @GetMapping("/api/plans/{planId}/today")
+    public Result getTodayTasks(@PathVariable Long planId, @RequestParam Long userId) {
+        try {
+            LearningPlan plan = planService.getById(planId);
+            if (plan == null) {
+                return Result.fail(404, "计划不存在");
+            }
+            List<PlanStep> steps = stepService.listByPlanId(planId);
+
+            Map<String, Object> planData = planToMap(plan);
+            List<Map<String, Object>> stepsData = stepsToMapList(steps);
+            Map<String, Float> masteries = buildMasteryMap(userId, plan.getCourseId());
+
+            Map<String, Object> result = pythonClient.getTodayTasks(planId, planData, stepsData,
+                    null, masteries);
+            return Result.ok(result);
+        } catch (Exception e) {
+            return Result.fail(e.getMessage());
+        }
+    }
+
+    /**
+     * 更新步骤进度 + 计算掌握度变化。
+     */
+    @Operation(summary = "更新步骤进度", description = "更新步骤进度并计算掌握度变化")
+    @PostMapping("/api/plans/{planId}/progress")
+    public Result updateProgress(@PathVariable Long planId, @RequestBody ProgressUpdateRequest body) {
+        try {
+            Long userId = UserHolder.getUser().getId();
+            LearningPlan plan = planService.getById(planId);
+            if (plan == null) {
+                return Result.fail(404, "计划不存在");
+            }
+            List<PlanStep> steps = stepService.listByPlanId(planId);
+
+            Map<String, Object> planData = planToMap(plan);
+            List<Map<String, Object>> stepsData = stepsToMapList(steps);
+            Map<String, Float> masteries = buildMasteryMap(userId, plan.getCourseId());
+
+            Map<String, Object> result = pythonClient.updatePlanProgress(planId, planData, stepsData,
+                    body.getStep_id(), body.getStep_order() != null ? body.getStep_order() : 0,
+                    body.getStatus(), body.getActivity_type(), body.getScore(),
+                    body.getDuration_minutes(), masteries);
+            return Result.ok(result);
+        } catch (Exception e) {
+            return Result.fail(e.getMessage());
+        }
+    }
+
+    /**
+     * 回归检测管线（两阶段）。
+     * 阶段1（不传 answers）：出题检测遗忘 → 阶段2（传 answers）：判分 + 重排
+     */
+    @Operation(summary = "回归检测", description = "两阶段回归检测：阶段1出题，阶段2判分+重排")
+    @PostMapping("/api/plans/{planId}/regression-check")
+    public Result regressionCheck(@PathVariable Long planId, @RequestBody RegressionCheckRequest body) {
+        try {
+            Long userId = UserHolder.getUser().getId();
+            LearningPlan plan = planService.getById(planId);
+            if (plan == null) {
+                return Result.fail(404, "计划不存在");
+            }
+            List<PlanStep> steps = stepService.listByPlanId(planId);
+
+            Map<String, Object> planData = planToMap(plan);
+            List<Map<String, Object>> stepsData = stepsToMapList(steps);
+            int daysIdle = body.getDays_idle() != null ? body.getDays_idle() : 0;
+
+            Map<String, Object> result = pythonClient.regressionCheck(planId, userId,
+                    body.getAnswers(), planData, stepsData, daysIdle);
+            return Result.ok(result);
+        } catch (Exception e) {
+            return Result.fail(e.getMessage());
+        }
+    }
+
+    /**
+     * 获取未来N天的复习日程（间隔重复提醒）。
+     */
+    @Operation(summary = "复习日程", description = "获取未来N天的间隔重复复习日程")
+    @GetMapping("/api/plans/{planId}/review-schedule")
+    public Result getReviewSchedule(@PathVariable Long planId,
+                                     @RequestParam Long userId,
+                                     @RequestParam(defaultValue = "7") int daysAhead) {
+        try {
+            LearningPlan plan = planService.getById(planId);
+            if (plan == null) {
+                return Result.fail(404, "计划不存在");
+            }
+            List<PlanStep> steps = stepService.listByPlanId(planId);
+            List<Map<String, Object>> stepsData = stepsToMapList(steps);
+
+            Map<String, Object> result = pythonClient.getReviewSchedule(planId, stepsData, daysAhead);
+            return Result.ok(result);
+        } catch (Exception e) {
+            return Result.fail(e.getMessage());
+        }
+    }
+
+    /**
+     * 完成学习步骤后触发巩固练习生成。
+     */
+    @Operation(summary = "步骤完成巩固", description = "完成一个学习步骤后生成巩固练习题")
+    @PostMapping("/api/plans/{planId}/complete-step")
+    public Result completeStep(@PathVariable Long planId, @RequestBody CompleteStepRequest body) {
+        try {
+            LearningPlan plan = planService.getById(planId);
+            if (plan == null) {
+                return Result.fail(404, "计划不存在");
+            }
+            List<PlanStep> steps = stepService.listByPlanId(planId);
+
+            Map<String, Object> planData = planToMap(plan);
+            List<Map<String, Object>> stepsData = stepsToMapList(steps);
+
+            Map<String, Object> result = pythonClient.completePlanStep(planId, body.getStep(),
+                    planData, stepsData);
+            return Result.ok(result);
+        } catch (Exception e) {
+            return Result.fail(e.getMessage());
+        }
+    }
+
+    // ==================== 辅助方法 ====================
+
+    /** 将 LearningPlan 实体转为 Map，供 PythonClient 传参 */
+    private Map<String, Object> planToMap(LearningPlan plan) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", plan.getId());
+        map.put("user_id", plan.getUserId());
+        map.put("course_id", plan.getCourseId());
+        map.put("title", plan.getTitle());
+        map.put("status", plan.getStatus());
+        map.put("total_steps", plan.getTotalSteps());
+        map.put("completed_steps", plan.getCompletedSteps());
+        return map;
+    }
+
+    /** 将 PlanStep 列表转为 Map 列表，供 PythonClient 传参 */
+    private List<Map<String, Object>> stepsToMapList(List<PlanStep> steps) {
+        return steps.stream().map(s -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("id", s.getId());
+            map.put("plan_id", s.getPlanId());
+            map.put("node_id", s.getNodeId());
+            map.put("knowledge_node_id", s.getNodeId());
+            map.put("topic", s.getTopic());
+            map.put("step_order", s.getOrder());
+            map.put("status", s.getStatus());
+            map.put("estimated_days", s.getEstimatedDays());
+            map.put("topic_difficulty", s.getTopicDifficulty());
+            return map;
+        }).collect(Collectors.toList());
+    }
+
+    /** 构建用户掌握度映射 */
+    private Map<String, Float> buildMasteryMap(Long userId, String courseId) {
+        List<NodeMastery> list = masteryService.listByUserIdAndCourseId(userId, courseId);
+        Map<String, Float> map = new HashMap<>();
+        for (NodeMastery nm : list) {
+            map.put(nm.getNodeId(), nm.getMastery() != null ? nm.getMastery() : 0f);
+        }
+        return map;
     }
 
     private int toInt(Object value, int defaultValue) {

@@ -3,16 +3,13 @@ package com.university.learning.controller;
 import com.university.learning.common.Result;
 import com.university.learning.entity.NodeMastery;
 import com.university.learning.service.INodeMasteryService;
+import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
-/**
- * 节点掌握度接口
- */
 @RestController
 @RequestMapping("/api/node-masteries")
 @RequiredArgsConstructor
@@ -20,14 +17,14 @@ public class NodeMasteryController {
 
     private final INodeMasteryService masteryService;
 
-    /** 获取用户在指定课程的所有节点掌握度 */
+    @Operation(summary = "获取课程所有节点掌握度", description = "查询用户在指定课程下所有知识节点的掌握度")
     @GetMapping
     public Result list(@RequestParam Long userId, @RequestParam String courseId) {
         List<NodeMastery> list = masteryService.listByUserIdAndCourseId(userId, courseId);
         return Result.ok(list);
     }
 
-    /** 获取单个节点的掌握度详情 */
+    @Operation(summary = "获取单个节点掌握度")
     @GetMapping("/{nodeId}")
     public Result getDetail(@PathVariable String nodeId, @RequestParam Long userId) {
         NodeMastery mastery = masteryService.getByUserIdAndNodeId(userId, nodeId);
@@ -37,7 +34,7 @@ public class NodeMasteryController {
         return Result.ok(mastery);
     }
 
-    /** 写入/更新节点掌握度（upsert语义） */
+    @Operation(summary = "写入/更新节点掌握度", description = "upsert 语义：存在则更新，不存在则创建")
     @PutMapping("/{nodeId}")
     public Result upsert(@PathVariable String nodeId, @RequestBody Map<String, Object> body) {
         Long userId = Long.valueOf(body.get("user_id").toString());
@@ -49,7 +46,7 @@ public class NodeMasteryController {
         return Result.ok(result);
     }
 
-    /** 获取掌握度分布统计 */
+    @Operation(summary = "获取掌握度分布统计", description = "按掌握度等级(0-0.2/0.2-0.4/...)分布统计")
     @GetMapping("/distribution")
     public Result getDistribution(@RequestParam Long userId, @RequestParam String courseId) {
         Map<String, Object> dist = masteryService.getDistribution(userId, courseId);

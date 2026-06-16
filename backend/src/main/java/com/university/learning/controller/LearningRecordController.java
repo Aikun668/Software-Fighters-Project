@@ -4,6 +4,7 @@ import com.university.learning.common.Result;
 import com.university.learning.entity.LearningRecord;
 import com.university.learning.service.ILearningRecordService;
 import com.university.learning.utils.UserHolder;
+import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,9 +19,7 @@ public class LearningRecordController {
 
     private final ILearningRecordService learningRecordService;
 
-    /**
-     * 获取用户所有学习记录
-     */
+    @Operation(summary = "获取当前用户所有学习记录")
     @GetMapping("/list")
     public Result listRecords() {
         Long userId = getUserId();
@@ -28,9 +27,7 @@ public class LearningRecordController {
         return Result.ok(records);
     }
 
-    /**
-     * 获取用户某类资源的学习记录
-     */
+    @Operation(summary = "按类型获取学习记录", description = "type: course_doc/mind_map/exercise/reading/code_practice")
     @GetMapping("/list/{type}")
     public Result listByType(@PathVariable String type) {
         Long userId = getUserId();
@@ -38,9 +35,7 @@ public class LearningRecordController {
         return Result.ok(records);
     }
 
-    /**
-     * 获取某个资源的学习记录
-     */
+    @Operation(summary = "获取某个资源的学习记录")
     @GetMapping("/resource/{resourceId}")
     public Result getRecord(@PathVariable Long resourceId) {
         Long userId = getUserId();
@@ -51,9 +46,7 @@ public class LearningRecordController {
         return Result.ok(record);
     }
 
-    /**
-     * 获取学习统计
-     */
+    @Operation(summary = "获取学习统计", description = "返回总得分、平均分、总记录数")
     @GetMapping("/stats")
     public Result getStats() {
         Long userId = getUserId();
