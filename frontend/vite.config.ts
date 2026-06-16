@@ -21,5 +21,15 @@ export default defineConfig({
         additionalData: `@use "@/styles/element-override.scss" as *;`
       }
     }
+  },
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://10.28.137.61:8080',
+        changeOrigin: true,
+        ws: true,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      }
+    }
   }
 })
