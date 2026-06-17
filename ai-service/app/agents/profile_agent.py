@@ -220,14 +220,11 @@ class ProfileAgent(BaseAgent):
         )
 
         try:
-            print(f"\n[JUDGE] tasks ({len(judge_tasks)} chars):\n{judge_tasks}\n")
             result_text = await self.judge_llm.chat(
                 [{"role": "user", "content": judge_user_prompt}],
                 system_prompt=self.judge_system_template,
             )
-            print(f"[JUDGE] raw ({len(result_text)} chars): {result_text[:400]}")
             judge_result = self._parse_judge_result(result_text)
-            print(f"[JUDGE] parsed: {judge_result}\n")
         except Exception as e:
             logger.warning("Semantic judge LLM failed: %s, falling back to embedding", e)
             judge_result = {}
