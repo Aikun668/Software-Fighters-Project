@@ -82,6 +82,8 @@ class BaseAgent(ABC):
             temperature=config.temperature,
             max_tokens=config.max_tokens,
             use_mock=self.use_mock_llm,
+            api_key=config.api_key,
+            base_url=config.base_url,
         )
 
     @abstractmethod

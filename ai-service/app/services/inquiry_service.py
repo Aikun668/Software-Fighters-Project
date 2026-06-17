@@ -136,8 +136,11 @@ class InquiryService:
         has_specifics = any(kw in msg for kw in [
             "出题", "练习", "推导", "代码", "项目", "考试",
             "思维导图", "闪卡", "阅读", "案例",
+            "教程", "文档", "可视化", "对比", "排查",
+            "示例", "修复", "图解", "动画", "演示",
+            "实现", "入门", "生成", "整理",
         ])
-        has_topic_detail = len(msg) > 15
+        has_topic_detail = len(msg) > 10
 
         if has_specifics and has_topic_detail:
             return InquiryResult(

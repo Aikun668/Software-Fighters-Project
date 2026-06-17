@@ -2,6 +2,7 @@ import logging
 
 from app.agents.exercise_agent import ExerciseAgent
 from app.centers.schemas import CenterResult, CenterTask
+from app.services.llm_service import PROFILE_EXERCISE
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ class ExerciseCenter:
         count = task.params.get("count", 3)
         difficulty = task.params.get("difficulty", "medium")
 
-        agent = self.exercise_agent or ExerciseAgent()
+        agent = self.exercise_agent or ExerciseAgent(model_profile=PROFILE_EXERCISE)
         try:
             state = await agent.run({
                 "topic": topic,

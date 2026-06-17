@@ -63,7 +63,7 @@ class ResourceCenter:
                     "questions": state.get("questions", []),
                     "response": state.get("response", ""),
                 },
-                agent="ResourceGenWorkflow",
+                agent=f"ResourceGenWorkflow/{state.get('agent_name', 'content')}",
                 sequence=task.sequence,
             )
         except Exception as e:
@@ -73,6 +73,6 @@ class ResourceCenter:
                 intent=task.intent,
                 event_type="error",
                 error="资源生成失败",
-                agent="ResourceGenWorkflow",
+                agent="ResourceGenWorkflow/error",
                 sequence=task.sequence,
             )

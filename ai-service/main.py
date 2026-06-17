@@ -21,7 +21,12 @@ async def lifespan(app: FastAPI):
     # startup — Java 后端负责 DB 管理，Python 端无需建表
     logger.info("AI service started (Java 后端负责数据存储)")
     yield
-    # shutdown
+    # shutdown — 释放 LLM HTTP 连接池
+    try:
+        from app.services.llm_service import close_llm_clients
+        await close_llm_clients()
+    except Exception:
+        pass
 
 
 app = FastAPI(
@@ -50,7 +55,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8080"],
+    allow_origins=["http://localhost:8080", "http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

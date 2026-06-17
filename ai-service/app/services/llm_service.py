@@ -32,6 +32,41 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
+# ═══════════════════════════════════════════════════════════════
+# 并发控制
+# ═══════════════════════════════════════════════════════════════
+
+_MAX_CONCURRENT = int(os.getenv("LLM_MAX_CONCURRENT", "8"))
+_MAX_STREAM_CONCURRENT = int(os.getenv("LLM_MAX_STREAM_CONCURRENT", "20"))
+_llm_semaphore = asyncio.Semaphore(_MAX_CONCURRENT)           # chat() 专用
+_llm_stream_semaphore = asyncio.Semaphore(_MAX_STREAM_CONCURRENT)  # chat_stream() 专用
+_MAX_RETRIES = 1
+
+_client_cache: dict[str, httpx.AsyncClient] = {}
+_client_cache_lock = asyncio.Lock()
+
+
+async def _get_shared_client(api_key: str, base_url: str) -> httpx.AsyncClient:
+    """获取或创建共享 httpx.AsyncClient（按 api_key+base_url 缓存，复用连接池）。"""
+    cache_key = f"{api_key}:{base_url}"
+    if cache_key not in _client_cache:
+        async with _client_cache_lock:
+            if cache_key not in _client_cache:
+                _client_cache[cache_key] = httpx.AsyncClient(
+                    timeout=httpx.Timeout(120.0, connect=10.0),
+                    limits=httpx.Limits(max_keepalive_connections=10, max_connections=20),
+                )
+    return _client_cache[cache_key]
+
+
+async def close_llm_clients():
+    """应用关闭时释放所有 LLM HTTP 连接池。"""
+    async with _client_cache_lock:
+        for client in _client_cache.values():
+            await client.aclose()
+        _client_cache.clear()
+    logger.info("All LLM HTTP clients closed")
+
 
 # ═══════════════════════════════════════════════════════════════
 # Per-Agent Model Configuration
@@ -46,10 +81,14 @@ class ModelConfig:
         model: 模型名称（空字符串 = 使用环境变量默认值）
         temperature: 生成温度 (0.0 = 确定性, 1.0 = 最高随机性)
         max_tokens: 最大输出 token 数
+        api_key: API Key（空字符串 = 使用环境变量 OPENAI_API_KEY）
+        base_url: API Base URL（空字符串 = 使用环境变量 OPENAI_BASE_URL）
     """
     model: str = ""
     temperature: float = 0.7
     max_tokens: int = 8192
+    api_key: str = ""
+    base_url: str = ""
 
 
 @dataclass
@@ -73,42 +112,121 @@ class AgentModelProfile:
 
 # ── 开箱即用的预设 Profiles ──────────────────────────────────
 
+# ── 环境变量速记 ─────────────────────────────────────────────
+_DK_PRO = os.getenv("DEEPSEEK_API_KEY", "")
+_DK_BASE = os.getenv("DEEPSEEK_BASE_URL", "")
+_DS_PLUS = os.getenv("DASHSCOPE_API_KEY_PLUS", "")
+_DS_MAX = os.getenv("DASHSCOPE_API_KEY_MAX", "")
+_DS_FLASH = os.getenv("DASHSCOPE_API_KEY_FLASH", "")
+_DS_BASE = os.getenv("DASHSCOPE_BASE_URL", "")
+
+# ── 通道分配 ─────────────────────────────────────────────────
+# pro   (deepseek-v4-pro)         : 重推理 + 代码
+# plus  (qwen3.7-plus)            : 中等推理
+# flash (deepseek-v4-flash)       : 初筛 / 判断
+# max   (qwen3.7-max-2026-05-17)  : 练习 / 审查 / 备胎
+
 PROFILE_DIRECTOR = AgentModelProfile(
-    default=ModelConfig(temperature=0.0, max_tokens=256),
+    default=ModelConfig(
+        model="deepseek-v4-flash", temperature=0.0, max_tokens=256,
+        api_key=_DS_FLASH, base_url=_DS_BASE,
+    ),
 )
 
 PROFILE_CONTENT = AgentModelProfile(
-    default=ModelConfig(temperature=0.7, max_tokens=8192),
-    plan=ModelConfig(temperature=0.3, max_tokens=4096),
+    default=ModelConfig(
+        model="deepseek-v4-pro", temperature=0.7, max_tokens=8192,
+        api_key=_DK_PRO, base_url=_DK_BASE,
+    ),
+    plan=ModelConfig(
+        model="deepseek-v4-pro", temperature=0.3, max_tokens=4096,
+        api_key=_DK_PRO, base_url=_DK_BASE,
+    ),
 )
 
 PROFILE_EXERCISE = AgentModelProfile(
-    default=ModelConfig(temperature=0.7, max_tokens=4096),
-    plan=ModelConfig(temperature=0.3, max_tokens=2048),
+    default=ModelConfig(
+        model="qwen3.7-max-2026-05-17", temperature=0.7, max_tokens=4096,
+        api_key=_DS_MAX, base_url=_DS_BASE,
+    ),
+    plan=ModelConfig(
+        model="qwen3.7-max-2026-05-17", temperature=0.3, max_tokens=2048,
+        api_key=_DS_MAX, base_url=_DS_BASE,
+    ),
 )
 
 PROFILE_CODE = AgentModelProfile(
-    default=ModelConfig(temperature=0.5, max_tokens=8192),
+    default=ModelConfig(
+        model="deepseek-v4-pro", temperature=0.5, max_tokens=8192,
+        api_key=_DK_PRO, base_url=_DK_BASE,
+    ),
 )
 
 PROFILE_MINDMAP = AgentModelProfile(
-    default=ModelConfig(temperature=0.6, max_tokens=4096),
+    default=ModelConfig(
+        model="qwen3.7-max-2026-05-17", temperature=0.6, max_tokens=4096,
+        api_key=_DS_MAX, base_url=_DS_BASE,
+    ),
 )
 
 PROFILE_READING = AgentModelProfile(
-    default=ModelConfig(temperature=0.7, max_tokens=4096),
+    default=ModelConfig(
+        model="deepseek-v4-pro", temperature=0.7, max_tokens=4096,
+        api_key=_DK_PRO, base_url=_DK_BASE,
+    ),
 )
 
 PROFILE_FLASHCARD = AgentModelProfile(
-    default=ModelConfig(temperature=0.6, max_tokens=4096),
+    default=ModelConfig(
+        model="qwen3.7-plus", temperature=0.6, max_tokens=4096,
+        api_key=_DS_PLUS, base_url=_DS_BASE,
+    ),
 )
 
 PROFILE_INTERACTIVE_DIAGRAM = AgentModelProfile(
-    default=ModelConfig(temperature=0.5, max_tokens=8192),
+    default=ModelConfig(
+        model="deepseek-v4-pro", temperature=0.5, max_tokens=8192,
+        api_key=_DK_PRO, base_url=_DK_BASE,
+    ),
 )
 
 PROFILE_PROJECT = AgentModelProfile(
-    default=ModelConfig(temperature=0.7, max_tokens=4096),
+    default=ModelConfig(
+        model="qwen3.7-plus", temperature=0.7, max_tokens=4096,
+        api_key=_DS_PLUS, base_url=_DS_BASE,
+    ),
+)
+
+# ── Diagnose / Profile（plus 通道）─────────────────────────────
+
+PROFILE_DIAGNOSE = AgentModelProfile(
+    default=ModelConfig(
+        model="qwen3.7-plus", temperature=0.3, max_tokens=4096,
+        api_key=_DS_PLUS, base_url=_DS_BASE,
+    ),
+)
+
+PROFILE_STUDENT = AgentModelProfile(
+    default=ModelConfig(
+        model="qwen3.7-plus", temperature=0.3, max_tokens=2048,
+        api_key=_DS_PLUS, base_url=_DS_BASE,
+    ),
+)
+
+# ── Visualize 管线专用 Profiles ──────────────────────────────
+
+PROFILE_ANALYSIS = AgentModelProfile(
+    default=ModelConfig(
+        model="deepseek-v4-flash", temperature=0.0, max_tokens=512,
+        api_key=_DS_FLASH, base_url=_DS_BASE,
+    ),
+)
+
+PROFILE_REVIEW = AgentModelProfile(
+    default=ModelConfig(
+        model="qwen3.7-max-2026-05-17", temperature=0.0, max_tokens=1024,
+        api_key=_DS_MAX, base_url=_DS_BASE,
+    ),
 )
 
 
@@ -140,6 +258,8 @@ def create_llm(
     max_tokens: int = 8192,
     use_mock: bool = False,
     model: str | None = None,
+    api_key: str = "",
+    base_url: str = "",
 ) -> Any:
     """LLM Provider 工厂——根据 LLM_PROVIDER 环境变量选择后端。
 
@@ -148,6 +268,8 @@ def create_llm(
 
     Args:
         model: 模型名称，仅 OpenAI 后端使用。None 时使用 OPENAI_MODEL 环境变量。
+        api_key: 非空时优先于 OPENAI_API_KEY 环境变量。
+        base_url: 非空时优先于 OPENAI_BASE_URL 环境变量。
     """
     provider = os.getenv("LLM_PROVIDER", "spark").lower()
     if provider == "openai":
@@ -156,6 +278,8 @@ def create_llm(
             max_tokens=max_tokens,
             use_mock=use_mock,
             model=model,
+            api_key=api_key,
+            base_url=base_url,
         )
     return SparkLLM(
         temperature=temperature,
@@ -273,37 +397,42 @@ class SparkLLM:
         ws_url = self._build_ws_url()
         request = self._build_request(full_messages)
 
-        try:
-            async with asyncio.timeout(120.0):
-                async with websockets.connect(ws_url, max_size=10 * 1024 * 1024, open_timeout=30.0) as ws:
-                    await ws.send(json.dumps(request))
-                    full_text = ""
-                    async for raw in ws:
-                        data = json.loads(raw)
-                        code = data.get("header", {}).get("code", 1)
-                        if code != 0:
-                            msg = data.get("header", {}).get("message", "unknown")
-                            raise RuntimeError(f"Spark WebSocket error {code}: {msg}")
-                        choices = (
-                            data.get("payload", {})
-                            .get("choices", {})
-                            .get("text", [])
-                        )
-                        for choice in choices:
-                            full_text += choice.get("content", "")
-                        status = data.get("header", {}).get("status", 2)
-                        if status == 2:
-                            break
-                    return full_text
-        except asyncio.TimeoutError:
-            logger.error("Spark WebSocket timeout after 120s")
-            raise RuntimeError("Spark WebSocket timeout: LLM did not respond within 120s")
-        except OSError as e:
-            logger.error(f"Spark WebSocket OS error: {e}")
-            raise RuntimeError(f"Spark WebSocket connection failed: {e}")
-        except websockets.ConnectionClosed as e:
-            logger.error(f"WebSocket connection closed: {e}")
-            raise RuntimeError(f"Spark WebSocket connection failed: {e}")
+        last_error = None
+        async with _llm_semaphore:
+            for attempt in range(_MAX_RETRIES + 1):
+                try:
+                    async with asyncio.timeout(120.0):
+                        async with websockets.connect(ws_url, max_size=10 * 1024 * 1024, open_timeout=30.0) as ws:
+                            await ws.send(json.dumps(request))
+                            full_text = ""
+                            async for raw in ws:
+                                data = json.loads(raw)
+                                code = data.get("header", {}).get("code", 1)
+                                if code != 0:
+                                    msg = data.get("header", {}).get("message", "unknown")
+                                    raise RuntimeError(f"Spark WebSocket error {code}: {msg}")
+                                choices = (
+                                    data.get("payload", {})
+                                    .get("choices", {})
+                                    .get("text", [])
+                                )
+                                for choice in choices:
+                                    full_text += choice.get("content", "")
+                                status = data.get("header", {}).get("status", 2)
+                                if status == 2:
+                                    break
+                            return full_text
+                except asyncio.TimeoutError:
+                    logger.error("Spark WebSocket timeout after 120s")
+                    raise RuntimeError("Spark WebSocket timeout: LLM did not respond within 120s")
+                except (OSError, websockets.ConnectionClosed) as e:
+                    last_error = e
+                    if attempt < _MAX_RETRIES:
+                        logger.warning(f"Spark WebSocket error (attempt {attempt+1}), retrying: {e}")
+                        await asyncio.sleep(1.0)
+
+        logger.error(f"Spark WebSocket connection failed after {_MAX_RETRIES+1} attempts: {last_error}")
+        raise RuntimeError(f"Spark WebSocket connection failed: {last_error}")
 
     async def chat_stream(
         self,
@@ -321,37 +450,35 @@ class SparkLLM:
         ws_url = self._build_ws_url()
         request = self._build_request(full_messages)
 
-        try:
-            async with asyncio.timeout(120.0):
-                async with websockets.connect(ws_url, max_size=10 * 1024 * 1024, open_timeout=30.0) as ws:
-                    await ws.send(json.dumps(request))
-                    async for raw in ws:
-                        data = json.loads(raw)
-                        code = data.get("header", {}).get("code", 1)
-                        if code != 0:
-                            msg = data.get("header", {}).get("message", "unknown")
-                            raise RuntimeError(f"Spark WebSocket error {code}: {msg}")
-                        choices = (
-                            data.get("payload", {})
-                            .get("choices", {})
-                            .get("text", [])
-                        )
-                        for choice in choices:
-                            content = choice.get("content", "")
-                            if content:
-                                yield content
-                        status = data.get("header", {}).get("status", 2)
-                        if status == 2:
-                            break
-        except asyncio.TimeoutError:
-            logger.error("Spark WebSocket stream timeout after 120s")
-            raise RuntimeError("Spark WebSocket stream timeout: LLM did not respond within 120s")
-        except OSError as e:
-            logger.error(f"Spark WebSocket OS error: {e}")
-            raise RuntimeError(f"Spark WebSocket connection failed: {e}")
-        except websockets.ConnectionClosed as e:
-            logger.error(f"WebSocket connection closed: {e}")
-            raise RuntimeError(f"Spark WebSocket connection failed: {e}")
+        async with _llm_stream_semaphore:
+            try:
+                async with asyncio.timeout(120.0):
+                    async with websockets.connect(ws_url, max_size=10 * 1024 * 1024, open_timeout=30.0) as ws:
+                        await ws.send(json.dumps(request))
+                        async for raw in ws:
+                            data = json.loads(raw)
+                            code = data.get("header", {}).get("code", 1)
+                            if code != 0:
+                                msg = data.get("header", {}).get("message", "unknown")
+                                raise RuntimeError(f"Spark WebSocket error {code}: {msg}")
+                            choices = (
+                                data.get("payload", {})
+                                .get("choices", {})
+                                .get("text", [])
+                            )
+                            for choice in choices:
+                                content = choice.get("content", "")
+                                if content:
+                                    yield content
+                            status = data.get("header", {}).get("status", 2)
+                            if status == 2:
+                                break
+            except asyncio.TimeoutError:
+                logger.error("Spark WebSocket stream timeout after 120s")
+                raise RuntimeError("Spark WebSocket stream timeout: LLM did not respond within 120s")
+            except (OSError, websockets.ConnectionClosed) as e:
+                logger.error(f"Spark WebSocket stream connection error: {e}")
+                raise RuntimeError(f"Spark WebSocket connection failed: {e}")
 
     # ── internal helpers ────────────────────────────────────────
 
@@ -401,9 +528,11 @@ class OpenAILLM:
         max_tokens: int = 4096,
         use_mock: bool = False,
         model: str | None = None,
+        api_key: str = "",
+        base_url: str = "",
     ):
-        self.base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
-        self.api_key = os.getenv("OPENAI_API_KEY", "")
+        self.base_url = (base_url or os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")).rstrip("/")
+        self.api_key = api_key or os.getenv("OPENAI_API_KEY", "")
         self.model = model or os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
         self.temperature = temperature
         self.max_tokens = max_tokens
@@ -425,35 +554,43 @@ class OpenAILLM:
         full_messages = self._build_messages(messages, system_prompt)
         url = f"{self.base_url}/chat/completions"
 
-        try:
-            async with asyncio.timeout(120.0):
-                async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=10.0)) as client:
-                    resp = await client.post(
-                        url,
-                        json={
-                            "model": self.model,
-                            "messages": full_messages,
-                            "temperature": self.temperature,
-                            "max_tokens": self.max_tokens,
-                            "stream": False,
-                        },
-                        headers={
-                            "Authorization": f"Bearer {self.api_key}",
-                            "Content-Type": "application/json",
-                        },
-                    )
-                    resp.raise_for_status()
-                    data = resp.json()
-                    return data["choices"][0]["message"]["content"]
-        except httpx.HTTPStatusError as e:
-            logger.error(f"OpenAI HTTP error {e.response.status_code}: {e.response.text}")
-            raise RuntimeError(f"OpenAI HTTP error: {e}")
-        except asyncio.TimeoutError:
-            logger.error("OpenAI timeout after 120s")
-            raise RuntimeError("OpenAI timeout: LLM did not respond within 120s")
-        except OSError as e:
-            logger.error(f"OpenAI connection error: {e}")
-            raise RuntimeError(f"OpenAI connection failed: {e}")
+        last_error = None
+        async with _llm_semaphore:
+            for attempt in range(_MAX_RETRIES + 1):
+                try:
+                    async with asyncio.timeout(120.0):
+                        client = await _get_shared_client(self.api_key, self.base_url)
+                        resp = await client.post(
+                            url,
+                            json={
+                                "model": self.model,
+                                "messages": full_messages,
+                                "temperature": self.temperature,
+                                "max_tokens": self.max_tokens,
+                                "stream": False,
+                            },
+                            headers={
+                                "Authorization": f"Bearer {self.api_key}",
+                                "Content-Type": "application/json",
+                            },
+                        )
+                        resp.raise_for_status()
+                        data = resp.json()
+                        return data["choices"][0]["message"]["content"]
+                except asyncio.TimeoutError:
+                    logger.error("OpenAI timeout after 120s")
+                    raise RuntimeError("OpenAI timeout: LLM did not respond within 120s")
+                except (httpx.ConnectError, httpx.RemoteProtocolError, httpx.ReadError, OSError) as e:
+                    last_error = e
+                    if attempt < _MAX_RETRIES:
+                        logger.warning(f"OpenAI network error (attempt {attempt+1}), retrying: {e}")
+                        await asyncio.sleep(1.0)
+                except httpx.HTTPStatusError as e:
+                    logger.error(f"OpenAI HTTP error {e.response.status_code}: {e.response.text}")
+                    raise RuntimeError(f"OpenAI HTTP error: {e}")
+
+        logger.error(f"OpenAI connection failed after {_MAX_RETRIES+1} attempts: {last_error}")
+        raise RuntimeError(f"OpenAI connection failed: {last_error}")
 
     async def chat_stream(
         self,
@@ -469,9 +606,10 @@ class OpenAILLM:
         full_messages = self._build_messages(messages, system_prompt)
         url = f"{self.base_url}/chat/completions"
 
-        try:
-            async with asyncio.timeout(120.0):
-                async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=10.0)) as client:
+        async with _llm_stream_semaphore:
+            try:
+                async with asyncio.timeout(120.0):
+                    client = await _get_shared_client(self.api_key, self.base_url)
                     async with client.stream(
                         "POST",
                         url,
@@ -502,15 +640,15 @@ class OpenAILLM:
                                     yield content
                             except (json.JSONDecodeError, KeyError, IndexError):
                                 continue
-        except httpx.HTTPStatusError as e:
-            logger.error(f"OpenAI stream HTTP error {e.response.status_code}")
-            raise RuntimeError(f"OpenAI HTTP error: {e}")
-        except asyncio.TimeoutError:
-            logger.error("OpenAI stream timeout after 120s")
-            raise RuntimeError("OpenAI stream timeout")
-        except OSError as e:
-            logger.error(f"OpenAI stream connection error: {e}")
-            raise RuntimeError(f"OpenAI connection failed: {e}")
+            except asyncio.TimeoutError:
+                logger.error("OpenAI stream timeout after 120s")
+                raise RuntimeError("OpenAI stream timeout")
+            except httpx.HTTPStatusError as e:
+                logger.error(f"OpenAI stream HTTP error {e.response.status_code}")
+                raise RuntimeError(f"OpenAI HTTP error: {e}")
+            except (httpx.ConnectError, httpx.RemoteProtocolError, httpx.ReadError, OSError) as e:
+                logger.error(f"OpenAI stream connection error: {e}")
+                raise RuntimeError(f"OpenAI connection failed: {e}")
 
     def _build_messages(
         self, messages: list[dict], system_prompt: str

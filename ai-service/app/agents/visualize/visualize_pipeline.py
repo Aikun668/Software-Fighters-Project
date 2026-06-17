@@ -4,6 +4,7 @@ from typing import Optional
 from app.agents.visualize.analysis_agent import AnalysisAgent
 from app.agents.visualize.code_generator_agent import CodeGeneratorAgent
 from app.agents.visualize.review_agent import ReviewAgent
+from app.services.llm_service import PROFILE_ANALYSIS, PROFILE_CODE, PROFILE_REVIEW
 
 
 @dataclass
@@ -28,9 +29,9 @@ class VisualizePipeline:
     }
 
     def __init__(self, use_mock_llm: bool = False):
-        self.analysis_agent = AnalysisAgent(use_mock_llm=use_mock_llm)
-        self.code_generator = CodeGeneratorAgent(use_mock_llm=use_mock_llm)
-        self.review_agent = ReviewAgent(use_mock_llm=use_mock_llm)
+        self.analysis_agent = AnalysisAgent(use_mock_llm=use_mock_llm, model_profile=PROFILE_ANALYSIS)
+        self.code_generator = CodeGeneratorAgent(use_mock_llm=use_mock_llm, model_profile=PROFILE_CODE)
+        self.review_agent = ReviewAgent(use_mock_llm=use_mock_llm, model_profile=PROFILE_REVIEW)
 
     async def run(self, question: str, answer: str) -> VisualizeResult:
         analysis_state = {"question": question, "answer": answer}

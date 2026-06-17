@@ -156,56 +156,64 @@ INTENT_REGISTRY: list[IntentDef] = [
         intent="exercise_gen",
         params_model=ExerciseParams,
         prompt="用户想要生成练习题。从消息中提取：topic(主题)、count(题数,默认3)、difficulty(easy/medium/hard,默认medium)",
-        keywords=["出题", "题目", "练习", "做题", "习题", "出几道", "来几道", "道题"],
+        keywords=["出题", "题目", "练习", "做题", "习题", "出几道", "来几道",
+                  "练习题", "选择题", "计算题", "填空题", "简答题"],
         exclusive_keywords=[],
     ),
     IntentDef(
         intent="resource_gen",
         params_model=ResourceParams,
         prompt="用户想要生成学习资源。从消息中提取：topic(主题)",
-        keywords=["资源", "资料", "学习材料", "课件", "生成资源"],
+        keywords=["资源", "资料", "学习材料", "课件", "生成资源",
+                  "大纲", "讲义", "教程", "文档", "提纲", "幻灯片", "对比", "项目",
+                  "思维导图", "脑图", "概念图"],
         exclusive_keywords=["出题", "闪卡", "卡片"],
     ),
     IntentDef(
         intent="code_example",
         params_model=CodeExampleParams,
         prompt="用户想要代码示例。从消息中提取：topic(主题)、language(编程语言,默认python)",
-        keywords=["代码", "例子", "示例", "代码示例", "写一个", "怎么写", "实现"],
+        keywords=["代码", "例子", "示例", "代码示例", "写一个", "怎么写", "实现", "写个", "编程"],
         exclusive_keywords=["出题"],
     ),
     IntentDef(
         intent="tutor_question",
         params_model=TutorParams,
         prompt="用户在问一个问题需要答疑。从消息中提取：question(完整问题文本)",
-        keywords=["?", "？", "什么", "为什么", "怎么", "如何", "是什么"],
+        keywords=["什么", "为什么", "怎么", "如何", "是什么",
+                  "解释", "讲讲", "讲解", "说说", "介绍",
+                  "告诉我", "说明", "分析一下", "帮我理解"],
         exclusive_keywords=[],
+        confidence=0.5,  # 低置信度：单关键词命中不参与竞争，多命中才出手
     ),
     IntentDef(
         intent="learning_path",
         params_model=LearningPathParams,
         prompt="用户想要个性化学习路径规划。从消息中提取：topic(主题)、level(beginner/intermediate/advanced,默认beginner)",
-        keywords=["规划", "学习路径", "路线", "先学", "后学", "怎么学"],
+        keywords=["规划", "学习路径", "路线", "先学", "后学", "怎么学",
+                  "计划", "安排", "学习安排", "自学", "学习计划"],
         exclusive_keywords=[],
     ),
     IntentDef(
         intent="solve_problem",
         params_model=SolveParams,
         prompt="用户想要逐步解一道具体的题目。从消息中提取：question(完整题目)",
-        keywords=["解", "求", "算", "推导", "证明", "求解", "计算出"],
+        keywords=["解题", "求解", "计算", "求导", "解方程", "推导", "证明", "计算出", "这道题", "帮我解"],
         exclusive_keywords=["解释", "概述", "介绍", "出题"],
     ),
     IntentDef(
         intent="flashcard_gen",
         params_model=FlashcardParams,
         prompt="用户想要生成记忆闪卡。从消息中提取：topic(主题)、count(卡片数,默认5)",
-        keywords=["闪卡", "记忆卡", "卡片", "背"],
+        keywords=["闪卡", "记忆卡", "卡片", "背诵", "背一下"],
         exclusive_keywords=[],
     ),
     IntentDef(
         intent="visualize",
         params_model=VisualizeParams,
         prompt="用户希望生成图表、流程图或可视化内容。从消息中提取：topic(主题)",
-        keywords=["画", "图", "图表", "流程图", "可视化", "画一下"],
+        keywords=["画图", "图表", "流程图", "可视化", "画一下", "画一张",
+                  "结构图", "曲线图", "示意图"],
         exclusive_keywords=[],
     ),
     IntentDef(
@@ -220,7 +228,7 @@ INTENT_REGISTRY: list[IntentDef] = [
         params_model=DiagnoseParams,
         prompt="用户希望进行学习诊断或测试自己的掌握情况。从消息中提取：topic(主题)、skills(技能列表)",
         keywords=["诊断", "测试", "掌握", "薄弱", "测一下", "考核", "测验", "摸底", "检查一下"],
-        exclusive_keywords=[],
+        exclusive_keywords=["解题", "求解"],
         confidence=0.8,
     ),
     IntentDef(
@@ -232,6 +240,8 @@ INTENT_REGISTRY: list[IntentDef] = [
             "我刚", "刚开始", "小白", "第一次", "没学过", "不懂",
             "完全不会", "基础差", "入门", "开始学", "学习目标",
             "我想了解", "介绍一下", "我是新手", "完全不懂",
+            "学过", "基础", "方向", "迷茫", "不知道怎么",
+            "我不知道", "大二", "大一", "大三", "大四", "转行",
         ],
         exclusive_keywords=["出题", "做题", "练习", "闪卡", "资源", "课件"],
         confidence=0.7,
@@ -240,25 +250,30 @@ INTENT_REGISTRY: list[IntentDef] = [
 
 
 def _build_extraction_prompt() -> str:
+    """构建精简版 LLM 提取 prompt — 5 大类意图。
+
+    细粒度路由（解题/诊断/画像）由 RouterAgent 关键词粗路由处理，
+    LLM 只需判断消息属于哪个 Center，大幅降低分类难度。
+    """
     parts = [
-        "分析用户消息，判断一个或多个意图并提取参数。返回JSON。",
+        "分析用户消息，判断其意图类别。返回JSON。",
         "",
-        "重要规则：",
-        "1. 只提取用户明确表达的意图，不要推测或添加额外意图",
-        "2. 用户说'解题/求解/算'→只提取 solve_problem，不要额外加 exercise_gen",
-        "3. 用户说'诊断/摸底/测一下'→只提取 diagnose，不要额外加 tutor_question 或 solve_problem",
-        "4. 用户说'出题/练习'→只提取 exercise_gen，不要额外加 solve_problem",
-        "5. 只有当用户一句话中明确包含多个不同诉求时（如'解释一下XX再出几道题'），才提取多个意图",
-        "6. 普通问答/闲聊/概念解释 → 只提取 tutor_question，不要附加其他意图",
+        "规则：",
+        "1. 只提取用户明确表达的意图，不推测",
+        "2. 单意图消息只输出一个意图，多诉求消息（如'解释X再出几道题'）才输出多个",
+        "3. 不确定时用 tutor_question 兜底",
         "",
-        "意图列表：",
+        "意图类别（5类）：",
+        "1. tutor_question - 答疑/概念解释/闲聊/问为什么/问怎么做",
+        "2. resource_gen - 生成学习资源（教程/文档/代码/闪卡/思维导图/项目）",
+        "3. exercise_gen - 生成练习题/出题/做题",
+        "4. learning_path - 学习路径规划/学习路线/怎么学",
+        "5. visualize - 画图/可视化/流程图/知识图谱",
+        "6. unknown - 无法识别",
+        "",
+        '返回格式：{"intents":[{"intent":"exercise_gen","params":{"topic":"...","count":5},"confidence":0.95}],"is_clear":true}',
+        "is_clear 表示意图是否清晰可执行；模糊设为 false。",
     ]
-    for i, d in enumerate(INTENT_REGISTRY, 1):
-        parts.append(f"{i}. {d.intent} - {d.prompt}")
-    parts.append(f"{len(INTENT_REGISTRY) + 1}. unknown - 无法识别")
-    parts.append('')
-    parts.append('返回格式：{"intents":[{"intent":"exercise_gen","params":{"topic":"...","count":5},"confidence":0.95}],"is_clear":true}')
-    parts.append("is_clear 表示意图是否清晰可执行；若模糊则设为 false。")
     return "\n".join(parts)
 
 
@@ -288,9 +303,8 @@ def _apply_mutex_filter(intents: list["IntentResult"]) -> list["IntentResult"]:
 
 def _score_intent(message: str, intent_def: IntentDef) -> float:
     """基于关键词命中数的意图评分。exclusive_keywords 一票否决。
-    注意：exclusive_keywords 基于子串匹配（`kw in msg`），可能产生边界效应。
-    例如"不要出题"会因含"出题"而命中 resource_gen 的 exclusive_keywords，
-    但这种简单否定句在实际对话中极少出现，当前精度可接受。"""
+    confidence 作为评分乘数：tutor_question(0.5) 等低频意图单次命中不出头，
+    只有多关键词命中才能与其他意图竞争。"""
     msg = message.lower()
     if any(kw in msg for kw in intent_def.exclusive_keywords):
         return 0.0
@@ -298,12 +312,14 @@ def _score_intent(message: str, intent_def: IntentDef) -> float:
         return 0.0
     hits = sum(1 for kw in intent_def.keywords if kw in msg)
     if hits >= 3:
-        return 0.9
-    if hits >= 2:
-        return 0.75
-    if hits >= 1:
-        return 0.5
-    return 0.0
+        base = 0.9
+    elif hits >= 2:
+        base = 0.75
+    elif hits >= 1:
+        base = 0.5
+    else:
+        return 0.0
+    return base * intent_def.confidence
 
 
 def _extract_topic(message: str) -> str:

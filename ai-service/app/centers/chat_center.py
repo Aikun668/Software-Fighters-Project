@@ -5,7 +5,6 @@ from app.agents.decompose_agent import DecomposeAgent
 from app.agents.diagnose_agent import DiagnoseAgent
 from app.agents.exercise_agent import ExerciseAgent
 from app.agents.goal_agent import GoalAgent
-from app.agents.layered_explain_agent import LayeredExplainAgent
 from app.agents.profile_agent import ProfileAgent
 from app.agents.schedule_agent import ScheduleAgent
 from app.agents.content_agent import ContentAgent
@@ -18,6 +17,11 @@ from app.centers.router_agent import RouterAgent
 from app.centers.schemas import ExecutionPlan
 from app.centers.visualization_center import VisualizationCenter
 from app.services.intent_extractor import IntentExtractor
+from app.services.llm_service import (
+    PROFILE_DIAGNOSE,
+    PROFILE_EXERCISE,
+    PROFILE_STUDENT,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -39,19 +43,16 @@ class ChatCenter:
     def _get_result(self) -> ResultAgent:
         if self.result_agent is None:
             decompose = DecomposeAgent()
-            layered = LayeredExplainAgent()
             goal = GoalAgent()
             schedule = ScheduleAgent()
             adjustment = AdjustmentAgent()
-            diagnose = DiagnoseAgent()
-            profile = ProfileAgent()
-            exercise = ExerciseAgent()
+            diagnose = DiagnoseAgent(model_profile=PROFILE_DIAGNOSE)
+            profile = ProfileAgent(model_profile=PROFILE_STUDENT)
+            exercise = ExerciseAgent(model_profile=PROFILE_EXERCISE)
             content = ContentAgent()
 
             self.result_agent = ResultAgent(
                 auto_center=AutoCenter(
-                    decompose_agent=decompose,
-                    layered_explain_agent=layered,
                     diagnose_agent=diagnose,
                     profile_agent=profile,
                 ),

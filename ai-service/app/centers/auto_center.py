@@ -1,13 +1,17 @@
 import logging
 
-from app.agents.decompose_agent import DecomposeAgent
 from app.agents.diagnose_agent import DiagnoseAgent
-from app.agents.image_agent import ImageAgent
-from app.agents.layered_explain_agent import LayeredExplainAgent
 from app.agents.profile_agent import ProfileAgent
 from app.agents.solve_agent import SolveAgent
 from app.agents.tutor_agent import TutorAgent
+from app.agents.visualize.visualize_pipeline import VisualizePipeline
 from app.centers.schemas import CenterResult, CenterTask
+from app.services.llm_service import (
+    PROFILE_CONTENT,
+    PROFILE_CODE,
+    PROFILE_DIAGNOSE,
+    PROFILE_STUDENT,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -17,19 +21,15 @@ class AutoCenter:
         self,
         tutor_agent: TutorAgent | None = None,
         solve_agent: SolveAgent | None = None,
-        decompose_agent: DecomposeAgent | None = None,
-        layered_explain_agent: LayeredExplainAgent | None = None,
         diagnose_agent: DiagnoseAgent | None = None,
-        image_agent: ImageAgent | None = None,
         profile_agent: ProfileAgent | None = None,
+        visualize_pipeline: VisualizePipeline | None = None,
     ):
         self.tutor_agent = tutor_agent
         self.solve_agent = solve_agent
-        self.decompose_agent = decompose_agent
-        self.layered_explain_agent = layered_explain_agent
         self.diagnose_agent = diagnose_agent
-        self.image_agent = image_agent
         self.profile_agent = profile_agent
+        self.visualize_pipeline = visualize_pipeline
 
     async def execute(self, task: CenterTask) -> CenterResult:
         intent = task.intent
@@ -53,21 +53,29 @@ class AutoCenter:
         student_profile: dict,
         style: str,
     ) -> CenterResult:
-        agent = self.tutor_agent or TutorAgent()
+        agent = self.tutor_agent or TutorAgent(model_profile=PROFILE_CONTENT)
         try:
             state = await agent.run({
                 "messages": messages,
                 "student_profile": student_profile,
                 "style": style,
             })
+            blocks = state.get("content_blocks", [])
+            response = state.get("response", "")
+
+            # ── 图解增强：Tutor 回答后判断是否需要补图 ──
+            viz_blocks = await self._maybe_visualize(messages, response)
+            if viz_blocks:
+                blocks = list(blocks) + viz_blocks
+
             return CenterResult(
                 mode="auto",
                 intent=task.intent,
                 event_type="content",
                 payload={
-                    "response": state.get("response", ""),
+                    "response": response,
                     "domain": state.get("domain", ""),
-                    "blocks": state.get("content_blocks", []),
+                    "blocks": blocks,
                 },
                 agent="TutorAgent",
                 sequence=task.sequence,
@@ -83,13 +91,51 @@ class AutoCenter:
                 sequence=task.sequence,
             )
 
+    async def _maybe_visualize(
+        self,
+        messages: list[dict],
+        answer: str,
+    ) -> list[dict]:
+        """Tutor 回答完成后，检查是否适合生成图解。"""
+        if not answer.strip():
+            return []
+
+        question = ""
+        for m in reversed(messages):
+            if m.get("role") == "user":
+                question = m.get("content", "")
+                break
+        if not question.strip():
+            return []
+
+        try:
+            pipeline = self.visualize_pipeline or VisualizePipeline()
+            result = await pipeline.run(question=question, answer=answer[:3000])
+        except Exception as e:
+            logger.warning(f"VisualizePipeline failed (non-blocking): {e}")
+            return []
+
+        if not result.should_visualize or not result.code:
+            return []
+
+        logger.info(
+            "Tutor 图解增强: type=%s, title=%s, code_len=%d",
+            result.render_type, result.title, len(result.code),
+        )
+        return [{
+            "type": "visualization",
+            "sub_type": result.render_type,
+            "heading": result.title,
+            "content": result.code,
+        }]
+
     async def _run_diagnose(
         self,
         task: CenterTask,
         student_profile: dict,
     ) -> CenterResult:
         topic = task.params.get("topic") or task.input
-        agent = self.diagnose_agent or DiagnoseAgent()
+        agent = self.diagnose_agent or DiagnoseAgent(model_profile=PROFILE_DIAGNOSE)
         try:
             state = await agent.run({
                 "topic": topic,
@@ -130,7 +176,7 @@ class AutoCenter:
         messages: list[dict],
         student_profile: dict,
     ) -> CenterResult:
-        agent = self.profile_agent or ProfileAgent()
+        agent = self.profile_agent or ProfileAgent(model_profile=PROFILE_STUDENT)
         try:
             state = await agent.run({
                 "messages": messages or [{"role": "user", "content": task.input}],
@@ -167,7 +213,7 @@ class AutoCenter:
         messages: list[dict],
         student_profile: dict,
     ) -> CenterResult:
-        agent = self.solve_agent or SolveAgent()
+        agent = self.solve_agent or SolveAgent(model_profile=PROFILE_CODE)
         context_parts = []
         for m in messages[-6:]:
             role_label = "学生" if m.get("role") == "user" else "AI"

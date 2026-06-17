@@ -10,6 +10,7 @@ class CenterTask:
     params: dict = field(default_factory=dict)
     context: dict = field(default_factory=dict)
     sequence: int = 0
+    confidence: float = 0.0
 
 
 @dataclass
@@ -19,6 +20,7 @@ class ExecutionPlan:
     is_clear: bool = True
     inquiry_question: str = ""
     max_intents: int = 3
+    needs_confirmation: bool = False  # 3+ 意图时推送确认卡
 
     def __post_init__(self):
         if len(self.tasks) > self.max_intents:
