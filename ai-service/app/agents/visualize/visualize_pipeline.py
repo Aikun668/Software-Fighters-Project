@@ -41,6 +41,12 @@ class VisualizePipeline:
         if not analysis.get("should_visualize", False):
             return VisualizeResult.skip(reason=analysis.get("reasoning", "无需可视化"))
 
+        confidence = analysis.get("confidence", 0.5)
+        if confidence < 0.6:
+            return VisualizeResult.skip(
+                reason=f"置信度过低 ({confidence:.2f})，跳过可视化"
+            )
+
         render_type = analysis.get("render_type", "mermaid")
         description = analysis.get("description", "")
         data_description = analysis.get("data_description", "")

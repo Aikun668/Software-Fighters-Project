@@ -6,6 +6,7 @@ from typing import TypedDict
 from langgraph.graph import StateGraph
 
 from app.agents.base_agent import BaseAgent
+from app.services.hallucination_guard import kb_verify
 from app.utils.prompt_loader import interpolate_variables
 
 logger = logging.getLogger(__name__)
@@ -23,6 +24,7 @@ class SolveState(TypedDict, total=False):
     confidence_score: float
 
 
+@kb_verify(fields=["solution"])
 class SolveAgent(BaseAgent):
     def __init__(self, config=None, use_mock_llm: bool = False, model_profile=None):
         super().__init__(

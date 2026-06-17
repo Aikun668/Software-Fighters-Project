@@ -89,8 +89,12 @@ class GraphService:
 
     def __init__(self):
         self._skeleton_cache: Optional[dict] = None
+        self._original_skeleton_node_ids: set[str] = set()
 
-    def load_skeleton(self) -> dict:
+    def load_skeleton(self, force_reload: bool = False) -> dict:
+        if force_reload:
+            self._skeleton_cache = None
+            self._original_skeleton_node_ids = set()
         if self._skeleton_cache is not None:
             return self._skeleton_cache
 
@@ -98,6 +102,7 @@ class GraphService:
             graph = json.load(f)
 
         self._validate_skeleton(graph)
+        self._original_skeleton_node_ids = {n["id"] for n in graph["nodes"]}
         self._skeleton_cache = graph
         logger.info("Skeleton loaded: %d nodes, %d edges", len(graph["nodes"]), len(graph["edges"]))
         return graph
@@ -155,7 +160,8 @@ class GraphService:
             logger.info("Auto-added %d parallel edges", added)
         return graph
 
-    async def get_graph(self, masteries: dict[str, float] | None = None) -> dict:
+    async def get_graph(self, course_id: str | None = None,
+                       masteries: dict[str, float] | None = None) -> dict:
         graph = copy.deepcopy(self.load_skeleton())
         graph = self.auto_add_parallel_edges(graph)
 
@@ -170,6 +176,7 @@ class GraphService:
         return graph
 
     async def get_node_card(self, node_id: str,
+                            course_id: str | None = None,
                             masteries: dict[str, float] | None = None,
                             total_exercises: int = 0,
                             last_practiced: str | None = None) -> dict:
@@ -363,6 +370,449 @@ class GraphService:
             return "基本掌握"
         else:
             return "已掌握"
+
+    # ── 图谱维护 CRUD ────────────────────────────────
+
+    def _all_nodes(self, course_id: str | None = None) -> list[dict]:
+        """返回当前图谱所有节点（骨架 + 动态添加）。"""
+        skeleton = self.load_skeleton()
+        return skeleton["nodes"]
+
+    def add_node(self, course_id: str, data: dict) -> dict:
+        """添加动态节点到图谱。"""
+        skeleton = self.load_skeleton()
+        node_id = data.get("id", "")
+        if not node_id:
+            raise ValueError("节点 id 不能为空")
+        for n in skeleton["nodes"]:
+            if n["id"] == node_id:
+                raise ValueError(f"节点 '{node_id}' 已存在")
+        node = {
+            "id": node_id,
+            "name": data.get("name", node_id),
+            "type": data.get("type", "concept"),
+            "description": data.get("description", ""),
+            "difficulty": max(1, min(5, int(data.get("difficulty", 3)))),
+            "category": data.get("category", "其他"),
+        }
+        skeleton["nodes"].append(node)
+        return node
+
+    def add_edge(self, course_id: str, data: dict) -> dict:
+        """添加边到图谱。"""
+        skeleton = self.load_skeleton()
+        src = data.get("source", "")
+        tgt = data.get("target", "")
+        rel = data.get("relation", "depends_on")
+        if not src or not tgt:
+            raise ValueError("边的 source 和 target 不能为空")
+        node_ids = {n["id"] for n in skeleton["nodes"]}
+        if src not in node_ids:
+            raise ValueError(f"source 节点 '{src}' 不存在")
+        if tgt not in node_ids:
+            raise ValueError(f"target 节点 '{tgt}' 不存在")
+        if rel not in VALID_RELATIONS:
+            raise ValueError(f"relation '{rel}' 不在 {VALID_RELATIONS} 中")
+        for e in skeleton["edges"]:
+            if e["source"] == src and e["target"] == tgt:
+                raise ValueError(f"边 {src} -> {tgt} 已存在")
+        edge = {
+            "source": src, "target": tgt, "relation": rel,
+            "rationale": data.get("rationale", ""),
+        }
+        skeleton["edges"].append(edge)
+        return edge
+
+    def delete_node(self, course_id: str, node_id: str) -> dict:
+        """删除节点（骨架节点不可删，动态节点可删并级联删除关联边）。"""
+        skeleton = self.load_skeleton()
+        if node_id in self._original_skeleton_node_ids:
+            raise ValueError("骨架节点不可删除")
+        target = None
+        for i, n in enumerate(skeleton["nodes"]):
+            if n["id"] == node_id:
+                target = skeleton["nodes"].pop(i)
+                break
+        if target is None:
+            raise ValueError(f"节点 '{node_id}' 不存在")
+        skeleton["edges"] = [
+            e for e in skeleton["edges"]
+            if e["source"] != node_id and e["target"] != node_id
+        ]
+        return target
+
+    def update_node(self, course_id: str, node_id: str, updates: dict) -> dict:
+        """更新节点元数据。骨架节点仅可改 difficulty/category，动态节点全字段可改。"""
+        skeleton = self.load_skeleton()
+        target = None
+        for n in skeleton["nodes"]:
+            if n["id"] == node_id:
+                target = n
+                break
+        if target is None:
+            raise ValueError(f"节点 '{node_id}' 不存在")
+        is_skeleton = node_id in self._original_skeleton_node_ids
+
+        allowed = {"difficulty", "category"} if is_skeleton else {
+            "name", "description", "difficulty", "category", "type",
+        }
+        for key, value in updates.items():
+            if key not in allowed:
+                raise ValueError(
+                    f"节点 '{node_id}' 不允许修改字段 '{key}'"
+                    + ("（骨架节点仅可改 difficulty/category）" if is_skeleton else "")
+                )
+            if key == "difficulty":
+                target[key] = max(1, min(5, int(value)))
+            else:
+                target[key] = value
+        return target
+
+    # ── 图谱分析 ──────────────────────────────────────
+
+    def check_prerequisites(self, node_id: str,
+                            masteries: dict[str, float],
+                            threshold: float,
+                            course_id: str | None = None) -> dict:
+        """检查用户是否满足学习指定节点的前置条件。"""
+        skeleton = self.load_skeleton()
+        node_map = {n["id"]: n for n in skeleton["nodes"]}
+        if node_id not in node_map:
+            raise ValueError(f"节点 '{node_id}' 不存在")
+
+        pred_ids = [
+            e["source"] for e in skeleton["edges"]
+            if e["target"] == node_id and e["relation"] == "depends_on"
+        ]
+
+        prereqs = []
+        for pid in pred_ids:
+            m = masteries.get(pid, 0.0)
+            met = m >= threshold
+            prereqs.append({
+                "node_id": pid,
+                "name": node_map.get(pid, {}).get("name", pid),
+                "mastery": m,
+                "met": met,
+                "gap": round(max(0.0, threshold - m), 2) if not met else 0.0,
+            })
+
+        met_count = sum(1 for p in prereqs if p["met"])
+        return {
+            "node_id": node_id,
+            "node_name": node_map[node_id].get("name", node_id),
+            "can_learn": met_count == len(prereqs),
+            "prerequisites": prereqs,
+            "unmet": [p for p in prereqs if not p["met"]],
+            "met_count": met_count,
+            "unmet_count": len(prereqs) - met_count,
+            "total_prerequisites": len(prereqs),
+            "threshold": threshold,
+        }
+
+    def get_layered_graph(self,
+                          masteries: dict[str, float] | None = None,
+                          course_id: str | None = None) -> dict:
+        """返回带层级信息的图谱（供前端分层布局）。"""
+        skeleton = copy.deepcopy(self.load_skeleton())
+        skeleton = self.auto_add_parallel_edges(skeleton)
+
+        masteries = masteries or {}
+        node_map = {n["id"]: n for n in skeleton["nodes"]}
+        for node in skeleton["nodes"]:
+            m = masteries.get(node["id"], 0.0)
+            status = self._mastery_to_status(m)
+            node["mastery"] = m
+            node["status"] = status
+            node["color"] = self._mastery_to_color(m, status)
+
+        # BFS 分层：仅考虑 depends_on 边
+        in_degree = {n["id"]: 0 for n in skeleton["nodes"]}
+        adj = {n["id"]: [] for n in skeleton["nodes"]}
+        for e in skeleton["edges"]:
+            if e["relation"] == "depends_on":
+                adj[e["source"]].append(e["target"])
+                in_degree[e["target"]] += 1
+
+        layer = {nid: 0 for nid in in_degree}
+        queue = deque([nid for nid, deg in in_degree.items() if deg == 0])
+        while queue:
+            u = queue.popleft()
+            for v in adj[u]:
+                layer[v] = max(layer[v], layer[u] + 1)
+                in_degree[v] -= 1
+                if in_degree[v] == 0:
+                    queue.append(v)
+
+        unlayered = [nid for nid, deg in in_degree.items() if deg > 0]
+        if unlayered:
+            logger.warning("Graph has cycle in depends_on edges, using topological fallback")
+            topo = self.topological_sort()
+            for i, nid in enumerate(topo):
+                layer[nid] = i
+
+        for node in skeleton["nodes"]:
+            node["layer"] = layer.get(node["id"], 0)
+
+        max_layer = max(layer.values()) if layer else 0
+        layer_groups: dict[int, list[str]] = {}
+        for nid, l in layer.items():
+            layer_groups.setdefault(l, []).append(nid)
+
+        layers = [
+            {"layer": l, "nodes": sorted(node_ids)}
+            for l, node_ids in sorted(layer_groups.items())
+        ]
+
+        return {
+            "nodes": skeleton["nodes"],
+            "edges": skeleton["edges"],
+            "layers": layers,
+            "max_layer": max_layer,
+        }
+
+    def recommend_next_node(self,
+                            masteries: dict[str, float],
+                            course_id: str | None = None) -> list[dict]:
+        """根据当前掌握度推荐下一个该学的节点。"""
+        skeleton = self.load_skeleton()
+        node_map = {n["id"]: n for n in skeleton["nodes"]}
+
+        prereqs: dict[str, list[str]] = {n["id"]: [] for n in skeleton["nodes"]}
+        for e in skeleton["edges"]:
+            if e["relation"] == "depends_on":
+                prereqs[e["target"]].append(e["source"])
+
+        successors: dict[str, int] = {}
+        for n in skeleton["nodes"]:
+            successors[n["id"]] = sum(
+                1 for e in skeleton["edges"]
+                if e["source"] == n["id"] and e["relation"] == "depends_on"
+            )
+
+        candidates = []
+        for node in skeleton["nodes"]:
+            nid = node["id"]
+            m = masteries.get(nid, 0.0)
+            if m >= 0.85:
+                continue
+            pred_list = prereqs[nid]
+            if pred_list:
+                readiness = sum(masteries.get(p, 0.0) for p in pred_list) / len(pred_list)
+                unmet = [p for p in pred_list if masteries.get(p, 0.0) < 0.85]
+            else:
+                readiness = 1.0
+                unmet = []
+            candidates.append({
+                "node_id": nid,
+                "name": node.get("name", nid),
+                "mastery": m,
+                "status": self._mastery_to_status(m),
+                "difficulty": node.get("difficulty", 1),
+                "category": node.get("category", ""),
+                "readiness": round(readiness, 4),
+                "unmet_prerequisites": unmet,
+                "unlocks_count": successors.get(nid, 0),
+            })
+
+        candidates.sort(key=lambda c: (
+            len(c["unmet_prerequisites"]),
+            -c["readiness"],
+            c["difficulty"],
+        ))
+        return candidates[:10]
+
+    def get_progress_summary(self,
+                             masteries: dict[str, float],
+                             course_id: str | None = None) -> dict:
+        """学习进度概要：全局掌握率 + 各分类/难度统计。"""
+        skeleton = self.load_skeleton()
+        nodes = skeleton["nodes"]
+
+        total = len(nodes)
+        if total == 0:
+            return {
+                "total_nodes": 0, "mastered_count": 0, "learning_count": 0,
+                "locked_count": 0, "global_mastery_pct": 0.0,
+                "by_category": {}, "by_difficulty": {}, "recommended_focus": [],
+            }
+
+        by_cat: dict[str, dict] = {}
+        by_diff: dict[int, dict] = {}
+        all_mastery = []
+
+        for node in nodes:
+            nid = node["id"]
+            m = masteries.get(nid, 0.0)
+            status = self._mastery_to_status(m)
+            cat = node.get("category", "未分类")
+            diff = node.get("difficulty", 1)
+            all_mastery.append(m)
+
+            for bucket, key in [(by_cat, cat), (by_diff, diff)]:
+                if key not in bucket:
+                    bucket[key] = {"total": 0, "mastered": 0, "learning": 0,
+                                   "locked": 0, "mastery_sum": 0.0}
+                bucket[key]["total"] += 1
+                bucket[key][status] += 1
+                bucket[key]["mastery_sum"] += m
+
+        mastered_count = sum(1 for n in nodes
+                             if self._mastery_to_status(masteries.get(n["id"], 0.0)) == STATUS_MASTERED)
+        learning_count = sum(1 for n in nodes
+                             if self._mastery_to_status(masteries.get(n["id"], 0.0)) == STATUS_LEARNING)
+        locked_count = total - mastered_count - learning_count
+        global_pct = round(sum(all_mastery) / total * 100, 1)
+
+        for bucket in (by_cat, by_diff):
+            for k, v in bucket.items():
+                v["avg_mastery"] = round(v["mastery_sum"] / max(v["total"], 1), 2)
+                v.pop("mastery_sum", None)
+
+        cat_avg = {
+            cat: data["avg_mastery"]
+            for cat, data in by_cat.items()
+        }
+        recommended_focus = sorted(cat_avg, key=cat_avg.get)[:2]
+
+        return {
+            "total_nodes": total,
+            "mastered_count": mastered_count,
+            "learning_count": learning_count,
+            "locked_count": locked_count,
+            "global_mastery_pct": global_pct,
+            "by_category": by_cat,
+            "by_difficulty": {int(k): v for k, v in sorted(by_diff.items())},
+            "recommended_focus": recommended_focus,
+        }
+
+    # ── 可视化导出 ────────────────────────────────────
+
+    def export_mermaid(self,
+                       course_id: str | None = None,
+                       masteries: dict[str, float] | None = None) -> str:
+        """导出知识图谱为 Mermaid flowchart 语法。"""
+        skeleton = copy.deepcopy(self.load_skeleton())
+        skeleton = self.auto_add_parallel_edges(skeleton)
+        masteries = masteries or {}
+
+        lines = ["flowchart TD"]
+
+        for node in skeleton["nodes"]:
+            nid = node["id"]
+            name = node.get("name", nid).replace('"', "'")
+            m = masteries.get(nid, 0.0)
+            status = self._mastery_to_status(m)
+            status_labels = {"locked": "未开始", "learning": "学习中", "mastered": "已掌握"}
+            label = status_labels.get(status, status)
+            pct = f"{round(m * 100)}%"
+            lines.append(f'    {nid}["{name}<br/>{label} {pct}"]')
+
+        relation_styles = {
+            "depends_on": ("-->", "实线"),
+            "extends": ("-.->", "虚线"),
+            "parallel": ("===", "粗线"),
+        }
+
+        for edge in skeleton["edges"]:
+            src = edge["source"]
+            tgt = edge["target"]
+            rel = edge.get("relation", "depends_on")
+            arrow, _ = relation_styles.get(rel, ("-->", ""))
+            rationale = edge.get("rationale", rel)
+            safe_rationale = rationale.replace('"', "'")[:40]
+            lines.append(f"    {src} {arrow}|\"{safe_rationale}\"| {tgt}")
+
+        return "\n".join(lines)
+
+    # ── LLM 补边 ──────────────────────────────────────
+
+    async def suggest_edges(self, course_id: str | None = None) -> list[dict]:
+        """LLM 自动补边：分析未连通节点对，建议遗漏的图谱关系。"""
+        skeleton = self.load_skeleton()
+        nodes = skeleton["nodes"]
+        edges = skeleton["edges"]
+
+        existing_pairs = {(e["source"], e["target"]) for e in edges}
+        node_id_set = {n["id"] for n in nodes}
+
+        nodes_info = [
+            {"id": n["id"], "name": n.get("name", ""),
+             "category": n.get("category", ""),
+             "description": (n.get("description", "") or "")[:100]}
+            for n in nodes
+        ]
+        edges_info = [
+            {"source": e["source"], "target": e["target"],
+             "relation": e.get("relation", ""),
+             "rationale": e.get("rationale", "")}
+            for e in edges
+        ]
+
+        import json as _json
+        system_prompt = (
+            "你是一个知识图谱专家。分析以下课程知识图谱，找出可能遗漏的学习依赖关系。\n"
+            "返回一个 JSON 对象，包含 key \"suggestions\"，值为数组。每个元素含：\n"
+            "  source: 源节点 id\n"
+            "  target: 目标节点 id\n"
+            "  relation: depends_on / extends / parallel 之一\n"
+            "  rationale: 新增此边的理由（中文，20 字以内）\n"
+            "  confidence: 0-1 信心分数\n"
+            "不要建议已存在的边。没有建议则返回空数组。"
+        )
+        user_prompt = (
+            f"## 节点列表\n{_json.dumps(nodes_info, ensure_ascii=False, indent=2)}\n\n"
+            f"## 已有边\n{_json.dumps(edges_info, ensure_ascii=False, indent=2)}\n\n"
+            f"## 已有边对 (source, target)\n{_json.dumps(sorted(existing_pairs), ensure_ascii=False)}\n\n"
+            "请分析并返回建议的新边。"
+        )
+
+        try:
+            from app.services.llm_service import get_llm_service
+            from app.utils.json_parser import parse_llm_json
+            llm = get_llm_service()
+            raw = await llm.chat(
+                [{"role": "user", "content": user_prompt}],
+                system_prompt=system_prompt,
+            )
+            data = parse_llm_json(raw, fallback={}, expected_key="suggestions")
+            raw_suggestions = data.get("suggestions", []) if isinstance(data, dict) else []
+        except Exception as exc:
+            logger.warning("LLM edge suggestion failed: %s", exc)
+            return []
+
+        if not isinstance(raw_suggestions, list):
+            return []
+
+        suggestions = []
+        name_lookup = {n["id"]: n["name"] for n in nodes_info}
+        for s in raw_suggestions:
+            if not isinstance(s, dict):
+                continue
+            src = str(s.get("source", ""))
+            tgt = str(s.get("target", ""))
+            if (src, tgt) in existing_pairs:
+                continue
+            if src not in node_id_set or tgt not in node_id_set:
+                continue
+            rel = s.get("relation", "extends")
+            if rel not in VALID_RELATIONS:
+                rel = "extends"
+            try:
+                confidence = float(s.get("confidence", 0.5))
+            except (TypeError, ValueError):
+                confidence = 0.5
+            suggestions.append({
+                "source": src,
+                "source_name": name_lookup.get(src, src),
+                "target": tgt,
+                "target_name": name_lookup.get(tgt, tgt),
+                "relation": rel,
+                "rationale": str(s.get("rationale", "")),
+                "confidence": round(confidence, 4),
+            })
+
+        return suggestions
 
 
 _graph_service: Optional[GraphService] = None

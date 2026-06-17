@@ -287,19 +287,61 @@ class ResourceGenWorkflow(BaseWorkflow):
             parts.append(f"已掌握: {', '.join(strong)}")
         return "; ".join(parts) if parts else "未知"
 
-    @staticmethod
-    def _infer_diagram_type(topic: str) -> str:
-        """从 topic 关键词推断合适的图表类型。"""
+    # ── P1-2: 扩展图表类型推断规则（加权计分）──
+    _DIAGRAM_TYPE_RULES: list[tuple[str, list[str]]] = [
+        ("architecture", [
+            "CNN", "卷积神经网络", "RNN", "循环神经网络", "LSTM", "GRU",
+            "Transformer", "BERT", "GPT", "ResNet", "VGG", "U-Net",
+            "encoder", "decoder", "编码器", "解码器",
+            "网络结构", "模型架构", "层次结构", "层级", "组件",
+            "整体结构", "总体框架", "系统架构", "框架图",
+        ]),
+        ("training_dynamics", [
+            "训练", "training", "epoch", "loss", "损失函数", "损失",
+            "收敛", "梯度", "学习率", "过拟合", "欠拟合",
+            "accuracy", "准确率", "验证集", "训练曲线",
+            "迭代", "iteration", "batch", "收敛曲线",
+        ]),
+        ("attention", [
+            "注意力", "attention", "self-attention", "多头",
+            "multi-head", "QKV", "query", "key", "value",
+            "softmax", "token", "embedding", "位置编码",
+            "注意力机制", "注意力权重", "自注意力",
+        ]),
+        ("feature_space", [
+            "特征", "feature", "PCA", "t-SNE", "降维",
+            "聚类", "决策边界", "分布", "散点图",
+            "特征空间", "特征提取", "可视化", "嵌入",
+            "embedding", "高维", "流形",
+        ]),
+        ("algorithm", [
+            "步骤", "算法", "algorithm", "流程", "过程", "伪代码",
+            "前向传播", "反向传播", "backprop", "BP",
+            "梯度下降", "SGD", "Adam", "dropout",
+            "batch norm", "池化", "pooling", "激活函数",
+            "ReLU", "sigmoid", "tanh", "softmax",
+        ]),
+    ]
+
+    @classmethod
+    def _infer_diagram_type(cls, topic: str) -> str:
+        """从 topic 关键词加权计分推断最合适的图表类型。"""
         t = topic.lower()
-        if any(kw in t for kw in ("注意力", "attention", "self-attention", "transformer")):
-            return "attention"
-        if any(kw in t for kw in ("训练", "training", "epoch", "loss", "收敛", "梯度")):
-            return "training_dynamics"
-        if any(kw in t for kw in ("特征", "feature", "pca", "t-sne", "聚类", "降维", "决策边界")):
-            return "feature_space"
-        if any(kw in t for kw in ("步骤", "算法", "algorithm", "流程", "过程", "伪代码")):
-            return "algorithm"
-        return "architecture"
+        scores: dict[str, int] = {}
+        for dtype, keywords in cls._DIAGRAM_TYPE_RULES:
+            score = 0
+            for kw in keywords:
+                if kw.lower() in t:
+                    score += 1
+            if score > 0:
+                scores[dtype] = score
+
+        if not scores:
+            return "architecture"
+
+        # 取最高分，同分时 architecture 优先（最常见场景）
+        best = max(scores, key=lambda k: (scores[k], k == "architecture"))
+        return best
 
     # ═══════════════════════════════════════════════════════════════
     # Stage 3: Finalize

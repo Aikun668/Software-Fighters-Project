@@ -19,6 +19,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse, FileResponse
 
 from app.utils.sse_heartbeat import sse_heartbeat_generator
+from app.utils.prompt_guard import sanitize_model
 from app.api.errors import ErrorCode, api_error, api_success
 from app.api.models import (
     ProfileChatRequest,
@@ -298,6 +299,7 @@ def _build_multimodal_message(text: str, images: list[str] | None) -> dict:
 
 @router.post("/profile/chat")
 async def profile_chat(body: ProfileChatRequest):
+    body = sanitize_model(body)
     messages = body.messages
     current_profile = body.student_profile
 
@@ -341,6 +343,7 @@ async def profile_chat(body: ProfileChatRequest):
 
 @router.post("/resources/generate")
 async def resources_generate(body: ResourceGenRequest):
+    body = sanitize_model(body)
     topic = body.topic.strip()
     student_profile = body.student_profile
     resource_type = body.resource_type
@@ -395,6 +398,7 @@ async def resources_generate(body: ResourceGenRequest):
 
 @router.post("/tutor/chat")
 async def tutor_chat(body: TutorChatRequest):
+    body = sanitize_model(body)
     messages = body.messages
     student_profile = body.student_profile
 
@@ -445,8 +449,11 @@ async def tutor_chat(body: TutorChatRequest):
 
 @router.post("/exercise/generate")
 async def exercise_generate(body: ExerciseGenRequest):
+    body = sanitize_model(body)
     topic = body.topic.strip()
     knowledge_node_id = body.knowledge_node_id
+    if not topic and not knowledge_node_id:
+        return api_error(ErrorCode.INVALID_REQUEST, "topic 和 knowledge_node_id 至少提供一个", status_code=400)
     strategy = body.strategy
     count = body.count
     difficulty = body.difficulty
@@ -621,6 +628,7 @@ async def download_pdf(filename: str = Query(...)):
 
 @router.post("/solve")
 async def solve_question(body: SolveRequest):
+    body = sanitize_model(body)
     question = body.question.strip()
     context = body.context
 
@@ -2011,6 +2019,7 @@ async def unified_chat(body: UnifiedChatRequest):
 
 
 async def _unified_chat(body: UnifiedChatRequest):
+    body = sanitize_model(body)
     message = body.message.strip()
     history = body.messages
     user_msg = {"role": "user", "content": message}
@@ -2092,6 +2101,7 @@ async def _unified_chat(body: UnifiedChatRequest):
 @router.post("/inquiry/resolve")
 async def inquiry_resolve(body: InquiryResolveRequest):
     """接收用户对追问的回答，合并后调用 ResourceGenWorkflow 生成资源。"""
+    body = sanitize_model(body)
     student_profile = body.student_profile
 
     inquiry = _get_inquiry_service()
@@ -2163,6 +2173,7 @@ async def inquiry_resolve(body: InquiryResolveRequest):
 @router.post("/inquiry/resolve/plan")
 async def inquiry_resolve_plan(body: InquiryResolveRequest):
     """接收用户对追问的回答，合并后调用 LearningPathWorkflow 生成学习路径。"""
+    body = sanitize_model(body)
     student_profile = body.student_profile
 
     inquiry = _get_inquiry_service()

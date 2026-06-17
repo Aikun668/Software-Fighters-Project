@@ -5,6 +5,7 @@ from typing import TypedDict
 from langgraph.graph import StateGraph
 
 from app.agents.base_agent import BaseAgent
+from app.services.hallucination_guard import kb_verify
 from app.services.llm_service import create_llm
 from app.utils.prompt_loader import interpolate_variables
 
@@ -28,6 +29,7 @@ class PathState(TypedDict, total=False):
     response: str
 
 
+@kb_verify(fields=["response"])
 class PathAgent(BaseAgent):
     """学习路径规划 Agent —— 基于画像设计个性化学习路径"""
 

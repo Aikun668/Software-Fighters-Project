@@ -5,6 +5,7 @@ from typing import TypedDict
 from langgraph.graph import StateGraph
 
 from app.agents.base_agent import BaseAgent
+from app.services.hallucination_guard import kb_verify
 from app.services.llm_service import create_llm
 from app.utils.prompt_loader import build_prompt, interpolate_variables
 
@@ -25,6 +26,7 @@ class ExerciseState(TypedDict, total=False):
     response: str
 
 
+@kb_verify(fields=["questions[*].question", "questions[*].answer"])
 class ExerciseAgent(BaseAgent):
     """练习题生成 Agent —— 基于薄弱点生成个性化题目"""
 

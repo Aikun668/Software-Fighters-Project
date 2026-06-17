@@ -1,0 +1,45 @@
+# ProfileAgent 语义判断 Prompt
+# 在 merge 前执行，用 LLM 做语义去重 + REPLACE 维度分类
+# embedding 只做候选召回，不做最终判断
+
+system: |
+  你是学习画像语义去重器。判断新条目与已有条目是否为同一底层概念。
+
+  # relation 判定规则（最重要）
+
+  ## refinement（同一方向，只是更具体/角度不同）：
+  - 新值是旧值的细化/补充，方向一致 → refinement
+  - 核心判断：新旧值指向的是否是同一个大方向？
+    ✅ "想学AI" → "想转行到AI方向" = refinement（都是AI方向，后者更具体）
+    ✅ "想学AI" → "补数学→系统学ML/DL→专攻CV" = refinement（CV是AI的子方向）
+    ✅ "图像分类实战" → "从图像分类做到目标检测" = refinement（延续CV方向）
+    ✅ "半年入门" → "每天2-3小时学习" = refinement（对学习节奏的更具体描述）
+    ✅ "想学编程" → "想做Python后端开发" = refinement（后端是编程的子方向）
+
+  ## contradiction（方向真正冲突，不可调和）：
+  - 新旧值指向不同的、互斥的方向 → contradiction
+    ❌ "做CV方向" vs "做NLP方向" → contradiction（不同AI子领域）
+    ❌ "学习ML" vs "学习Web开发" → contradiction（完全不同领域）
+    ❌ "喜欢视觉型学习" vs "纯动手实战型" → contradiction（学习风格冲突）
+
+  ## identical（字面不同但语义完全相同）：
+  - 措辞不同但含义100%一致 → identical
+    ✅ "想入门AI" vs "打算学习人工智能" = identical
+    ✅ "数学基础差" vs "数学功底不扎实" = identical
+
+  # ARRAY 去重规则
+  - 同一底层概念的多种描述（知识缺口、情绪反应、实际表现）→ 算同一概念，合并
+  - 例："线代基础弱" + "看到数学公式就慌" + "矩阵运算全忘了" → 同一弱点"数学薄弱"
+  - 不相关的弱点（数学弱 vs 编程弱）→ 不同概念，不合并
+
+  # 输出要求
+  对每个 REPLACE 维度，必须给出 relation；对每个 ARRAY 新条目，给出 match_existing_index（匹配成功）或 null（不匹配）。
+
+user: |
+  {judge_tasks}
+
+  返回 JSON（只输出 JSON，不要解释）：
+  {{
+    "array_matches": [{{"dim": "维度英文名(weak_points/interest_direction)", "new_id": "A/B/C…", "new_text": "新条目文本", "match_existing_index": 数字或null}}, ...],
+    "replace_classifications": [{{"dim": "维度英文名(learning_goal/cognitive_style/learning_pace)", "relation": "refinement|contradiction|identical"}}, ...]
+  }}

@@ -1,19 +1,32 @@
 import logging
 
 from app.agents.diagnose_agent import DiagnoseAgent
-from app.agents.profile_agent import ProfileAgent
+from app.agents.profile_agent import DIMENSIONS, ProfileAgent
 from app.agents.solve_agent import SolveAgent
 from app.agents.tutor_agent import TutorAgent
 from app.agents.visualize.visualize_pipeline import VisualizePipeline
 from app.centers.schemas import CenterResult, CenterTask
-from app.services.llm_service import (
-    PROFILE_CONTENT,
-    PROFILE_CODE,
-    PROFILE_DIAGNOSE,
-    PROFILE_STUDENT,
-)
+from app.services.llm_service import PROFILE_CODE
 
 logger = logging.getLogger(__name__)
+
+# ── P1-1 Layer 1: 预过滤关键词，减少不必要的 LLM 调用 ──
+_MUST_VISUALIZE_KW = [
+    "步骤", "流程", "架构", "结构", "对比", "区别", "比较",
+    "变化", "趋势", "关系", "层次", "示意图", "如图",
+    "阶段", "管线", "流水线", "管道",
+]
+_SKIP_KW = ["定义", "概念", "是什么", "简称"]
+
+
+def _prefilter_visualize(question: str, answer: str) -> bool:
+    """快速预过滤：强信号直接放行，明显弱信号跳过，中间地带交给 LLM。"""
+    combined = question + answer[:300]
+    if any(kw in combined for kw in _MUST_VISUALIZE_KW):
+        return True
+    if any(kw in combined for kw in _SKIP_KW) and answer.count("。") < 3:
+        return False
+    return True
 
 
 class AutoCenter:
@@ -53,7 +66,7 @@ class AutoCenter:
         student_profile: dict,
         style: str,
     ) -> CenterResult:
-        agent = self.tutor_agent or TutorAgent(model_profile=PROFILE_CONTENT)
+        agent = self.tutor_agent or TutorAgent()
         try:
             state = await agent.run({
                 "messages": messages,
@@ -108,6 +121,9 @@ class AutoCenter:
         if not question.strip():
             return []
 
+        if not _prefilter_visualize(question, answer):
+            return []
+
         try:
             pipeline = self.visualize_pipeline or VisualizePipeline()
             result = await pipeline.run(question=question, answer=answer[:3000])
@@ -135,7 +151,7 @@ class AutoCenter:
         student_profile: dict,
     ) -> CenterResult:
         topic = task.params.get("topic") or task.input
-        agent = self.diagnose_agent or DiagnoseAgent(model_profile=PROFILE_DIAGNOSE)
+        agent = self.diagnose_agent or DiagnoseAgent()
         try:
             state = await agent.run({
                 "topic": topic,
@@ -176,25 +192,52 @@ class AutoCenter:
         messages: list[dict],
         student_profile: dict,
     ) -> CenterResult:
-        agent = self.profile_agent or ProfileAgent(model_profile=PROFILE_STUDENT)
+        agent = self.profile_agent or ProfileAgent()
         try:
             state = await agent.run({
                 "messages": messages or [{"role": "user", "content": task.input}],
                 "current_profile": student_profile,
                 "user_id": task.context.get("user_id", 1) if task.context else 1,
             })
+
+            current_profile = state.get("current_profile", {})
+            response = state.get("response", "")
+            profile_changed = state.get("profile_changed", False)
+            profile_complete = False
+            filled_dims = 0
+
+            # ── 完备度检测（与 ProfileWorkflow.director 逻辑一致）──
+            filled_dims = sum(
+                1 for k, v in current_profile.items()
+                if v is not None and v != [] and v != {} and k in DIMENSIONS
+            )
+            if filled_dims >= 4:
+                profile_complete = True
+                summary = (
+                    f"太棒了！我已经对你的学习情况有了比较全面的了解"
+                    f"（已收集 {filled_dims}/{len(DIMENSIONS)} 个维度）。"
+                    f"接下来我可以为你：\n"
+                    f"1. 生成个性化的学习资源\n"
+                    f"2. 规划适合你的学习路径\n"
+                    f"3. 推荐针对性的练习题\n"
+                    f"你想从哪里开始？"
+                )
+                response = f"{response}\n\n{summary}" if response else summary
+
             return CenterResult(
                 mode="auto",
                 intent=task.intent,
                 event_type="content",
                 payload={
-                    "response": state.get("response", ""),
-                    "current_profile": state.get("current_profile", {}),
-                    "profile_changed": state.get("profile_changed", False),
+                    "response": response,
+                    "current_profile": current_profile,
+                    "profile_changed": profile_changed,
+                    "profile_complete": profile_complete,
+                    "filled_dimensions": filled_dims,
                 },
                 agent="ProfileAgent",
                 sequence=task.sequence,
-                profile_delta=state.get("current_profile", {}),
+                profile_delta=current_profile,
             )
         except Exception as e:
             logger.error(f"AutoCenter profile building failed: {e}")

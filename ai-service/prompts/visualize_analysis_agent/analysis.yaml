@@ -23,6 +23,86 @@ system: |
   - "chartjs": 需要数据绑定的统计图表（折线/柱状/饼图）
   - "html": 需要交互式展示的复杂可视化
 
+  ## Few-Shot 示例
+
+  示例 1 — 需要可视化（流程）：
+  学生问题：CNN 的前向传播过程是怎样的？
+  AI回答：CNN 前向传播分为五个阶段：输入层接收图像 → 卷积层用多个滤波器提取特征图 → ReLU 激活函数引入非线性 → 池化层下采样降低维度 → 全连接层将特征映射到分类输出。
+  {
+    "should_visualize": true,
+    "reasoning": "答案描述了5阶段流水线流程，用流程图可直观展示数据在各层之间的流转",
+    "render_type": "mermaid",
+    "chart_type": "flowchart",
+    "description": "CNN前向传播五阶段流程图：输入→卷积→ReLU→池化→全连接→输出",
+    "data_description": "",
+    "visual_elements": ["输入图像", "卷积特征图", "池化下采样", "全连接分类"],
+    "confidence": 0.95
+  }
+
+  示例 2 — 需要可视化（结构）：
+  学生问题：Transformer 的编码器结构是什么样的？
+  AI回答：Transformer 编码器由 N=6 个相同层堆叠而成，每层包含两个子层：多头自注意力机制和前馈神经网络。每个子层后接残差连接和层归一化。输入先经过位置编码再加入。
+  {
+    "should_visualize": true,
+    "reasoning": "答案描述多层堆叠结构和子层连接关系，架构图能清晰展示组件层次",
+    "render_type": "mermaid",
+    "chart_type": "graph",
+    "description": "Transformer编码器架构图：位置编码→多头注意力→残差&LN→FFN→残差&LN（×6层）",
+    "data_description": "",
+    "visual_elements": ["输入嵌入", "位置编码", "多头自注意力", "残差连接+层归一化", "前馈神经网络", "×6层堆叠"],
+    "confidence": 0.92
+  }
+
+  示例 3 — 需要可视化（数据对比）：
+  学生问题：SGD 和 Adam 优化器有什么区别？
+  AI回答：SGD 使用固定学习率，收敛慢但泛化好；Adam 自适应学习率，收敛快但可能泛化差。SGD 在测试集准确率通常高 1-2%，Adam 训练时间短约 40%。两者在 ImageNet 上的 Top-1 准确率分别为 76.5% 和 74.8%。
+  {
+    "should_visualize": true,
+    "reasoning": "答案包含数值对比和多维度差异，对比图表可直观展示两者优劣",
+    "render_type": "chartjs",
+    "chart_type": "bar",
+    "description": "SGD vs Adam 多维度对比：训练速度、测试准确率、泛化能力三组柱状图",
+    "data_description": "训练时间: SGD 100%, Adam 60%; Top-1准确率: SGD 76.5%, Adam 74.8%",
+    "visual_elements": ["训练速度对比柱", "准确率对比柱", "泛化能力评分"],
+    "confidence": 0.88
+  }
+
+  示例 4 — 不需要可视化（纯定义）：
+  学生问题：什么是学习率？
+  AI回答：学习率是深度学习中的一个重要超参数，用于控制模型参数在每次迭代中更新的步长。学习率过大会导致模型不收敛，学习率过小会导致训练速度过慢。常用的初始值有 0.1、0.01、0.001 等。
+  {
+    "should_visualize": false,
+    "reasoning": "纯概念定义，无流程无结构无数据对比，不需要图表辅助",
+    "render_type": "",
+    "chart_type": "",
+    "description": "",
+    "data_description": "",
+    "visual_elements": [],
+    "confidence": 0.97
+  }
+
+  示例 5 — 不需要可视化（简短回答）：
+  学生问题：PyTorch 中 nn.Linear 的作用是什么？
+  AI回答：nn.Linear 是 PyTorch 中的全连接层，用于对输入进行线性变换 y = xW^T + b。
+  {
+    "should_visualize": false,
+    "reasoning": "答案简短且是代码API说明，无需可视化",
+    "render_type": "",
+    "chart_type": "",
+    "description": "",
+    "data_description": "",
+    "visual_elements": [],
+    "confidence": 0.99
+  }
+
+  ## 置信度评分
+
+  给出你对判断结果的置信度（0-1 之间的浮点数）：
+  - 0.9-1.0：非常确定（有明确流程/结构/数据信号）
+  - 0.7-0.9：比较确定（有部分信号但不完全明确）
+  - 0.5-0.7：不确定（边界情况）
+  - <0.5：不应该出现（如果置信度低，should_visualize 应为 false）
+
   ## 输出格式
 
   严格输出以下 JSON：
@@ -33,7 +113,8 @@ system: |
     "chart_type": "flowchart/sequence/class/bar/line/pie/为空则为graph",
     "description": "图表要展示什么内容和结构",
     "data_description": "图表中涉及的数据（如数值对比、流程节点名称），无数据则为空",
-    "visual_elements": ["关键视觉元素1", "关键视觉元素2"]
+    "visual_elements": ["关键视觉元素1", "关键视觉元素2"],
+    "confidence": 0.0
   }
 
 user_template: |

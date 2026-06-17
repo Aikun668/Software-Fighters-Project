@@ -1,8 +1,10 @@
 import logging
 from dataclasses import dataclass, field
+from functools import wraps
 from typing import Optional
 
 from app.utils.content_guard import KBCoverageChecker, CoverageResult, SearchableKB
+from app.utils.security_logger import SecurityLogger
 
 logger = logging.getLogger(__name__)
 
@@ -142,3 +144,112 @@ class HallucinationGuard:
                 parts.append(f"- {claim[:100]}")
 
         return "\n".join(parts)
+
+
+DISCLAIMER_TEXT = "\n\n> 以上内容建议结合教材验证，部分知识点可能存在不准确之处。"
+
+
+def kb_verify(fields: list[str]):
+    """类装饰器：在 Agent.run() 返回前对指定字段做 KB 覆盖验证。
+
+    用法：
+        @kb_verify(fields=["response"])
+        class TutorAgent(BaseAgent):
+            ...
+
+        @kb_verify(fields=["questions[*].question", "questions[*].answer"])
+        class ExerciseAgent(BaseAgent):
+            ...
+
+    - ``fields`` 中的路径支持 ``key[*].subkey`` 语法，表示遍历列表中每个元素的 subkey。
+    - 验证失败时不阻断返回，仅在低置信度文本后附加 DISCLAIMER_TEXT。
+    - KB 不可用时静默降级，不抛异常。
+    """
+    def decorator(cls):
+        original_run = cls.run
+
+        @wraps(original_run)
+        async def safe_run(self, input_state: dict) -> dict:
+            output = await original_run(self, input_state)
+            try:
+                from app.services.knowledge_base import get_kb
+                kb = get_kb()
+                guard = HallucinationGuard(kb)
+
+                for field_path in fields:
+                    _verify_field(output, field_path, guard, input_state.get("user_id"), cls.__name__)
+            except Exception:
+                logger.warning("kb_verify failed for agent=%s, returning raw output", cls.__name__, exc_info=True)
+                SecurityLogger.log_event(
+                    "pipeline_error",
+                    {"agent": cls.__name__, "user_id": input_state.get("user_id"), "content": ""},
+                    severity="low",
+                )
+            return output
+
+        cls.run = safe_run
+        return cls
+
+    return decorator
+
+
+def _verify_field(
+    obj: dict,
+    field_path: str,
+    guard: HallucinationGuard,
+    user_id,
+    agent_name: str,
+) -> None:
+    parts = field_path.split(".")
+    _descend(obj, parts, guard, user_id, agent_name)
+
+
+def _descend(
+    obj,
+    parts: list[str],
+    guard: HallucinationGuard,
+    user_id,
+    agent_name: str,
+) -> None:
+    if not parts:
+        return
+
+    head, *tail = parts
+
+    # list traversal: key[*] → iterate list items
+    if head.endswith("[*]"):
+        list_key = head[:-3]
+        items = obj.get(list_key)
+        if not isinstance(items, list):
+            return
+        for item in items:
+            if isinstance(item, dict):
+                _descend(item, tail, guard, user_id, agent_name)
+    else:
+        val = obj.get(head)
+        if isinstance(val, str) and not tail:
+            # leaf: verify this text field
+            if len(val) >= 20:  # skip very short strings
+                report = guard.verify(val)
+                if report.confidence.overall < LOW_CONFIDENCE_COVERAGE_THRESHOLD:
+                    obj[head] = val + DISCLAIMER_TEXT
+                    SecurityLogger.log_event(
+                        "hallucination_warning",
+                        {
+                            "agent": agent_name,
+                            "user_id": user_id,
+                            "content": val,
+                            "extra": {
+                                "field": head,
+                                "confidence": report.confidence.overall,
+                                "verdict": report.verdict,
+                            },
+                        },
+                        severity="low",
+                    )
+        elif isinstance(val, dict) and tail:
+            _descend(val, tail, guard, user_id, agent_name)
+        elif isinstance(val, list):
+            for item in val:
+                if isinstance(item, dict):
+                    _descend(item, tail, guard, user_id, agent_name)

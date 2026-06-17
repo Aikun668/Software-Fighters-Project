@@ -7,21 +7,21 @@ ProfileAgent — 对话式学习画像构建智能体
   - 周期性审计：LLM 审视已有条目是否仍成立
   - 硬上限裁剪：每维度最多 N 个条目
 
-5 节点 StateGraph：extract → merge → audit → response
+6 节点 StateGraph：extract → semantic_judge → merge → audit → response
 
 Architecture #2: 纯内存计算。Java 传入 profile dict，Python 返回更新结果，
 不调 Java API，不持久化。
 """
 
-import json
 import logging
 from datetime import datetime, timezone
 from typing import TypedDict
 
-from langgraph.graph import END, StateGraph
+from langgraph.graph import StateGraph
 
 from app.agents.base_agent import BaseAgent
-from app.services.llm_service import create_llm
+from app.services.llm_service import create_llm, OpenAILLM, PROFILE_DIRECTOR
+from app.utils.embeddings import semantic_similarity
 from app.utils.prompt_loader import interpolate_variables
 
 logger = logging.getLogger(__name__)
@@ -41,8 +41,8 @@ REPLACE_DIMENSIONS = {"cognitive_style", "learning_goal", "learning_pace"}
 
 MAX_ENTRIES_PER_DIM = 8
 MIN_CONFIDENCE_FOR_ACTIVE = 2
-AUDIT_INTERVAL = 10
-DEDUP_SIMILARITY = 0.55
+AUDIT_MSG_INTERVAL = 20
+DEDUP_PREFILTER = 0.45  # embedding recall threshold (candidate only, final decision by LLM)
 
 TAG_EMA_ALPHA = 0.4
 TAG_CUTOFF = 0.2
@@ -51,27 +51,12 @@ STABILITY_N = 2
 MAX_EXTRACT_TURNS = 10
 
 
-def _bigram_jaccard(a: str, b: str) -> float:
-    """字符 bigram 包含相似度"""
-    def bigrams(s: str) -> set[str]:
-        s = s.replace(" ", "")
-        if len(s) < 2:
-            return {s}
-        return {s[i:i + 2] for i in range(len(s) - 1)}
-    ba = bigrams(a)
-    bb = bigrams(b)
-    if not ba or not bb:
-        return 0.0
-    intersection = len(ba & bb)
-    denominator = min(len(ba), len(bb))
-    return intersection / denominator if denominator > 0 else 0.0
-
-
 class ProfileState(TypedDict, total=False):
     messages: list[dict]
     user_id: int
     current_profile: dict
     extracted_fragment: dict
+    judge_result: dict
     profile_changed: bool
     response: str
     last_extracted_msg_index: int
@@ -94,19 +79,38 @@ class ProfileAgent(BaseAgent):
         self.extract_user_template = self._load_prompt(filename="extract.yaml", key="user")
 
         self.extract_llm = create_llm(temperature=0.3, use_mock=use_mock_llm)
-        self.response_llm = create_llm(temperature=0.7, use_mock=use_mock_llm)
+        self.response_llm = create_llm(temperature=0.4, use_mock=use_mock_llm)
         self.audit_llm = create_llm(temperature=0.2, use_mock=use_mock_llm)
+
+        # 语义 judge 必须走 DeepSeek V4 Flash (DashScope OpenAI 兼容接口)
+        # create_llm 默认走星火，无法传递 model/api_key/base_url → 直接实例化 OpenAILLM
+        self.judge_llm = OpenAILLM(
+            temperature=PROFILE_DIRECTOR.default.temperature,
+            max_tokens=1024,  # override: 256 too low for multi-candidate JSON
+            use_mock=use_mock_llm,
+            model=PROFILE_DIRECTOR.default.model,
+            api_key=PROFILE_DIRECTOR.default.api_key,
+            base_url=PROFILE_DIRECTOR.default.base_url,
+        )
+        self.judge_system_template = self._load_prompt(
+            filename="semantic_judge.yaml", key="system",
+        )
+        self.judge_user_template = self._load_prompt(
+            filename="semantic_judge.yaml", key="user",
+        )
 
     def build_graph(self):
         graph = StateGraph(ProfileState)
 
         graph.add_node("extract", self._extract_node)
+        graph.add_node("semantic_judge", self._semantic_judge_node)
         graph.add_node("merge", self._merge_node)
         graph.add_node("audit", self._audit_node)
         graph.add_node("response", self._response_node)
 
         graph.set_entry_point("extract")
-        graph.add_edge("extract", "merge")
+        graph.add_edge("extract", "semantic_judge")
+        graph.add_edge("semantic_judge", "merge")
         graph.add_edge("merge", "audit")
         graph.add_edge("audit", "response")
         graph.set_finish_point("response")
@@ -176,7 +180,9 @@ class ProfileAgent(BaseAgent):
         if new_last_idx > (profile.get("last_extracted_msg_index") or 0):
             profile["last_extracted_msg_index"] = new_last_idx
 
-        profile, changed = self._apply_merge_in_memory(profile, fragment)
+        profile, changed = self._apply_merge_in_memory(
+            profile, fragment, state.get("judge_result"),
+        )
 
         profile["raw_profile_json"] = {
             d: profile.get(d) for d in DIMENSIONS
@@ -185,25 +191,146 @@ class ProfileAgent(BaseAgent):
         profile["raw_profile_json"]["tag_weights"] = profile.get("tag_weights")
         profile["raw_profile_json"]["stability_counter"] = profile.get("stability_counter")
 
-        profile["audit_counter"] = (profile.get("audit_counter") or 0) + 1
-
         current_profile = {
             d: profile.get(d) for d in DIMENSIONS
         }
         current_profile["entries"] = profile.get("entries")
         current_profile["tag_weights"] = profile.get("tag_weights")
         current_profile["stability_counter"] = profile.get("stability_counter")
-        current_profile["audit_counter"] = profile.get("audit_counter")
         current_profile["last_extracted_msg_index"] = profile.get("last_extracted_msg_index")
+        current_profile["last_audit_msg_index"] = profile.get("last_audit_msg_index")
         return {"current_profile": current_profile, "profile_changed": changed}
+
+    # ── semantic_judge ────────────────────────────────────────────────
+
+    async def _semantic_judge_node(self, state: ProfileState) -> dict:
+        """merge 前调用 flash LLM 做语义去重判断。embedding 只做候选召回。"""
+        fragment = state.get("extracted_fragment", {})
+        profile = state.get("current_profile", {})
+
+        if not fragment:
+            return {"judge_result": {}}
+
+        judge_tasks = self._build_judge_tasks(profile, fragment)
+        if not judge_tasks:
+            return {"judge_result": {}}
+
+        judge_user_prompt = interpolate_variables(
+            self.judge_user_template, {"judge_tasks": judge_tasks},
+        )
+
+        try:
+            print(f"\n[JUDGE] tasks ({len(judge_tasks)} chars):\n{judge_tasks}\n")
+            result_text = await self.judge_llm.chat(
+                [{"role": "user", "content": judge_user_prompt}],
+                system_prompt=self.judge_system_template,
+            )
+            print(f"[JUDGE] raw ({len(result_text)} chars): {result_text[:400]}")
+            judge_result = self._parse_judge_result(result_text)
+            print(f"[JUDGE] parsed: {judge_result}\n")
+        except Exception as e:
+            logger.warning("Semantic judge LLM failed: %s, falling back to embedding", e)
+            judge_result = {}
+
+        return {"judge_result": judge_result}
+
+    def _build_judge_tasks(self, profile: dict, fragment: dict) -> str | None:
+        """构建语义判断的 tasks 文本。无待判断项时返回 None。
+
+        embedding 做候选召回（t=0.45）：新条目与已有条目无候选时不送 LLM，自动创建。
+        """
+        entries = profile.get("entries", {})
+        dim_labels = {
+            "weak_points": "薄弱环节", "interest_direction": "兴趣方向",
+            "cognitive_style": "学习风格", "learning_goal": "学习目标",
+            "learning_pace": "学习节奏",
+        }
+        parts = []
+
+        # ARRAY 候选任务
+        array_sections = []
+        for dim in ARRAY_DIMENSIONS:
+            new_items = fragment.get(dim)
+            if not new_items or not isinstance(new_items, list):
+                continue
+            existing = entries.get(dim, [])
+            if not existing:
+                continue
+
+            existing_lines = [
+                f"  [{i}] \"{e.get('text', '')}\" (c={e.get('confidence', 1)})"
+                for i, e in enumerate(existing)
+            ]
+
+            # Pre-filter: only include new items with at least one candidate above threshold
+            new_lines = []
+            for i, item in enumerate(new_items):
+                text = item if isinstance(item, str) else item.get("text", "")
+                if not text:
+                    continue
+                has_candidate = any(
+                    semantic_similarity(text, e.get("text", "")) > DEDUP_PREFILTER
+                    for e in existing
+                )
+                if has_candidate:
+                    nid = chr(ord('A') + i)
+                    new_lines.append(f"  [{nid}] \"{text}\"")
+                # No candidate → auto-create, skip LLM judgment
+
+            if new_lines:
+                section = f"【{dim}（{dim_labels.get(dim, dim)}）】\n已有条目：\n"
+                section += "\n".join(existing_lines)
+                section += "\n\n本轮新条目（已通过 embedding 候选召回）：\n"
+                section += "\n".join(new_lines)
+                array_sections.append(section)
+
+        if array_sections:
+            parts.append("## ARRAY 去重任务\n")
+            parts.append("\n\n".join(array_sections))
+
+        # REPLACE 分类任务
+        replace_tasks = []
+        for dim in REPLACE_DIMENSIONS:
+            new_val = fragment.get(dim)
+            if new_val is None:
+                continue
+            old_val = profile.get(dim)
+            if old_val is None or old_val == new_val:
+                continue
+            replace_tasks.append(
+                f"- {dim}（{dim_labels.get(dim, dim)}）: 旧值\"{old_val}\" vs 新值\"{new_val}\""
+            )
+
+        if replace_tasks:
+            parts.append("\n## REPLACE 维度分类任务\n")
+            parts.append("\n".join(replace_tasks))
+
+        if not parts:
+            return None
+
+        return "\n".join(parts)
+
+    def _parse_judge_result(self, text: str) -> dict:
+        """解析 judge LLM 返回的 JSON"""
+        from app.utils.json_parser import parse_llm_json
+
+        data = parse_llm_json(text, fallback={})
+        if not isinstance(data, dict):
+            data = {}
+        return {
+            "array_matches": data.get("array_matches", []),
+            "replace_classifications": data.get("replace_classifications", []),
+        }
 
     # ── audit ────────────────────────────────────────────────────────
 
     async def _audit_node(self, state: ProfileState) -> dict:
         profile = state.get("current_profile", {})
-        audit_counter = profile.get("audit_counter", 0)
+        last_audit_idx = profile.get("last_audit_msg_index") or 0
+        current_idx = profile.get("last_extracted_msg_index") or 0
+        msgs_since_audit = current_idx - last_audit_idx
 
-        if audit_counter < AUDIT_INTERVAL:
+        if msgs_since_audit < AUDIT_MSG_INTERVAL:
             return {}
 
         entries = profile.get("entries", {})
@@ -230,7 +357,7 @@ class ProfileAgent(BaseAgent):
 
             new_profile = dict(profile)
             new_profile["entries"] = db_entries
-            new_profile["audit_counter"] = 0
+            new_profile["last_audit_msg_index"] = current_idx
 
             return {"current_profile": new_profile, "profile_changed": True}
 
@@ -262,8 +389,8 @@ class ProfileAgent(BaseAgent):
     # ── merge logic (in-memory) ──────────────────────────────────────
 
     @staticmethod
-    def _merge_array_dimension(entries: dict, dim: str, new_items: list) -> tuple[dict, list, bool]:
-        """合并单一 ARRAY 维度的条目。返回 (更新后的 entries, legacy 列表, 是否变更)"""
+    def _merge_array_dimension(entries: dict, dim: str, new_items: list, judge_matches: dict = None) -> tuple[dict, list, bool]:
+        """合并单一 ARRAY 维度的条目。judge_matches: {text: existing_index | None}"""
         dim_entries = list(entries.get(dim, []))
         now = _now_iso()
         changed = False
@@ -273,17 +400,22 @@ class ProfileAgent(BaseAgent):
             if not text:
                 continue
 
-            matched = False
-            for existing in dim_entries:
-                if _bigram_jaccard(text, existing.get("text", "")) > DEDUP_SIMILARITY:
-                    existing["confidence"] = min(existing.get("confidence", 1) + 1, 10)
-                    existing["updated_at"] = now
-                    if existing["confidence"] >= MIN_CONFIDENCE_FOR_ACTIVE:
-                        existing["status"] = "active"
-                    matched = True
-                    break
+            match_index = None
+            if judge_matches is not None:
+                match_index = judge_matches.get(text)
+            else:
+                for i, existing in enumerate(dim_entries):
+                    if semantic_similarity(text, existing.get("text", "")) > 0.70:
+                        match_index = i
+                        break
 
-            if not matched:
+            if match_index is not None and 0 <= match_index < len(dim_entries):
+                existing = dim_entries[match_index]
+                existing["confidence"] = min(existing.get("confidence", 1) + 1, 10)
+                existing["updated_at"] = now
+                if existing["confidence"] >= MIN_CONFIDENCE_FOR_ACTIVE:
+                    existing["status"] = "active"
+            else:
                 dim_entries.append({
                     "text": text, "confidence": 1, "status": "tentative",
                     "created_at": now, "updated_at": now,
@@ -308,20 +440,35 @@ class ProfileAgent(BaseAgent):
         new_entries[dim] = dim_entries
         return new_entries, legacy, changed or (dim_entries != entries.get(dim))
 
-    def _apply_merge_in_memory(self, profile: dict, fragment: dict) -> tuple[dict, bool]:
-        """纯内存合并，返回 (new_profile, changed) — 不改变传入参数"""
+    def _apply_merge_in_memory(self, profile: dict, fragment: dict, judge_result: dict = None) -> tuple[dict, bool]:
+        """纯内存合并，返回 (new_profile, changed)。judge_result 来自 semantic_judge LLM。"""
         new_profile = dict(profile)
         changed = False
 
-        db_entries = dict(new_profile.get("entries") or {})
+        if "entries" not in new_profile:
+            new_profile["entries"] = {}
+        db_entries = dict(new_profile["entries"] or {})
 
         for dim in ARRAY_DIMENSIONS:
             new_items = fragment.get(dim)
             if not new_items or not isinstance(new_items, list):
                 continue
 
+            dim_judge_matches = None
+            if judge_result:
+                array_matches = judge_result.get("array_matches", [])
+                dim_judge_matches = {}
+                for m in array_matches:
+                    if not isinstance(m, dict):
+                        continue
+                    if m.get("dim") != dim:
+                        continue
+                    text = m.get("new_text", "")
+                    if text:
+                        dim_judge_matches[text] = m.get("match_existing_index")
+
             db_entries, legacy, dim_changed = self._merge_array_dimension(
-                db_entries, dim, new_items,
+                db_entries, dim, new_items, dim_judge_matches,
             )
             if dim_changed:
                 changed = True
@@ -344,7 +491,7 @@ class ProfileAgent(BaseAgent):
             if old_val is None:
                 merged = int(new_num)
             else:
-                merged = max(int(old_val), int(old_val * 0.7 + new_num * 0.3))
+                merged = int(old_val * 0.7 + new_num * 0.3)
             if merged != old_val:
                 new_profile[dim] = merged
                 changed = True
@@ -355,20 +502,42 @@ class ProfileAgent(BaseAgent):
             if new_val is None:
                 continue
             current_value = new_profile.get(dim)
-            sc = dict(stability.get(dim, {"value": None, "count": 0, "status": None}))
+            default_sc = {"value": None, "count": 0, "status": None, "pending_value": None}
+            sc = dict(stability.get(dim, default_sc))
 
             if current_value == new_val:
-                sc = {"value": new_val, "count": 0, "status": "confirmed"}
+                sc = {"value": new_val, "count": 0, "status": "confirmed", "pending_value": None}
+            elif current_value is None:
+                # 首次填充直接确认
+                new_profile[dim] = new_val
+                sc = {"value": new_val, "count": 0, "status": "confirmed", "pending_value": None}
+                changed = True
             else:
-                if sc.get("value") == new_val:
-                    sc["count"] = sc.get("count", 0) + 1
-                else:
-                    sc = {"value": new_val, "count": 1, "status": "tentative"}
+                relation = "contradiction"
+                if judge_result:
+                    for rc in judge_result.get("replace_classifications", []):
+                        if isinstance(rc, dict) and rc.get("dim") == dim:
+                            relation = rc.get("relation", "contradiction")
+                            break
 
-                if sc["count"] >= STABILITY_N:
+                if relation == "identical":
+                    sc = {"value": new_val, "count": 0, "status": "confirmed", "pending_value": None}
+                elif relation == "refinement":
                     new_profile[dim] = new_val
-                    sc = {"value": new_val, "count": 0, "status": "confirmed"}
+                    sc = {"value": new_val, "count": 0, "status": "confirmed", "pending_value": None}
                     changed = True
+                else:  # contradiction, required=STABILITY_N
+                    pending = sc.get("pending_value")
+                    if pending is not None and semantic_similarity(pending, new_val) > 0.80:
+                        sc["count"] = sc.get("count", 1) + 1
+                    else:
+                        sc = {"value": current_value, "pending_value": new_val,
+                              "count": 1, "status": "tentative"}
+
+                    if sc["count"] >= STABILITY_N:
+                        new_profile[dim] = new_val
+                        sc = {"value": new_val, "count": 0, "status": "confirmed", "pending_value": None}
+                        changed = True
 
             stability[dim] = sc
 
@@ -474,7 +643,7 @@ class ProfileAgent(BaseAgent):
         if not profile or all(
             v is None or v == [] or v == {}
             for k, v in profile.items()
-            if k not in ("tag_weights", "stability_counter", "entries", "audit_counter")
+            if k not in ("tag_weights", "stability_counter", "entries", "last_audit_msg_index", "last_extracted_msg_index")
         ):
             return "（尚无画像信息，这是第一次对话）"
 
@@ -554,10 +723,18 @@ class ProfileAgent(BaseAgent):
         if not fragment:
             return {"changed": False, "profile": current_profile}
 
+        judge_state: ProfileState = {
+            "messages": messages,
+            "current_profile": current_profile,
+            "extracted_fragment": fragment,
+        }
+        judge_result = await self._semantic_judge_node(judge_state)
+
         merge_state: ProfileState = {
             "messages": messages,
             "current_profile": current_profile,
             "extracted_fragment": fragment,
+            "judge_result": judge_result.get("judge_result", {}),
             "last_extracted_msg_index": extract_result.get("last_extracted_msg_index", last_idx),
         }
         merge_result = await self._merge_node(merge_state)

@@ -18,7 +18,6 @@ from app.centers.schemas import ExecutionPlan
 from app.centers.visualization_center import VisualizationCenter
 from app.services.intent_extractor import IntentExtractor
 from app.services.llm_service import (
-    PROFILE_DIAGNOSE,
     PROFILE_EXERCISE,
     PROFILE_STUDENT,
 )
@@ -46,7 +45,7 @@ class ChatCenter:
             goal = GoalAgent()
             schedule = ScheduleAgent()
             adjustment = AdjustmentAgent()
-            diagnose = DiagnoseAgent(model_profile=PROFILE_DIAGNOSE)
+            diagnose = DiagnoseAgent()
             profile = ProfileAgent(model_profile=PROFILE_STUDENT)
             exercise = ExerciseAgent(model_profile=PROFILE_EXERCISE)
             content = ContentAgent()

@@ -6,7 +6,7 @@ from langgraph.graph import StateGraph
 from app.agents.base_agent import BaseAgent
 from app.services.analogy_library import get_analogy_library
 from app.services.domain_router import get_domain_router
-from app.services.hallucination_guard import HallucinationGuard
+from app.services.hallucination_guard import HallucinationGuard, kb_verify
 from app.services.knowledge_base import get_kb
 from app.utils.prompt_loader import interpolate_variables
 
@@ -33,6 +33,7 @@ class TutorState(TypedDict, total=False):
     socratic_round: int          # 苏格拉底追问轮次（0-based）
 
 
+@kb_verify(fields=["response"])
 class TutorAgent(BaseAgent):
     """智能答疑 Agent —— 基于 RAG 上下文回答学生问题"""
 
