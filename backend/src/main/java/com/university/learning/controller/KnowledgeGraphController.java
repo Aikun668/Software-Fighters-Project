@@ -1,8 +1,8 @@
 package com.university.learning.controller;
 
+import com.university.learning.client.PythonClient;
 import com.university.learning.common.Result;
 import com.university.learning.entity.NodeMastery;
-import com.university.learning.service.IKnowledgeGraphService;
 import com.university.learning.service.INodeMasteryService;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
@@ -19,14 +19,14 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class KnowledgeGraphController {
 
-    private final IKnowledgeGraphService graphService;
+    private final PythonClient pythonClient;
     private final INodeMasteryService masteryService;
 
     @Operation(summary = "获取课程知识图谱", description = "返回节点+边+用户掌握度，courseId 如 ai_intro")
     @GetMapping("/{courseId}")
     public Result getGraph(@PathVariable String courseId, @RequestParam Long userId) {
         Map<String, Float> masteries = buildMasteryMap(userId, courseId);
-        Map<String, Object> graph = graphService.getGraph(courseId, masteries);
+        Map<String, Object> graph = pythonClient.getKnowledgeGraph(courseId, masteries);
         return Result.ok(graph);
     }
 
@@ -38,7 +38,7 @@ public class KnowledgeGraphController {
                               @RequestParam(defaultValue = "0") int totalExercises,
                               @RequestParam(required = false) String lastPracticed) {
         Map<String, Float> masteries = buildMasteryMap(userId, courseId);
-        Map<String, Object> card = graphService.getNodeCard(
+        Map<String, Object> card = pythonClient.getNodeCard(
                 courseId, nodeId, masteries, totalExercises, lastPracticed);
         if (card == null) {
             return Result.fail(404, "节点不存在");

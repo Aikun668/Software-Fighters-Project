@@ -1,10 +1,15 @@
+import logging
+
 from dataclasses import dataclass
 from typing import Optional
 
 from app.agents.visualize.analysis_agent import AnalysisAgent
 from app.agents.visualize.code_generator_agent import CodeGeneratorAgent
 from app.agents.visualize.review_agent import ReviewAgent
+from app.agents.visualize.utils import validate_visualization
 from app.services.llm_service import PROFILE_ANALYSIS, PROFILE_CODE, PROFILE_REVIEW
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -75,13 +80,22 @@ class VisualizePipeline:
             "description": description,
             "data_description": data_description,
         }
-        review_output = await self.review_agent.run(review_state)
-        review = review_output.get("review_result", {})
 
-        if review.get("changed", False):
-            final_code = review.get("optimized_code", code)
-        else:
+        # ── 确定性验证：通过则跳过 ReviewAgent，省一次 LLM 调用 ──
+        valid, error = validate_visualization(code, render_type)
+        if valid:
             final_code = code
+        else:
+            logger.info(
+                "可视化代码校验失败 type=%s: %s，调用 ReviewAgent 修复",
+                render_type, error,
+            )
+            review_output = await self.review_agent.run(review_state)
+            review = review_output.get("review_result", {})
+            if review.get("changed", False):
+                final_code = review.get("optimized_code", code)
+            else:
+                final_code = code
 
         return VisualizeResult(
             should_visualize=True,

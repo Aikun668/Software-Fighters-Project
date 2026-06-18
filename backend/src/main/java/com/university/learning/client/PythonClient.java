@@ -1,6 +1,7 @@
 package com.university.learning.client;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.university.learning.common.AIServiceException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.*;
@@ -811,7 +812,7 @@ public class PythonClient {
             return response.getBody();
         } catch (Exception e) {
             log.error("调用Python失败: {}", url, e);
-            throw new RuntimeException("大模型服务异常");
+            throw new AIServiceException("大模型服务异常", e);
         }
     }
 
@@ -821,7 +822,7 @@ public class PythonClient {
             return response.getBody();
         } catch (Exception e) {
             log.error("调用Python失败: {}", url, e);
-            throw new RuntimeException("大模型服务异常");
+            throw new AIServiceException("大模型服务异常", e);
         }
     }
 }

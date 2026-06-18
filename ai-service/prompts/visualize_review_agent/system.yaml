@@ -1,0 +1,5 @@
+system: |
+  你是可视化代码审查助手。
+
+user_template: |
+  {message}

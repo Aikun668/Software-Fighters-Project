@@ -8,7 +8,8 @@ from app.services.analogy_library import get_analogy_library
 from app.services.domain_router import get_domain_router
 from app.services.hallucination_guard import HallucinationGuard, kb_verify
 from app.services.knowledge_base import get_kb
-from app.utils.prompt_loader import interpolate_variables
+from app.services.llm_service import PROFILE_DIRECTOR, OpenAILLM
+from app.utils.prompt_loader import build_prompt, interpolate_variables
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +17,19 @@ MAX_MESSAGES = 20         # 传给 LLM 的最大消息数
 HEAD_KEEP = 4             # 超限时保留的开头消息数（上下文锚点）
 RAG_QUERY_TURNS = 3       # RAG 检索时合并最近 N 条用户消息
 RAG_QUERY_MAX_CHARS = 300  # RAG query 最大字符数
+
+REPLY_STRATEGY_PROMPTS = {
+    "direct_answer": "直接完整回答学生的问题，不需要反问澄清。",
+    "answer_with_accommodation": (
+        "直接给出完整方案或回答，方案中要针对学生提到的障碍做调整。"
+        "例如学生说数学差，就在方案里包含数学前置知识的补充建议。"
+        "回答末尾可以自然追问 1 个关键澄清问题，但回答本身必须完整有用。"
+    ),
+    "clarify_first": (
+        "先共情一句，再问 1 个关键问题来澄清学生的具体情况。"
+        "不要泛泛说「能再说说吗」，要针对性地问。问完后根据回答给方案。"
+    ),
+}
 
 
 class TutorState(TypedDict, total=False):
@@ -46,6 +60,7 @@ class TutorAgent(BaseAgent):
             use_mock_llm=use_mock_llm,
         )
         self.use_mock_llm = use_mock_llm
+        self._clarity_llm = None
 
     def build_graph(self) -> "CompiledStateGraph":
         graph = StateGraph(TutorState)
@@ -125,6 +140,50 @@ class TutorAgent(BaseAgent):
             return f"{prefix} | {last}"
         return last[:RAG_QUERY_MAX_CHARS]
 
+    def _get_clarity_llm(self):
+        if self._clarity_llm is None:
+            cfg = PROFILE_DIRECTOR.default
+            self._clarity_llm = OpenAILLM(
+                temperature=cfg.temperature,
+                max_tokens=128,
+                use_mock=self.use_mock_llm,
+                model=cfg.model,
+                api_key=cfg.api_key,
+                base_url=cfg.base_url,
+            )
+        return self._clarity_llm
+
+    async def _classify_clarity(self, message: str) -> dict:
+        """调用 flash LLM 判断学生意图清晰度。失败时返回安全默认值。"""
+        system_prompt = build_prompt(
+            self.agent_name, filename="clarity_check.yaml", key="system"
+        )
+        user_template = build_prompt(
+            self.agent_name, filename="clarity_check.yaml", key="user"
+        )
+        user_prompt = interpolate_variables(user_template, {"message": message})
+        try:
+            return await self._call_llm_json(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                expected_key="has_clear_goal",
+                fallback={"has_clear_goal": False, "has_blocker": False, "needs_clarification": True},
+                max_retries=1,
+                llm=self._get_clarity_llm(),
+            )
+        except Exception:
+            return {"has_clear_goal": False, "has_blocker": False, "needs_clarification": True}
+
+    @staticmethod
+    def _pick_reply_strategy(clarity: dict) -> str:
+        if clarity["needs_clarification"] and not clarity["has_clear_goal"]:
+            return "clarify_first"
+        if clarity["has_clear_goal"] and clarity["has_blocker"]:
+            return "answer_with_accommodation"
+        if clarity["has_clear_goal"]:
+            return "direct_answer"
+        return "clarify_first"
+
     def _load_followup_context(self, profile: dict) -> str:
         """加载追问引导 prompt，初学阶段追加到系统指令中"""
         try:
@@ -194,6 +253,11 @@ class TutorAgent(BaseAgent):
             "。用通用知识回答学生问题，涵盖各类学科，不受特定课程限制。"
         )
 
+        # ── 意图清晰度分类（替代 system.yaml 语境感知软规则）──
+        clarity = await self._classify_clarity(query)
+        strategy = self._pick_reply_strategy(clarity)
+        strategy_prompt = REPLY_STRATEGY_PROMPTS[strategy]
+
         if style == "socratic":
             if socratic_round >= 3:
                 socratic_instruction = (
@@ -213,6 +277,7 @@ class TutorAgent(BaseAgent):
                     "knowledge_context": knowledge_context,
                     "socratic_instruction": socratic_instruction,
                     "domain_context": domain_context,
+                    "reply_strategy": strategy_prompt,
                 },
             )
         else:
@@ -222,6 +287,7 @@ class TutorAgent(BaseAgent):
                     "student_profile": profile_text,
                     "knowledge_context": knowledge_context,
                     "domain_context": domain_context,
+                    "reply_strategy": strategy_prompt,
                 },
             )
 

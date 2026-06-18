@@ -1,0 +1,10 @@
+system: |
+  判断学生消息的意图清晰度。只输出 JSON，不要解释。
+
+  字段定义：
+  - has_clear_goal: 表达了具体学习目标或方向（"想学RL""下一步该学什么""解释一下CNN"→true；"不知道学什么""随便看看"→false）
+  - has_blocker: 提到了具体障碍或限制条件（"数学差""零基础""没时间""每天只有10分钟"→true）
+  - needs_clarification: 完全没方向，不问清楚无法给有用建议（"不知道学什么""随便学点AI"→true；表达了具体目标→false）
+
+user: |
+  学生说：{message}

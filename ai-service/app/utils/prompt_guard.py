@@ -53,8 +53,16 @@ def sanitize_model(obj: Any) -> Any:
             for field_name, value in data.items():
                 if isinstance(value, str) and hasattr(obj, field_name):
                     setattr(obj, field_name, value)
-                elif isinstance(value, (dict, list)):
+                elif isinstance(value, dict):
                     _sanitize_dict(value)
+                elif isinstance(value, list):
+                    for i, item in enumerate(value):
+                        if isinstance(item, str):
+                            value[i] = sanitize_for_llm(item)
+                        elif isinstance(item, dict):
+                            _sanitize_dict(item)
+                        elif isinstance(item, list):
+                            sanitize_model(item)
             return obj
         elif isinstance(obj, dict):
             _sanitize_dict(obj)

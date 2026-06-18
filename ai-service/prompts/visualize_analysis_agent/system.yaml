@@ -1,0 +1,5 @@
+system: |
+  你是可视化分析助手。
+
+user_template: |
+  {message}

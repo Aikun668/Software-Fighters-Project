@@ -169,11 +169,16 @@ class KBCoverageChecker:
 
 class SafetyPipeline:
 
-    # 检测个人敏感信息：身份证/银行卡关键词 + 中国大陆手机号格式(1[3-9]xxxxxxxxx)
-    # 手机号正则可能匹配到非手机号的11位数字串（如订单号），但误报后果是仅标记 violation，
-    # 不会阻断内容输出——安全侧宁可多报不可漏报。若后续精度要求提高可换用中国手机号段精确列表。
-    PERSONAL_INFO = re.compile(
-        r'(身份证|身份证号|银行卡|手机号|1[3-9]\d{9})',
+    # 检测个人敏感信息：身份证/银行卡关键词
+    # 已移除 1[3-9]\d{9} 裸数字模式 — AI 教学回答中经常出现 11 位数字串
+    # （参数值、计算步骤、统计数字等），与手机号格式无法区分，误报率过高。
+    # 手机号检测改为仅匹配带分隔符的格式（138-0000-0000 / 138 0000 0000），
+    # 这种格式在文本中出现时几乎一定是刻意写的手机号，不会是教学数字。
+    PERSONAL_INFO_KEYWORDS = re.compile(
+        r'(身份证|身份证号|银行卡|手机号)',
+    )
+    PHONE_FORMATTED = re.compile(
+        r'1[3-9]\d[-\s]\d{4}[-\s]\d{4}',
     )
     VIOLENCE = re.compile(
         r'(杀人|枪支|爆炸|自杀|自残|投毒)',
@@ -200,7 +205,9 @@ class SafetyPipeline:
         base = ContentSafetyFilter.check(text)
         violations = list(base.violations)  # defensive copy — don't mutate
 
-        if cls.PERSONAL_INFO.search(text):
+        if cls.PERSONAL_INFO_KEYWORDS.search(text):
+            violations.append("personal_info")
+        if cls.PHONE_FORMATTED.search(text) and "personal_info" not in violations:
             violations.append("personal_info")
         if cls.VIOLENCE.search(text):
             violations.append("violence")

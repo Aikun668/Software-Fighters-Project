@@ -18,8 +18,6 @@ from app.agents.profile_agent import (
     STABILITY_N,
     MAX_ENTRIES_PER_DIM,
     MIN_CONFIDENCE_FOR_ACTIVE,
-    DEDUP_SIMILARITY,
-    _bigram_jaccard,
     ARRAY_DIMENSIONS,
     REPLACE_DIMENSIONS,
     NUMBER_DIMENSIONS,
@@ -38,27 +36,6 @@ def _make_mock_profile(**kwargs):
     p.stability_counter = kwargs.get("stability_counter", {})
     p.entries = kwargs.get("entries", {})
     return p
-
-
-# ── 工具函数 ────────────────────────────────────────────────────
-
-
-class TestBigramJaccard:
-    def test_identical_strings(self):
-        assert _bigram_jaccard("学生对梯度下降不熟悉", "学生对梯度下降不熟悉") > 0.9
-
-    def test_completely_different(self):
-        assert _bigram_jaccard("学生对梯度下降不熟悉", "学生喜欢计算机视觉应用") < 0.3
-
-    def test_similar_strings(self):
-        sim = _bigram_jaccard(
-            "学生对反向传播的链式求导有困难",
-            "学生对反向传播的链式求导理解不深",
-        )
-        assert sim > DEDUP_SIMILARITY  # 应该被判定为相似
-
-    def test_short_strings(self):
-        assert _bigram_jaccard("ab", "abc") > 0.0
 
 
 # ── 条目模型 ARRAY 维度 ─────────────────────────────────────────
@@ -368,8 +345,9 @@ class TestStabilityCounter:
         return ProfileAgent()
 
     def test_first_sighting_not_replaced(self, agent):
+        """contradiction 路径：首次出现矛盾不直接替换，count=1"""
         p = _make_mock_profile(cognitive_style="视觉型")
-        fragment = {"cognitive_style": "听觉型"}
+        fragment = {"cognitive_style": "项目实战驱动学习"}
 
         agent._apply_merge(p, fragment)
 
@@ -377,27 +355,29 @@ class TestStabilityCounter:
         assert p.stability_counter["cognitive_style"]["count"] == 1
 
     def test_consecutive_same_value_replaces(self, agent):
+        """contradiction 路径：连续 2 次相同矛盾值触发替换"""
         p = _make_mock_profile(cognitive_style="视觉型")
 
         for _ in range(STABILITY_N):
-            agent._apply_merge(p, {"cognitive_style": "听觉型"})
+            agent._apply_merge(p, {"cognitive_style": "项目实战驱动学习"})
 
-        assert p.cognitive_style == "听觉型"
+        assert p.cognitive_style == "项目实战驱动学习"
         assert p.stability_counter["cognitive_style"]["count"] == 0
 
     def test_interrupted_sequence_resets(self, agent):
+        """contradiction 路径：不同矛盾值打断计数重置"""
         p = _make_mock_profile(cognitive_style="视觉型")
 
-        agent._apply_merge(p, {"cognitive_style": "听觉型"})
+        agent._apply_merge(p, {"cognitive_style": "项目实战驱动学习"})
         assert p.stability_counter["cognitive_style"]["count"] == 1
 
-        agent._apply_merge(p, {"cognitive_style": "读写型"})
+        agent._apply_merge(p, {"cognitive_style": "纯理论推导式学习"})
         assert p.stability_counter["cognitive_style"]["count"] == 1
-        assert p.stability_counter["cognitive_style"]["value"] == "读写型"
+        assert p.stability_counter["cognitive_style"]["pending_value"] == "纯理论推导式学习"
 
-        agent._apply_merge(p, {"cognitive_style": "读写型"})
-        agent._apply_merge(p, {"cognitive_style": "读写型"})
-        assert p.cognitive_style == "读写型"
+        agent._apply_merge(p, {"cognitive_style": "纯理论推导式学习"})
+        agent._apply_merge(p, {"cognitive_style": "纯理论推导式学习"})
+        assert p.cognitive_style == "纯理论推导式学习"
 
 
 # ── 向后兼容：旧版 list 字段同步 ─────────────────────────────────
@@ -412,18 +392,18 @@ class TestBackwardCompat:
         """旧版 weak_points list 按置信度降序"""
         p = _make_mock_profile()
 
-        # 添加多个条目，不同置信度
+        # 添加多个语义显著不同的条目
         agent._apply_merge(p, {"weak_points": [
-            {"text": "问题A"}, {"text": "问题B"}, {"text": "问题C"}
+            {"text": "数学基础薄弱"}, {"text": "编程能力不足"}, {"text": "英语阅读文献困难"}
         ]})
-        # 再次命中 A 和 B，提升它们的置信度
+        # 再次命中前两个条目，提升置信度
         agent._apply_merge(p, {"weak_points": [
-            {"text": "问题A"}, {"text": "问题B"}
+            {"text": "数学基础薄弱"}, {"text": "编程能力不足"}
         ]})
 
         legacy = p.weak_points
-        assert legacy[0] in ("问题A", "问题B")  # A和B置信度高，排前面
-        assert "问题C" in legacy  # 仍然在列表中
+        assert legacy[0] in ("数学基础薄弱", "编程能力不足")  # 置信度高，排前面
+        assert "英语阅读文献困难" in legacy  # 仍然在列表中
 
     def test_empty_entries_preserved(self, agent):
         """空 entries 不破坏已有数据"""

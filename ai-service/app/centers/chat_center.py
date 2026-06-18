@@ -46,7 +46,7 @@ class ChatCenter:
             schedule = ScheduleAgent()
             adjustment = AdjustmentAgent()
             diagnose = DiagnoseAgent()
-            profile = ProfileAgent(model_profile=PROFILE_STUDENT)
+            profile = ProfileAgent()
             exercise = ExerciseAgent(model_profile=PROFILE_EXERCISE)
             content = ContentAgent()
 
