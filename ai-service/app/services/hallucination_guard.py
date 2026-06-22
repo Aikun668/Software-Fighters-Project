@@ -76,7 +76,7 @@ class HallucinationGuard:
 
         warnings = []
         if weak_count / total > LOW_CONFIDENCE_COVERAGE_THRESHOLD:
-            warnings.append(f"超过{int(LOW_CONFIDENCE_COVERAGE_THRESHOLD*100)}%的内容在知识库中无法验证，可能存在幻觉")
+            warnings.append(f"超过{int(LOW_CONFIDENCE_COVERAGE_THRESHOLD*100)}%的内容未在教材中找到对应验证，建议结合教材核实")
         if low_confidence_claims:
             warnings.append(f"{len(low_confidence_claims)}条声明置信度较低，建议核实")
 
@@ -146,7 +146,7 @@ class HallucinationGuard:
         return "\n".join(parts)
 
 
-DISCLAIMER_TEXT = "\n\n> 以上内容建议结合教材验证，部分知识点可能存在不准确之处。"
+DISCLAIMER_TEXT = "\n\n> 以上部分内容未在教材中找到对应验证，建议结合教材核实。"
 
 
 def kb_verify(fields: list[str]):
@@ -231,6 +231,12 @@ def _descend(
             # leaf: verify this text field
             if len(val) >= 20:  # skip very short strings
                 report = guard.verify(val)
+                # 没有任何 GOOD/PARTIAL 声明 → 文本无可验证内容（系统报错/兜底文案），跳过
+                has_any_support = any(
+                    r.coverage in ("GOOD", "PARTIAL") for r in report.coverage_results
+                )
+                if not has_any_support:
+                    return
                 if report.confidence.overall < LOW_CONFIDENCE_COVERAGE_THRESHOLD:
                     obj[head] = val + DISCLAIMER_TEXT
                     SecurityLogger.log_event(

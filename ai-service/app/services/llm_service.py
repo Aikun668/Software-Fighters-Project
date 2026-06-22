@@ -15,6 +15,7 @@ Per-agent 模型选择：
 
 import asyncio
 import os
+import random
 import json
 import hmac
 import hashlib
@@ -28,7 +29,7 @@ from urllib.parse import urlparse, urlencode
 from wsgiref.handlers import format_date_time
 
 import websockets
-import httpx
+import aiohttp
 
 logger = logging.getLogger(__name__)
 
@@ -42,30 +43,62 @@ _llm_semaphore = asyncio.Semaphore(_MAX_CONCURRENT)           # chat() 专用
 _llm_stream_semaphore = asyncio.Semaphore(_MAX_STREAM_CONCURRENT)  # chat_stream() 专用
 _MAX_RETRIES = 1
 
-_client_cache: dict[str, httpx.AsyncClient] = {}
-_client_cache_lock = asyncio.Lock()
+# 每把 API key 的独立并发上限（防止单 key 被过度争抢导致限流）
+_PER_KEY_MAX = int(os.getenv("LLM_PER_KEY_MAX", "2"))
+_per_key_semaphores: dict[str, asyncio.Semaphore] = {}
+_per_key_lock = asyncio.Lock()
 
 
-async def _get_shared_client(api_key: str, base_url: str) -> httpx.AsyncClient:
-    """获取或创建共享 httpx.AsyncClient（按 api_key+base_url 缓存，复用连接池）。"""
-    cache_key = f"{api_key}:{base_url}"
-    if cache_key not in _client_cache:
-        async with _client_cache_lock:
-            if cache_key not in _client_cache:
-                _client_cache[cache_key] = httpx.AsyncClient(
-                    timeout=httpx.Timeout(120.0, connect=10.0),
-                    limits=httpx.Limits(max_keepalive_connections=10, max_connections=20),
-                )
-    return _client_cache[cache_key]
+async def _acquire_per_key(key: str) -> asyncio.Semaphore:
+    """获取或创建单 key 限流信号量。"""
+    if key not in _per_key_semaphores:
+        async with _per_key_lock:
+            if key not in _per_key_semaphores:
+                _per_key_semaphores[key] = asyncio.Semaphore(_PER_KEY_MAX)
+    return _per_key_semaphores[key]
+
+def _pick_key(api_key: str) -> str:
+    """多 key 负载分担：逗号分隔则随机选一把，单 key 原样返回。"""
+    keys = [k.strip() for k in api_key.split(",") if k.strip()]
+    if len(keys) <= 1:
+        return api_key
+    return random.choice(keys)
+
+
+async def _aiter_lines_with_idle_timeout(resp, idle_timeout: float = 60.0):
+    """包装 aiohttp 流式响应的行迭代，若 idle_timeout 秒内无新行则超时（默认 60s）。"""
+    while True:
+        try:
+            async with asyncio.timeout(idle_timeout):
+                line = await resp.content.readline()
+            if not line:
+                return
+            yield line.decode("utf-8").rstrip("\r\n")
+        except asyncio.TimeoutError:
+            raise RuntimeError(
+                f"LLM stream idle timeout: no token received for {idle_timeout}s"
+            )
+
+
+class _KeyRejectedError(Exception):
+    """内部异常：当前 API key 被拒绝（401/403/429），触发切换 key 重试。"""
+    pass
+
+
+def _create_session(timeout: float = 120.0, connect_timeout: float = 10.0) -> aiohttp.ClientSession:
+    """创建 aiohttp session（每次请求新建，避免连接池复用问题）。"""
+    return aiohttp.ClientSession(
+        timeout=aiohttp.ClientTimeout(total=timeout, connect=connect_timeout),
+    )
 
 
 async def close_llm_clients():
-    """应用关闭时释放所有 LLM HTTP 连接池。"""
-    async with _client_cache_lock:
-        for client in _client_cache.values():
-            await client.aclose()
-        _client_cache.clear()
-    logger.info("All LLM HTTP clients closed")
+    """应用关闭时释放 LLM 连接资源。
+
+    aiohttp 模式每次请求创建/销毁 session，无需显式清理。
+    保留此函数以兼容 main.py 的生命周期调用。
+    """
+    logger.info("LLM HTTP clients cleanup (no-op for aiohttp)")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -114,6 +147,7 @@ class AgentModelProfile:
 
 # ── 环境变量速记 ─────────────────────────────────────────────
 _DK_PRO = os.getenv("DEEPSEEK_API_KEY", "")
+_DK_FLASH = os.getenv("DEEPSEEK_API_KEY_FLASH", "")
 _DK_BASE = os.getenv("DEEPSEEK_BASE_URL", "")
 _DS_PLUS = os.getenv("DASHSCOPE_API_KEY_PLUS", "")
 _DS_MAX = os.getenv("DASHSCOPE_API_KEY_MAX", "")
@@ -129,18 +163,18 @@ _DS_BASE = os.getenv("DASHSCOPE_BASE_URL", "")
 PROFILE_DIRECTOR = AgentModelProfile(
     default=ModelConfig(
         model="deepseek-v4-flash", temperature=0.0, max_tokens=256,
-        api_key=_DS_FLASH, base_url=_DS_BASE,
+        api_key=_DK_FLASH, base_url=_DK_BASE,
     ),
 )
 
 PROFILE_CONTENT = AgentModelProfile(
     default=ModelConfig(
-        model="deepseek-v4-pro", temperature=0.7, max_tokens=8192,
-        api_key=_DK_PRO, base_url=_DK_BASE,
+        model="qwen3.7-max-2026-05-17", temperature=0.7, max_tokens=8192,
+        api_key=_DS_MAX, base_url=_DS_BASE,
     ),
     plan=ModelConfig(
-        model="deepseek-v4-pro", temperature=0.3, max_tokens=4096,
-        api_key=_DK_PRO, base_url=_DK_BASE,
+        model="qwen3.7-max-2026-05-17", temperature=0.3, max_tokens=4096,
+        api_key=_DS_MAX, base_url=_DS_BASE,
     ),
 )
 
@@ -157,8 +191,8 @@ PROFILE_EXERCISE = AgentModelProfile(
 
 PROFILE_CODE = AgentModelProfile(
     default=ModelConfig(
-        model="deepseek-v4-pro", temperature=0.5, max_tokens=8192,
-        api_key=_DK_PRO, base_url=_DK_BASE,
+        model="qwen3.7-max-2026-05-17", temperature=0.5, max_tokens=8192,
+        api_key=_DS_MAX, base_url=_DS_BASE,
     ),
 )
 
@@ -192,8 +226,8 @@ PROFILE_INTERACTIVE_DIAGRAM = AgentModelProfile(
 
 PROFILE_PROJECT = AgentModelProfile(
     default=ModelConfig(
-        model="qwen3.7-plus", temperature=0.7, max_tokens=4096,
-        api_key=_DS_PLUS, base_url=_DS_BASE,
+        model="deepseek-v4-pro", temperature=0.7, max_tokens=8192,
+        api_key=_DK_PRO, base_url=_DK_BASE,
     ),
 )
 
@@ -218,7 +252,7 @@ PROFILE_STUDENT = AgentModelProfile(
 PROFILE_ANALYSIS = AgentModelProfile(
     default=ModelConfig(
         model="deepseek-v4-flash", temperature=0.0, max_tokens=512,
-        api_key=_DS_FLASH, base_url=_DS_BASE,
+        api_key=_DK_FLASH, base_url=_DK_BASE,
     ),
 )
 
@@ -401,7 +435,7 @@ class SparkLLM:
         async with _llm_semaphore:
             for attempt in range(_MAX_RETRIES + 1):
                 try:
-                    async with asyncio.timeout(120.0):
+                    async with asyncio.timeout(180.0):
                         async with websockets.connect(ws_url, max_size=10 * 1024 * 1024, open_timeout=30.0) as ws:
                             await ws.send(json.dumps(request))
                             full_text = ""
@@ -452,7 +486,7 @@ class SparkLLM:
 
         async with _llm_stream_semaphore:
             try:
-                async with asyncio.timeout(120.0):
+                async with asyncio.timeout(180.0):
                     async with websockets.connect(ws_url, max_size=10 * 1024 * 1024, open_timeout=30.0) as ws:
                         await ws.send(json.dumps(request))
                         async for raw in ws:
@@ -532,7 +566,9 @@ class OpenAILLM:
         base_url: str = "",
     ):
         self.base_url = (base_url or os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")).rstrip("/")
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY", "")
+        raw_key = api_key or os.getenv("OPENAI_API_KEY", "")
+        self._all_keys = [k.strip() for k in raw_key.split(",") if k.strip()]
+        self.api_key = _pick_key(raw_key)
         self.model = model or os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
         self.temperature = temperature
         self.max_tokens = max_tokens
@@ -554,42 +590,56 @@ class OpenAILLM:
         full_messages = self._build_messages(messages, system_prompt)
         url = f"{self.base_url}/chat/completions"
 
+        keys = self._all_keys.copy()
+        random.shuffle(keys)
+        if not keys:
+            keys = [self.api_key]
+
         last_error = None
         async with _llm_semaphore:
-            for attempt in range(_MAX_RETRIES + 1):
+            for attempt in range(_MAX_RETRIES + len(keys)):
+                key = keys[attempt % len(keys)]
+                per_key_sem = await _acquire_per_key(key)
                 try:
-                    async with asyncio.timeout(120.0):
-                        client = await _get_shared_client(self.api_key, self.base_url)
-                        resp = await client.post(
-                            url,
-                            json={
-                                "model": self.model,
-                                "messages": full_messages,
-                                "temperature": self.temperature,
-                                "max_tokens": self.max_tokens,
-                                "stream": False,
-                            },
-                            headers={
-                                "Authorization": f"Bearer {self.api_key}",
-                                "Content-Type": "application/json",
-                            },
-                        )
-                        resp.raise_for_status()
-                        data = resp.json()
-                        return data["choices"][0]["message"]["content"]
+                    async with asyncio.timeout(180.0), per_key_sem:
+                        async with _create_session() as session:
+                            async with session.post(
+                                url,
+                                json={
+                                    "model": self.model,
+                                    "messages": full_messages,
+                                    "temperature": self.temperature,
+                                    "max_tokens": self.max_tokens,
+                                    "stream": False,
+                                },
+                                headers={
+                                    "Authorization": f"Bearer {key}",
+                                    "Content-Type": "application/json",
+                                },
+                            ) as resp:
+                                if resp.status != 200:
+                                    err_text = await resp.text()
+                                    if resp.status in (429, 401, 403) and len(keys) > 1:
+                                        next_key = keys[(attempt + 1) % len(keys)]
+                                        if next_key != key:
+                                            logger.warning(f"Key rejected (HTTP {resp.status}), switching key")
+                                            await asyncio.sleep(0.5)
+                                            raise _KeyRejectedError(resp.status, err_text)
+                                    raise RuntimeError(f"OpenAI HTTP error {resp.status}: {err_text[:200]}")
+                                data = await resp.json()
+                                return data["choices"][0]["message"]["content"]
+                except _KeyRejectedError:
+                    continue
                 except asyncio.TimeoutError:
                     logger.error("OpenAI timeout after 120s")
                     raise RuntimeError("OpenAI timeout: LLM did not respond within 120s")
-                except (httpx.ConnectError, httpx.RemoteProtocolError, httpx.ReadError, OSError) as e:
+                except (aiohttp.ClientError, OSError) as e:
                     last_error = e
-                    if attempt < _MAX_RETRIES:
-                        logger.warning(f"OpenAI network error (attempt {attempt+1}), retrying: {e}")
+                    if attempt < _MAX_RETRIES + len(keys) - 1:
+                        logger.warning(f"OpenAI network error (attempt {attempt+1}, key={key[:12]}...), retrying: {e}")
                         await asyncio.sleep(1.0)
-                except httpx.HTTPStatusError as e:
-                    logger.error(f"OpenAI HTTP error {e.response.status_code}: {e.response.text}")
-                    raise RuntimeError(f"OpenAI HTTP error: {e}")
 
-        logger.error(f"OpenAI connection failed after {_MAX_RETRIES+1} attempts: {last_error}")
+        logger.error(f"OpenAI connection failed after {_MAX_RETRIES + len(keys)} attempts: {last_error}")
         raise RuntimeError(f"OpenAI connection failed: {last_error}")
 
     async def chat_stream(
@@ -606,49 +656,73 @@ class OpenAILLM:
         full_messages = self._build_messages(messages, system_prompt)
         url = f"{self.base_url}/chat/completions"
 
+        keys = self._all_keys.copy()
+        random.shuffle(keys)
+        if not keys:
+            keys = [self.api_key]
+
         async with _llm_stream_semaphore:
-            try:
-                async with asyncio.timeout(120.0):
-                    client = await _get_shared_client(self.api_key, self.base_url)
-                    async with client.stream(
-                        "POST",
-                        url,
-                        json={
-                            "model": self.model,
-                            "messages": full_messages,
-                            "temperature": self.temperature,
-                            "max_tokens": self.max_tokens,
-                            "stream": True,
-                        },
-                        headers={
-                            "Authorization": f"Bearer {self.api_key}",
-                            "Content-Type": "application/json",
-                        },
-                    ) as resp:
-                        resp.raise_for_status()
-                        async for line in resp.aiter_lines():
-                            if not line.startswith("data: "):
-                                continue
-                            chunk = line[6:]
-                            if chunk == "[DONE]":
-                                break
-                            try:
-                                data = json.loads(chunk)
-                                delta = data["choices"][0].get("delta", {})
-                                content = delta.get("content", "")
-                                if content:
-                                    yield content
-                            except (json.JSONDecodeError, KeyError, IndexError):
-                                continue
-            except asyncio.TimeoutError:
-                logger.error("OpenAI stream timeout after 120s")
-                raise RuntimeError("OpenAI stream timeout")
-            except httpx.HTTPStatusError as e:
-                logger.error(f"OpenAI stream HTTP error {e.response.status_code}")
-                raise RuntimeError(f"OpenAI HTTP error: {e}")
-            except (httpx.ConnectError, httpx.RemoteProtocolError, httpx.ReadError, OSError) as e:
-                logger.error(f"OpenAI stream connection error: {e}")
-                raise RuntimeError(f"OpenAI connection failed: {e}")
+            last_error = None
+            for attempt in range(_MAX_RETRIES + len(keys)):
+                key = keys[attempt % len(keys)]
+                per_key_sem = await _acquire_per_key(key)
+                try:
+                    async with asyncio.timeout(180.0), per_key_sem:
+                        async with _create_session() as session:
+                            async with session.post(
+                                url,
+                                json={
+                                    "model": self.model,
+                                    "messages": full_messages,
+                                    "temperature": self.temperature,
+                                    "max_tokens": self.max_tokens,
+                                    "stream": True,
+                                },
+                                headers={
+                                    "Authorization": f"Bearer {key}",
+                                    "Content-Type": "application/json",
+                                },
+                            ) as resp:
+                                if resp.status != 200:
+                                    err_text = await resp.text()
+                                    if resp.status in (429, 401, 403) and len(keys) > 1:
+                                        next_key = keys[(attempt + 1) % len(keys)]
+                                        if next_key != key:
+                                            logger.warning(f"Stream key rejected (HTTP {resp.status}), switching key")
+                                            await asyncio.sleep(0.5)
+                                            raise _KeyRejectedError(resp.status, err_text)
+                                    raise RuntimeError(f"OpenAI HTTP error {resp.status}: {err_text[:200]}")
+                                async for line in _aiter_lines_with_idle_timeout(
+                                    resp, idle_timeout=60.0
+                                ):
+                                    if not line.startswith("data: "):
+                                        continue
+                                    chunk = line[6:]
+                                    if chunk == "[DONE]":
+                                        return
+                                    try:
+                                        data = json.loads(chunk)
+                                        delta = data["choices"][0].get("delta", {})
+                                        content = delta.get("content", "")
+                                        if content:
+                                            yield content
+                                    except (json.JSONDecodeError, KeyError, IndexError):
+                                        continue
+                except _KeyRejectedError:
+                    continue
+                except asyncio.TimeoutError:
+                    logger.error("OpenAI stream timeout after 180s")
+                    raise RuntimeError("OpenAI stream timeout")
+                except (aiohttp.ClientError, OSError) as e:
+                    last_error = e
+                    if attempt < _MAX_RETRIES + len(keys) - 1:
+                        logger.warning(f"Stream connection error (attempt {attempt+1}), retrying: {e}")
+                        await asyncio.sleep(0.5)
+                        continue
+                    logger.error(f"OpenAI stream connection error: {e}")
+                    raise RuntimeError(f"OpenAI connection failed: {e}")
+
+            raise RuntimeError(f"OpenAI stream failed with all keys: {last_error}")
 
     def _build_messages(
         self, messages: list[dict], system_prompt: str

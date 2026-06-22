@@ -35,6 +35,12 @@ class ExportPptxRequest(BaseModel):
     title: str = Field(default="AI学习资源", description="PPT 标题")
 
 
+class ExportDocxRequest(BaseModel):
+    content_blocks: list = Field(default_factory=list, description="DOCX 内容块")
+    title: str = Field(default="AI学习资源", description="DOCX 标题")
+    sub_type: str = Field(default="overview", description="文档子类型: overview|guide")
+
+
 class ExportPdfRequest(BaseModel):
     content_blocks: list = Field(default_factory=list, description="PDF 内容块")
     title: str = Field(default="AI学习资源", description="PDF 标题")

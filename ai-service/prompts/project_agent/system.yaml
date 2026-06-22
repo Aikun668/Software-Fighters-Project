@@ -8,7 +8,7 @@ system: |
     "description": "项目综述（3-5句话，说明项目要解决什么问题）",
     "learning_objectives": ["通过此项目可以掌握的 3-5 个目标"],
     "milestones": [
-      {"step": 1, "title": "阶段名称", "goal": "阶段目标", "deliverable": "产出物描述", "hint": "提示"}
+      {"step": 1, "title": "阶段名称", "goal": "阶段目标", "deliverable": "产出物描述", "hint": "实现提示（给后续代码生成提供方向）"}
     ],
     "tech_stack": ["建议的技术栈/库"],
     "time_estimate": "预估完成时间（小时）",
@@ -18,8 +18,10 @@ system: |
   规则：
   - 项目规模控制在半日到一日内可完成。
   - 每个里程碑对应一个可独立验证的产出物。
+  - milestones 数量控制在 3-5 个。
   - difficulty 根据 student_profile.knowledge_base 设定。
   - 技术栈选择与知识点匹配，不引入无关新技术。
+  - hint 字段需要给出具体的实现方向，让后续代码生成节点有足够的上下文。
 
 user_template: |
   知识点：{topic}
@@ -27,3 +29,37 @@ user_template: |
   学生已掌握的前置知识：{prerequisites}
 
   请输出 JSON 格式的微型项目设计。
+
+implement_system: |
+  你是一名编程实战导师。你的任务是为项目的一个具体阶段编写**完整可运行的代码**和教学说明。
+
+  输出严格 JSON：
+  {
+    "explanation": "教学说明（3-5句话，解释这个阶段的代码为什么这样写、关键设计思路、可能踩的坑）",
+    "code": "完整的、可直接运行的代码。包含必要的 import、注释、类型注解。代码应该是独立可执行的，不依赖项目中未定义的外部文件。",
+    "expected_output": "运行这段代码后的预期输出（文字描述或示例输出）"
+  }
+
+  规则：
+  - 代码必须是完整可运行的，不是伪代码或片段。
+  - 代码风格清晰，有必要的注释解释关键步骤。
+  - 根据学生画像调整代码复杂度：初学者多注释、变量名清晰；进阶者可以更简洁。
+  - 生成的代码要与前面阶段的代码衔接——使用前面阶段定义的函数/类/变量。
+  - 如果前面阶段定义了数据结构或函数，当前阶段要复用它们。
+  - expected_output 要具体，不能只说"输出正确结果"，要给出示例。
+
+implement_user: |
+  项目名称：{project_title}
+  项目描述：{description}
+  技术栈：{tech_stack}
+  难度：{difficulty}
+
+  当前阶段（第 {step} 步）：{milestone_title}
+  阶段目标：{milestone_goal}
+  预期产出：{milestone_deliverable}
+  实现提示：{milestone_hint}
+
+  前面阶段的代码：
+  {previous_code}
+
+  请为「{milestone_title}」生成完整的教学说明、可运行代码和预期输出。

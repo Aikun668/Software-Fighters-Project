@@ -317,6 +317,7 @@ class TutorAgent(BaseAgent):
                 + "\n---"
             )
 
+        api_success = True
         try:
             response = ""
             async for chunk in self.llm.chat_stream(
@@ -326,9 +327,10 @@ class TutorAgent(BaseAgent):
         except (ConnectionError, RuntimeError, ValueError) as e:
             logger.error(f"Tutor respond failed: {e}")
             response = "抱歉，我暂时无法回答这个问题。请稍后再试。"
+            api_success = False
 
-        # ── 幻觉守护只对 AI 领域生效 ──
-        if domain == "ai":
+        # ── 幻觉守护只对 AI 领域 + API 调用成功的回复生效 ──
+        if api_success and domain == "ai":
             try:
                 kb = get_kb()
                 guard = HallucinationGuard(kb)

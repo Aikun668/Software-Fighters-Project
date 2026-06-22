@@ -52,7 +52,7 @@ logger = logging.getLogger(__name__)
 PLAN_REQUIRED_AGENTS = frozenset({"content", "mindmap"})
 
 AGENT_LABELS: dict[str, str] = {
-    "content": "课程文档",
+    "content": "技术文档",
     "interactive_diagram": "交互式可视化",
     "code": "代码案例",
     "project": "项目实战",
@@ -171,7 +171,7 @@ class ResourceGenWorkflow(BaseWorkflow):
                     topic, student_profile,
                 )
                 outline = plan_result.get("outline", {})
-                sub_count = len(outline.get("subsections", []))
+                sub_count = len(outline.get("subsections") or outline.get("sections") or outline.get("steps") or [])
                 self._emit(state, stage_end("outline",
                     f"大纲规划完成，共 {sub_count} 个章节"))
             except Exception as e:
@@ -226,7 +226,7 @@ class ResourceGenWorkflow(BaseWorkflow):
                 logger.exception(f"ContentAgent fallback also failed: {fb_e}")
                 result = {"blocks": [], "response": f"{label}生成失败，请稍后重试"}
 
-        blocks = result.get("blocks", []) if isinstance(result, dict) else []
+        blocks = (result.get("blocks") or result.get("content_blocks") or []) if isinstance(result, dict) else []
         response = result.get("response", "") if isinstance(result, dict) else str(result)
 
         self._emit(state, stage_end("generate",
@@ -254,6 +254,7 @@ class ResourceGenWorkflow(BaseWorkflow):
 
         if agent_name == "content":
             base["outline"] = outline
+            base["sub_type"] = sub_type or "overview"
             if sub_type == "comparison":
                 base["comparison"] = True
         elif agent_name == "mindmap":

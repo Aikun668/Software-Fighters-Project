@@ -72,12 +72,13 @@ ROUTING_TIERS: list[tuple[str, list[str]]] = [
         "完整应用", "小应用", "做一个", "做个", "开发一个",
         "开发个", "mini",
     ]),
-    # Tier 4 — 课程文档（最泛化，兜底）
+    # Tier 4 — 技术文档（最泛化，兜底）
     ("content", [
         "基础", "入门", "教程", "是什么", "原理", "理论", "概念",
         "学习", "介绍", "概述", "导论", "了解", "解释", "什么",
         "对比", "比较", "区别", "差异", "优缺点", "怎么学",
-        "学好", "理解", "认识",
+        "学好", "理解", "认识", "怎么", "如何", "步骤", "攻略",
+        "实战", "训练", "手把手", "跟着",
     ]),
 ]
 
@@ -197,7 +198,7 @@ class Director:
     # ── 子类型检测 ──
 
     _AGENT_SUB_TYPES: dict[str, frozenset[str]] = {
-        "content": frozenset({"comparison"}),
+        "content": frozenset({"overview", "guide", "comparison"}),
         "code": frozenset({"diagnosis"}),
     }
 
@@ -205,14 +206,39 @@ class Director:
     def _detect_sub_type(cls, topic: str, agent_name: str | None = None) -> str | None:
         """检测子类型（词根匹配 + 兼容性过滤）。
 
-        对比分析走 content agent，报错诊断走 code agent。
+        content agent:
+          - overview: 是什么/原理/结构/对比/图解 等概念理解类
+          - guide: 怎么/如何/实现/训练/构建/解决 等动手实操类
+          - comparison: 保留向后兼容
+        code agent:
+          - diagnosis: 报错/调试/排查
         """
         detected = None
         msg = topic.lower()
-        if any(kw in msg for kw in ("对比", "比较", "区别", "差异", "vs", "优缺点", "哪个好", "选哪个")):
+
+        # ── guide 检测（优先，因为包含具体动作词）──
+        guide_roots = ("怎么", "如何", "实现", "训练", "构建", "解决", "步骤",
+                       "教程", "实战", "跟着", "做一个", "写一个", "开发一个",
+                       "攻略", "动手", "手把手", "一步步", "搭建")
+        if any(kw in msg for kw in guide_roots):
+            detected = "guide"
+
+        # ── comparison 检测 ──
+        if not detected and any(kw in msg for kw in ("对比", "比较", "区别", "差异",
+                "vs", "优缺点", "哪个好", "选哪个")):
             detected = "comparison"
-        if any(kw in msg for kw in DIAG_ROOTS):
+
+        # ── overview 检测（兜底：概念理解类词）──
+        if not detected and any(kw in msg for kw in ("是什么", "原理", "结构",
+                "概念", "图解", "架构", "理解", "认识", "了解", "介绍", "概述",
+                "导论", "解释", "什么", "怎么学", "学好", "基础", "入门", "理论",
+                "流程", "机制", "核心", "组成", "框架")):
+            detected = "overview"
+
+        # ── diagnosis 检测 ──
+        if not detected and any(kw in msg for kw in DIAG_ROOTS):
             detected = "diagnosis"
+
         if detected is not None and agent_name is not None:
             allowed = cls._AGENT_SUB_TYPES.get(agent_name, frozenset())
             if detected not in allowed:
@@ -234,11 +260,11 @@ class Director:
             llm = self._get_llm()
 
             system_prompt = (
-                "你是一个教育资源路由决策器。分析学生想要什么类型的资源，"
+                "你是一个技术资源路由决策器。分析用户想要什么类型的资源，"
                 "从以下 6 种中选择最合适的一个。\n\n"
                 "判断依据:\n"
                 "- 表达困惑/报错/不收敛/不行/急/怎么办 → code（代码诊断修复）\n"
-                "- 要求解释概念/对比/原理/是什么 → content（课程文档讲解）\n"
+                "- 要求解释概念/对比/原理/是什么 → content（技术文档）\n"
                 "- 要求写代码/实现/demo/示例 → code（代码实操案例）\n"
                 "- 要求做项目/实战/练手 → project（微型练习项目）\n"
                 "- 要求可视化/动画/图解 → interactive_diagram（交互式可视化）\n"

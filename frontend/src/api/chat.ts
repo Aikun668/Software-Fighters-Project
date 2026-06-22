@@ -14,7 +14,7 @@ export const sendMessageStream = async (data: {
     conversation_id: data.conversation_id
   })
   
-  const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || '/api'}/api/chat`, {
+  const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || '/api'}/chat`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

@@ -183,6 +183,10 @@ class SafetyPipeline:
     VIOLENCE = re.compile(
         r'(杀人|枪支|爆炸|自杀|自残|投毒)',
     )
+    # AI/ML 教学场景中的技术术语包含"爆炸"，不应视为暴力内容
+    TECHNICAL_EXPLOSION = re.compile(
+        r'(梯度爆炸|参数爆炸|维度爆炸|组合爆炸|信息爆炸|数据爆炸|指数爆炸)',
+    )
     HATE_SPEECH = re.compile(
         r'(种族歧视|性别歧视|地域歧视|宗教歧视|政治敏感)',
     )
@@ -209,13 +213,22 @@ class SafetyPipeline:
             violations.append("personal_info")
         if cls.PHONE_FORMATTED.search(text) and "personal_info" not in violations:
             violations.append("personal_info")
-        if cls.VIOLENCE.search(text):
+        cleaned = cls.TECHNICAL_EXPLOSION.sub('', text)
+        if cls.VIOLENCE.search(cleaned):
             violations.append("violence")
         if cls.HATE_SPEECH.search(text):
             violations.append("hate_speech")
         if cls.PORNOGRAPHY.search(text):
             violations.append("pornography")
-        if cls.MISINFO_MARKERS.search(text) and not cls.EDUCATIONAL_ENCOURAGEMENT.search(text):
+        # RL/AI 术语上下文豁免：PPO/Agent/Policy 等技术讨论中的"肯定能"不构成过度自信
+        rl_context = bool(re.search(
+            r'(?:PPO|RL|Policy\s*Gradient|Reward\s*Model|Critic|Actor|'
+            r'微调|fine.?tune|算法|模型|训练|梯度|参数|优化|推理|架构)',
+            text, re.IGNORECASE,
+        ))
+        if (cls.MISINFO_MARKERS.search(text)
+            and not cls.EDUCATIONAL_ENCOURAGEMENT.search(text)
+            and not rl_context):
             violations.append("overconfident_language")
 
         return SafetyResult(safe=len(violations) == 0, violations=violations)

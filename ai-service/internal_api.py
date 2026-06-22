@@ -26,6 +26,7 @@ from app.api.models import (
     ProfileWorkflowStatusRequest,
     ResourceGenRequest,
     ExportPptxRequest,
+    ExportDocxRequest,
     ExportPdfRequest,
     TutorChatRequest,
     ExerciseGenRequest,
@@ -561,7 +562,7 @@ async def export_pptx(body: ExportPptxRequest):
 
 
 _EXPORTS_DIR = os.path.join(os.path.dirname(__file__), "exports")
-_ALLOWED_EXTENSIONS = frozenset({".pptx", ".pdf"})
+_ALLOWED_EXTENSIONS = frozenset({".pptx", ".pdf", ".docx"})
 
 
 @router.get("/resources/download-pptx")
@@ -578,6 +579,47 @@ async def download_pptx(filename: str = Query(...)):
     return FileResponse(
         file_path,
         media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        filename=safe_name,
+    )
+
+
+# ── DOCX Export / Download ────────────────────────────────────
+
+@router.post("/resources/export-docx")
+async def export_docx(body: ExportDocxRequest):
+    from app.utils.docx_exporter import export_to_docx
+
+    content_blocks = body.content_blocks
+    title = body.title
+    sub_type = body.sub_type
+    output_dir = os.path.join(os.path.dirname(__file__), "exports")
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = os.path.join(output_dir, f"export_{int(time.time())}.docx")
+
+    try:
+        result_path = export_to_docx(content_blocks, output_path, title, sub_type)
+    except Exception as e:
+        logger.error(f"DOCX export failed: {e}")
+        return api_error(
+            ErrorCode.GENERATION_FAILED, "导出失败，请稍后重试", status_code=500
+        )
+    return api_success({"filename": os.path.basename(result_path)})
+
+
+@router.get("/resources/download-docx")
+async def download_docx(filename: str = Query(...)):
+    safe_name = os.path.basename(filename)
+    ext = os.path.splitext(safe_name)[1].lower()
+    if ext != ".docx":
+        return api_error(ErrorCode.VALIDATION_ERROR, "不支持的文件类型", status_code=400)
+    file_path = os.path.join(_EXPORTS_DIR, safe_name)
+    if not os.path.realpath(file_path).startswith(os.path.realpath(_EXPORTS_DIR)):
+        return api_error(ErrorCode.VALIDATION_ERROR, "非法文件路径", status_code=400)
+    if not os.path.exists(file_path):
+        return api_error(ErrorCode.NOT_FOUND, "文件不存在或已过期", status_code=404)
+    return FileResponse(
+        file_path,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         filename=safe_name,
     )
 
@@ -2255,3 +2297,40 @@ async def get_conversation_summary(conversation_id: int, body: SummaryRequest):
     except Exception as e:
         logger.error(f"Summary generation failed: {e}")
         return api_error(ErrorCode.INTERNAL_ERROR, "生成总结卡片失败", status_code=500)
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Eval Judge — 独立评测端点（绕过 Agent 包装，只调原 LLM）
+# ═══════════════════════════════════════════════════════════════════
+
+from pydantic import BaseModel, Field
+
+
+class JudgeRequest(BaseModel):
+    message: str = Field(..., min_length=1, description="裁判提示词（含待评审内容）")
+    system_prompt: str = Field(default="", description="可选 system prompt")
+
+
+@router.post("/eval/judge")
+async def eval_judge(body: JudgeRequest):
+    """旁路评测：直接调用 LLM，不经任何 Agent 包装。
+
+    与 /api/chat 的区别：
+      - 不走 RouterAgent → Center → Agent pipeline
+      - LLM 返回什么就输出什么，不对格式做任何加工
+      - 仅用于自动化测试的 LLM 裁判评审
+
+    安全：通过 EVAL_JUDGE_ENABLED 环境变量控制（默认关闭）。
+    """
+    if not os.getenv("EVAL_JUDGE_ENABLED", "").strip().lower() in ("1", "true", "yes"):
+        return api_error(ErrorCode.INVALID_REQUEST, "评测端点未启用", status_code=403)
+    try:
+        from app.services.llm_service import get_llm_service as _get_llm
+
+        llm = _get_llm()
+        messages = [{"role": "user", "content": body.message}]
+        raw = await llm.chat(messages, system_prompt=body.system_prompt or "")
+        return api_success({"response": raw})
+    except Exception as e:
+        logger.error(f"Eval judge failed: {e}")
+        return api_error(ErrorCode.INTERNAL_ERROR, f"裁判调用失败: {e}", status_code=500)

@@ -152,14 +152,17 @@ class ProfileAgent(BaseAgent):
             result_text = await self.extract_llm.chat(
                 extract_messages, system_prompt=self.extract_system_template,
             )
-            fragment = self._parse_extract_result(result_text)
+            parsed = self._parse_extract_result(result_text)
+            fragment = parsed["updates"]
+            extract_reasoning = parsed["reasoning"]
         except (RuntimeError, ConnectionError) as e:
             logger.error(f"Extract LLM failed: {e}, using empty fragment")
             fragment = {}
+            extract_reasoning = ""
 
         new_last_idx = new_start + len(new_messages)
 
-        return {"extracted_fragment": fragment, "last_extracted_msg_index": new_last_idx}
+        return {"extracted_fragment": fragment, "last_extracted_msg_index": new_last_idx, "extract_reasoning": extract_reasoning}
 
     # ── merge ────────────────────────────────────────────────────────
 
@@ -691,7 +694,9 @@ class ProfileAgent(BaseAgent):
         if not isinstance(data, dict):
             data = {}
         updates = data.get("updates", data)
-        return {k: v for k, v in updates.items() if k in DIMENSIONS}
+        dimension_updates = {k: v for k, v in updates.items() if k in DIMENSIONS}
+        reasoning = data.get("reasoning", "")
+        return {"updates": dimension_updates, "reasoning": reasoning}
 
     # ── 公开方法：供 tutor/unified chat 后台调用 ───────────────────
 
@@ -717,8 +722,9 @@ class ProfileAgent(BaseAgent):
 
         extract_result = await self._extract_node(state)
         fragment = extract_result.get("extracted_fragment", {})
+        extract_reasoning = extract_result.get("extract_reasoning", "")
         if not fragment:
-            return {"changed": False, "profile": current_profile}
+            return {"changed": False, "profile": current_profile, "reasoning": extract_reasoning}
 
         judge_state: ProfileState = {
             "messages": messages,
@@ -745,7 +751,7 @@ class ProfileAgent(BaseAgent):
                 [k for k, v in fragment.items() if v],
             )
 
-        return {"changed": changed, "profile": profile}
+        return {"changed": changed, "profile": profile, "reasoning": extract_reasoning}
 
 
 def _now_iso() -> str:

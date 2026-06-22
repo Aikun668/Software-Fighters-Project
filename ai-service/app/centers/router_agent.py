@@ -5,6 +5,7 @@ from app.centers.schemas import CenterTask, ExecutionPlan
 from app.services.intent_extractor import (
     INTENT_CENTER_MAP,
     _CENTER_EXECUTION_ORDER,
+    _MUTEX_GROUPS,
     INTENT_REGISTRY,
     IntentExtractor,
     _mock_extract_params,
@@ -96,7 +97,26 @@ class RouterAgent:
 
         scored.sort(key=lambda x: -x[0])
 
-        from app.services.intent_extractor import _MUTEX_GROUPS
+        # ── 问题检测 checkpoint：当存在非 auto 意图且输入含疑问标记时，
+        #     强制注入 tutor_question，防止"画图+出题"等强工具词吸走答疑意图。
+        #     非 auto = 映射到具体中心（visualization/resource/exercise/plan），
+        #     排除 tutor_question / solve_problem / diagnose / profile_building / unknown。
+        #     _QMARKS 与 tutor_question.keywords 语义相近但独立维护：
+        #     此处关注"是否为提问句式"，keyword 评分关注"是否匹配答疑意图"。
+        _QMARKS = ["什么", "为什么", "怎么", "如何", "是什么", "?", "？",
+                   "解释", "讲讲", "讲解", "说说", "介绍一下", "区别", "分析"]
+        _non_auto = [d for _, d in scored
+                     if INTENT_CENTER_MAP.get(d.intent, "auto") != "auto"]
+        if _non_auto and any(m in message for m in _QMARKS):
+            _has_tutor = any(
+                d.intent == "tutor_question" and s >= _CONFIDENCE_THRESHOLD
+                for s, d in scored
+            )
+            if not _has_tutor:
+                tutor_def = next((d for d in INTENT_REGISTRY
+                                  if d.intent == "tutor_question"), None)
+                if tutor_def:
+                    scored.insert(0, (0.55, tutor_def))
         filtered = list(scored)
         for group in _MUTEX_GROUPS:
             matched = [(s, d) for s, d in filtered if d.intent in group]

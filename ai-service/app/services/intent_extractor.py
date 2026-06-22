@@ -184,7 +184,7 @@ INTENT_REGISTRY: list[IntentDef] = [
                   "解释", "讲讲", "讲解", "说说", "介绍",
                   "告诉我", "说明", "分析一下", "帮我理解"],
         exclusive_keywords=[],
-        confidence=0.5,  # 低置信度：单关键词命中不参与竞争，多命中才出手
+        confidence=0.6,  # 2 命中: 0.75×0.6=0.45 > 0.4 阈值；单命中: 0.5×0.6=0.30 仍过滤
     ),
     IntentDef(
         intent="learning_path",
@@ -282,8 +282,7 @@ EXTRACTION_PROMPT = _build_extraction_prompt()
 # 意图互斥组：同组内只保留置信度最高的那个，过滤 LLM 噪声
 # 注意：不要把跨功能域的意图放在同组，否则会误杀真多意图
 _MUTEX_GROUPS: list[set[str]] = [
-    {"solve_problem", "exercise_gen"},                 # 解题 vs 出题
-    {"diagnose", "tutor_question", "solve_problem"},   # 诊断 vs 答疑 vs 解题
+    {"solve_problem", "exercise_gen"},  # 解题 vs 出题（真冲突：解现有题和出新题互斥）
 ]
 
 

@@ -17,9 +17,11 @@ class ContentState(TypedDict, total=False):
     student_profile: dict
     outline: dict
     comparison: bool
+    sub_type: str  # "overview" | "guide"
     current_section: str
     stage: str
     content_blocks: list[dict]
+    blocks: list[dict]
     response: str
 
 
@@ -73,7 +75,9 @@ class ContentAgent(BaseAgent):
         block_count = len(
             output.get("content_blocks") or output.get("blocks") or []
         )
-        intent = f"讲解{topic}的核心概念和原理，覆盖 {len(concepts)} 个知识点"
+        doc_type = state.get("sub_type", "overview")
+        doc_label = "技术速览" if doc_type == "overview" else "实战攻略"
+        intent = f"{doc_label}：{topic}，覆盖 {len(concepts)} 个关键点"
 
         return AgentTurnSummary(
             agent_name=self.__class__.__name__,
@@ -95,8 +99,21 @@ class ContentAgent(BaseAgent):
 
 
     @staticmethod
+    def _validate_sections(result: dict) -> list[str]:
+        """验证 overview sections 结构完整性"""
+        issues = []
+        sections = result.get("sections", [])
+        if not isinstance(sections, list) or len(sections) == 0:
+            issues.append("sections 必须是非空数组")
+            return issues
+        for i, sec in enumerate(sections):
+            if not isinstance(sec.get("heading"), str) or not sec["heading"]:
+                issues.append(f"sections[{i}] 缺少或 heading 为空")
+        return issues
+
+    @staticmethod
     def _validate_outline(result: dict) -> list[str]:
-        """验证 outline 结构完整性"""
+        """验证旧版 outline 结构完整性（向后兼容）"""
         issues = []
         subsections = result.get("subsections", [])
         if not isinstance(subsections, list) or len(subsections) == 0:
@@ -108,25 +125,56 @@ class ContentAgent(BaseAgent):
         return issues
 
     async def _plan_node(self, state: ContentState) -> dict:
-        """规划内容大纲"""
+        """规划内容大纲 — 按 sub_type 路由到不同 prompt"""
         topic = state.get("topic", "")
+        sub_type = state.get("sub_type", "overview")
         student_profile = state.get("student_profile", {})
 
+        # 确认 sub_type
+        if sub_type not in ("overview", "guide"):
+            sub_type = "overview"
+
+        # 路由 prompt 文件
+        if sub_type == "guide":
+            prompt_file = "guide.yaml"
+            expected_key = "steps"
+            fallback_outline = {
+                "scenario": f"实现{topic}的完整流程。",
+                "prerequisites": ["基础编程能力"],
+                "steps": [
+                    {"heading": "环境准备", "code": "", "explanation": "安装依赖"},
+                    {"heading": "核心实现", "code": "", "explanation": f"编写{topic}的核心代码"},
+                    {"heading": "验证测试", "code": "", "explanation": "运行并验证结果"},
+                ],
+                "pitfalls": ["注意输入数据格式"],
+                "key_takeaway": f"掌握{topic}的实战实现方法。",
+            }
+            validator = None
+        else:
+            prompt_file = "overview.yaml"
+            expected_key = "sections"
+            fallback_outline = {
+                "intro": f"{topic}核心技术解析。",
+                "sections": [
+                    {"heading": f"{topic}核心概念", "focus": f"理解{topic}的基本原理"},
+                    {"heading": f"{topic}关键技术点", "focus": f"掌握{topic}的关键技术"},
+                    {"heading": f"{topic}实践要点", "focus": f"{topic}的应用注意事项"},
+                ],
+                "key_takeaway": f"快速理解{topic}的核心概念和技术要点。",
+            }
+            validator = self._validate_sections
+
         outline_prompt = self._load_extra_prompt(
-            filename="outline.yaml", key="system"
+            filename=prompt_file, key="system"
         )
         user_prompt = self._load_extra_prompt(
-            filename="outline.yaml", key="user_template"
+            filename=prompt_file, key="user_template"
         )
         user_filled = interpolate_variables(
             user_prompt,
             {
                 "topic": topic,
-                "topic_summary": f"关于{topic}的知识讲解",
-                "objectives": "理解核心概念，掌握基本原理",
-                "focus_topic": topic,
                 "knowledge_context": "",
-                "student_profile": self._format_profile(student_profile),
             },
         )
 
@@ -134,99 +182,196 @@ class ContentAgent(BaseAgent):
             outline_result = await self._call_llm_json(
                 system_prompt=outline_prompt,
                 user_prompt=user_filled,
-                expected_key="subsections",
+                expected_key=expected_key,
                 fallback={},
-                validator=self._validate_outline,
+                validator=validator,
                 llm=self.plan_llm,
             )
-            subsections = outline_result.get("subsections", [])
-            if subsections:
+            items = outline_result.get(expected_key, [])
+            if items:
                 outline = outline_result
             else:
-                raise ValueError("Outline has empty subsections")
+                raise ValueError(f"Outline has empty {expected_key}")
         except ValueError as e:
-            logger.error(f"Content plan failed: {e}")
-            outline = {
-                "intro": f"本节介绍{topic}的核心概念。",
-                "subsections": [
-                    {"heading": f"{topic}基础概念", "role": "core", "focus": topic, "target_words": 300},
-                    {"heading": f"{topic}核心原理", "role": "core", "focus": f"{topic}原理", "target_words": 350},
-                    {"heading": f"{topic}实践应用", "role": "application", "focus": f"{topic}应用", "target_words": 300},
-                ],
-                "key_takeaway": f"掌握{topic}的基本原理和应用方法。",
-            }
+            logger.error(f"Content plan failed ({sub_type}): {e}")
+            outline = fallback_outline
 
-        return {"outline": outline, "stage": "planned"}
+        return {"outline": outline, "sub_type": sub_type, "stage": "planned"}
 
     async def _generate_node(self, state: ContentState) -> dict:
-        """生成内容块（按 outline.subsections 逐块调用 LLM，按 role 路由子 prompt）"""
+        """生成内容块 — 按 sub_type 走不同生成路径"""
         topic = state.get("topic", "")
         outline = state.get("outline", {})
-        subsections = outline.get("subsections", [])
-        intro = outline.get("intro", f"{topic}介绍")
+        sub_type = state.get("sub_type", "overview")
         student_profile = state.get("student_profile", {})
         comparison = state.get("comparison", False)
 
-        # 对比模式：加载对比分析专用指令
-        comparison_instructions = ""
-        if comparison:
-            try:
-                from app.utils.prompt_loader import _resolve_path
-                with open(_resolve_path("content_agent/comparison_template.md"), "r", encoding="utf-8") as f:
-                    comp_raw = f.read()
-                import re as _re
-                comparison_instructions = _re.sub(r'\{\{#if comparison\}\}|\{\{/if\}\}', '', comp_raw).strip()
-            except Exception:
-                pass
+        if sub_type == "guide":
+            blocks = self._render_guide(topic, outline)
+        elif comparison:
+            blocks = await self._generate_comparison(topic, outline, student_profile)
+        else:
+            blocks = await self._generate_overview(topic, outline)
 
-        content_blocks = []
-        content_blocks.append({"type": "section", "heading": "概述", "content": intro})
+        safe_blocks = self._apply_safety_filter(blocks)
 
-        profile_text = self._format_profile(student_profile)
+        doc_label = "实战攻略" if sub_type == "guide" else "技术速览"
+        response = f"已为您生成「{topic}」的{doc_label}，共 {len(safe_blocks)} 个内容块。"
+        return {"blocks": safe_blocks, "response": response, "stage": "generated"}
 
-        for i, sub in enumerate(subsections):
-            heading = sub.get("heading", f"第{i+1}节")
-            role = sub.get("role", "core")
-            focus = sub.get("focus", topic)
+    async def _generate_overview(self, topic: str, outline: dict) -> list[dict]:
+        """技术速览 — 按 sections 逐块展开"""
+        sections = outline.get("sections", [])
+        intro = outline.get("intro", f"{topic}技术解析")
 
-            # 按 role 路由到子 prompt
-            sys_prompt, user_tpl, expected_key, block_type, fallback = self._route_block_prompt(
-                heading, role, focus, topic
-            )
-            if comparison_instructions:
-                sys_prompt = sys_prompt + "\n\n" + comparison_instructions
+        blocks = []
+        blocks.append({"type": "section", "heading": "概述", "content": intro})
+
+        sys_prompt = self._load_extra_prompt("overview.yaml", key="system")
+        user_tpl = self._load_extra_prompt("overview.yaml", key="user_template")
+
+        for i, sec in enumerate(sections):
+            heading = sec.get("heading", f"第{i+1}节")
+            focus = sec.get("focus", topic)
 
             user_prompt = interpolate_variables(
                 user_tpl,
-                {
-                    "topic": topic,
-                    "topic_summary": focus,
-                    "objectives": f"掌握{heading}",
-                    "focus_topic": heading,
-                    "knowledge_context": "",
-                    "student_profile": profile_text,
-                },
+                {"topic": topic, "knowledge_context": focus},
             )
 
             try:
                 result = await self._call_llm_json(
                     system_prompt=sys_prompt,
                     user_prompt=user_prompt,
-                    expected_key=expected_key,
+                    expected_key="sections",
                     fallback={},
                 )
-                content = self._render_block_content(role, heading, focus, topic, result, fallback)
+                content = self._render_section_content(heading, focus, result)
             except Exception:
-                logger.exception(f"Block generation failed for '{heading}', using fallback")
-                content = fallback
-            content_blocks.append({"type": block_type, "heading": heading, "content": content})
+                logger.exception(f"Section generation failed for '{heading}'")
+                content = f"## {heading}\n\n{focus}相关技术要点。"
+            blocks.append({"type": "section", "heading": heading, "content": content})
 
-        # 关键要点
-        key_takeaway = outline.get("key_takeaway", f"掌握{topic}的核心原理。")
-        content_blocks.append({"type": "callout", "heading": "关键要点", "content": key_takeaway})
+        key_takeaway = outline.get("key_takeaway", "")
+        if key_takeaway:
+            blocks.append({"type": "callout", "heading": "核心要点", "content": key_takeaway})
+        return blocks
 
+    async def _generate_comparison(self, topic: str, outline: dict, student_profile: dict) -> list[dict]:
+        """对比分析文档 — 保留原有逻辑"""
+        subsections = outline.get("subsections", [])
+        intro = outline.get("intro", f"{topic}对比分析")
+
+        profile_text = self._format_profile(student_profile)
+        comparison_instructions = self._load_comparison_template()
+
+        blocks = []
+        blocks.append({"type": "section", "heading": "概述", "content": intro})
+
+        sys_prompt = self._load_extra_prompt("outline.yaml", key="system")
+        user_tpl = self._load_extra_prompt("outline.yaml", key="user_template")
+
+        if comparison_instructions:
+            sys_prompt = sys_prompt + "\n\n" + comparison_instructions
+
+        for i, sub in enumerate(subsections):
+            heading = sub.get("heading", f"第{i+1}节")
+            role = sub.get("role", "core")
+            focus = sub.get("focus", topic)
+
+            user_prompt = interpolate_variables(
+                user_tpl,
+                {
+                    "topic": topic, "topic_summary": focus,
+                    "objectives": f"掌握{heading}", "focus_topic": heading,
+                    "knowledge_context": "", "student_profile": profile_text,
+                },
+            )
+
+            try:
+                result = await self._call_llm_json(
+                    system_prompt=sys_prompt, user_prompt=user_prompt,
+                    expected_key="subsections", fallback={},
+                )
+                content = self._render_block_content(role, heading, focus, topic,
+                    result, f"## {heading}\n\n{focus}\n\n{topic}的核心知识点。")
+            except Exception:
+                logger.exception(f"Block generation failed for '{heading}'")
+                content = f"## {heading}\n\n{focus}\n\n{topic}的核心知识点。"
+            blocks.append({"type": "section", "heading": heading, "content": content})
+
+        key_takeaway = outline.get("key_takeaway", f"掌握{topic}的对比要点。")
+        blocks.append({"type": "callout", "heading": "对比要点", "content": key_takeaway})
+        return blocks
+
+    def _render_guide(self, topic: str, outline: dict) -> list[dict]:
+        """实战攻略 — plan 已给出完整内容，直接格式化"""
+        blocks = []
+
+        scenario = outline.get("scenario", "")
+        if scenario:
+            blocks.append({"type": "section", "heading": "场景", "content": scenario})
+
+        prerequisites = outline.get("prerequisites", [])
+        if prerequisites:
+            prereq_text = "\n".join(f"- {p}" for p in prerequisites)
+            blocks.append({"type": "callout", "heading": "前置准备", "content": prereq_text})
+
+        steps = outline.get("steps", [])
+        for s in steps:
+            heading = s.get("heading", "")
+            code = s.get("code", "")
+            explanation = s.get("explanation", "")
+            if code:
+                blocks.append({"type": "code", "heading": heading, "content": code})
+            if explanation:
+                blocks.append({"type": "section", "heading": f"说明：{heading}", "content": explanation})
+
+        pitfalls = outline.get("pitfalls", [])
+        if pitfalls:
+            pit_text = "\n".join(f"- {p}" for p in pitfalls)
+            blocks.append({"type": "callout", "heading": "常见坑点", "content": pit_text})
+
+        key_takeaway = outline.get("key_takeaway", "")
+        if key_takeaway:
+            blocks.append({"type": "callout", "heading": "核心收获", "content": key_takeaway})
+        return blocks
+
+    @staticmethod
+    def _render_section_content(heading: str, focus: str, result: dict) -> str:
+        """从 overview LLM 输出中提取内容"""
+        if not result:
+            return f"## {heading}\n\n{focus}"
+        intro_text = result.get("intro", "")
+        sections = result.get("sections", [])
+        if sections:
+            lines = []
+            if intro_text:
+                lines.append(intro_text)
+            for s in sections:
+                lines.append(f"### {s.get('heading', '')}\n{s.get('focus', '')}")
+            return "\n\n".join(lines)
+        if intro_text:
+            return f"## {heading}\n\n{intro_text}"
+        return f"## {heading}\n\n{focus}"
+
+    @staticmethod
+    def _load_comparison_template() -> str:
+        """加载对比分析模板"""
+        try:
+            from app.utils.prompt_loader import _resolve_path
+            with open(_resolve_path("content_agent/comparison_template.md"), "r", encoding="utf-8") as f:
+                comp_raw = f.read()
+            import re as _re
+            return _re.sub(r'\{\{#if comparison\}\}|\{\{/if\}\}', '', comp_raw).strip()
+        except Exception:
+            return ""
+
+    @staticmethod
+    def _apply_safety_filter(blocks: list[dict]) -> list[dict]:
+        """对内容块逐一做安全检查"""
         safe_blocks = []
-        for block in content_blocks:
+        for block in blocks:
             block_text = block.get("content", "")
             block_type = block.get("type", "")
             if block_text and block_type not in ("mindmap", "mermaid"):
@@ -243,21 +388,7 @@ class ContentAgent(BaseAgent):
                     })
                     continue
             safe_blocks.append(block)
-
-        response = f"已为您生成「{topic}」的学习内容，共 {len(safe_blocks)} 个内容块。"
-        return {"content_blocks": safe_blocks, "response": response, "stage": "generated"}
-
-    def _route_block_prompt(self, heading: str, role: str, focus: str, topic: str) -> tuple[str, str, str, str, str]:
-        """按 subsection role 路由到对应的子 prompt，返回 (sys, user_tpl, expected_key, block_type, fallback)"""
-        # 核心内容统一使用 outline.yaml 生成 section 块
-        # code/reading/mindmap 已由 CodeAgent/ReadingAgent/MindMapAgent 独立生成
-        return (
-            self._load_extra_prompt("outline.yaml", key="system"),
-            self._load_extra_prompt("outline.yaml", key="user_template"),
-            "subsections",
-            "section",
-            f"## {heading}\n\n{focus}\n\n本节详细讲解{topic}的核心知识点。",
-        )
+        return safe_blocks
 
     def _render_block_content(
         self, role: str, heading: str, focus: str, topic: str,

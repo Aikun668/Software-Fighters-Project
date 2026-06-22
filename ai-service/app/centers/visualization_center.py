@@ -1,11 +1,16 @@
+import asyncio
 import logging
 
 from app.agents.mindmap_agent import MindMapAgent
+from app.agents.tutor_agent import TutorAgent
 from app.agents.visualize.visualize_pipeline import VisualizePipeline
 from app.centers.schemas import CenterResult, CenterTask
 from app.services.graph_service import GraphService, get_graph_service
 
 logger = logging.getLogger(__name__)
+
+_VIS_HARD_TIMEOUT = 45  # 可视化硬超时（秒），不阻塞后续任务
+_TUTOR_TIMEOUT = 120     # 先导内容生成超时
 
 
 class VisualizationCenter:
@@ -14,31 +19,67 @@ class VisualizationCenter:
         visualize_pipeline: VisualizePipeline | None = None,
         mindmap_agent: MindMapAgent | None = None,
         graph_service: GraphService | None = None,
+        tutor_agent: "TutorAgent | None" = None,
     ):
         self.visualize_pipeline = visualize_pipeline
         self.mindmap_agent = mindmap_agent
         self.graph_service = graph_service
+        self._tutor_agent = tutor_agent
 
     async def execute(self, task: CenterTask) -> CenterResult:
         topic = task.params.get("topic") or task.input
         context = task.context or {}
         student_profile = context.get("student_profile", {})
+        messages = context.get("messages", [])
+        style = context.get("style", "standard")
 
         try:
             blocks = []
 
             if task.intent == "visualize":
-                pipeline = self.visualize_pipeline or VisualizePipeline()
-                viz_result = await pipeline.run(
-                    question=task.input,
-                    answer=f"关于{topic}的知识点讲解",
-                )
-                if viz_result.should_visualize:
-                    blocks.append({
-                        "type": viz_result.render_type,
-                        "title": viz_result.title,
-                        "code": viz_result.code,
-                    })
+                try:
+                    if self._tutor_agent is None:
+                        self._tutor_agent = TutorAgent()
+                    tutor = self._tutor_agent
+                    try:
+                        tutor_state = await asyncio.wait_for(
+                            tutor.run({
+                                "messages": messages,
+                                "student_profile": student_profile,
+                                "style": style,
+                            }),
+                            timeout=_TUTOR_TIMEOUT,
+                        )
+                        answer = tutor_state.get("response", "")
+                    except (asyncio.TimeoutError, Exception) as e:
+                        logger.warning("可视化前置 tutor 失败: %s，使用问题文本降级", e)
+                        answer = task.input
+
+                    async with asyncio.timeout(_VIS_HARD_TIMEOUT):
+                        pipeline = self.visualize_pipeline or VisualizePipeline()
+                        viz_result = await pipeline.run(
+                            question=task.input,
+                            answer=answer,
+                        )
+                    if viz_result.should_visualize:
+                        blocks.append({
+                            "type": viz_result.render_type,
+                            "title": viz_result.title,
+                            "code": viz_result.code,
+                        })
+                except asyncio.TimeoutError:
+                    logger.warning(
+                        "可视化超时 (%.0fs)，跳过图解: %s", _VIS_HARD_TIMEOUT, topic
+                    )
+                    return CenterResult(
+                        mode="visualization",
+                        intent=task.intent,
+                        event_type="error",
+                        error="可视化生成超时，已跳过",
+                        payload={"type": "visualization", "topic": topic, "blocks": []},
+                        agent="VisualizationCenter",
+                        sequence=task.sequence,
+                    )
 
             if task.intent == "knowledge_graph":
                 graph_service = self.graph_service or get_graph_service()
@@ -88,7 +129,8 @@ class VisualizationCenter:
                 mode="visualization",
                 intent=task.intent,
                 event_type="error",
-                error="可视化生成失败",
+                error="可视化生成失败，请稍后重试",
+                payload={"type": "visualization", "topic": topic, "blocks": []},
                 agent="VisualizationCenter",
                 sequence=task.sequence,
             )

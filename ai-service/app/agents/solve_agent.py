@@ -12,7 +12,7 @@ from app.utils.prompt_loader import interpolate_variables
 logger = logging.getLogger(__name__)
 
 MAX_QUESTION_LENGTH = 2000
-SOLVE_TIMEOUT_SECONDS = 60  # 过长题目截断，防止 prompt 膨胀和 token 浪费
+SOLVE_TIMEOUT_SECONDS = 120  # 与底层 HTTP 超时保持一致，避免复杂题被误杀
 
 
 class SolveState(TypedDict, total=False):

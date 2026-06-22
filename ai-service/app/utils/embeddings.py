@@ -21,7 +21,7 @@ class BGEZhEmbedding(EmbeddingFunction):
         from sentence_transformers import SentenceTransformer
 
         self._model = SentenceTransformer("BAAI/bge-small-zh-v1.5")
-        self._dim = self._model.get_embedding_dimension()
+        self._dim = self._model.get_sentence_embedding_dimension()
 
     def __call__(self, input: Documents) -> Embeddings:
         embeddings = self._model.encode(

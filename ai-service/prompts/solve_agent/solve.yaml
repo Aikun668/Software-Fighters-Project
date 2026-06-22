@@ -42,13 +42,18 @@ system_solve: |
   - 初学者（level < 3）：详细解释每个概念，多用类比
   - 进阶者（level >= 3）：减少冗余解释，突出关键推导
 
+  返回 JSON：
+  {
+    "solution": "完整的解题讲解（Markdown 格式，包含步骤标题、推导过程、最终答案）"
+  }
+
 user_solve: |
   学生问题：{question}
   知识库上下文：{context}
   解题步骤：{steps}
   学生画像：{profile}
 
-  请按照解题步骤逐步讲解。
+  请按照解题步骤逐步讲解，返回 JSON。
 
 system_review: |
   你是一个解题答案审核专家。审核解题过程是否正确、完整、易懂。
