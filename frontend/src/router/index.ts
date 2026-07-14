@@ -12,47 +12,59 @@ const router = createRouter({
       children: [
         {
           path: '',
-          redirect: '/dashboard'
+          redirect: '/question-nav-chat'
         },
         {
           path: 'dashboard',
           name: 'Dashboard',
-          component: () => import('../views/Dashboard.vue')
+          redirect: '/learning-analysis'
         },
         {
           path: 'profile-chat',
           name: 'ProfileChat',
-          component: () => import('../views/ProfileChat.vue')
+          redirect: '/learning-analysis'
         },
         {
           path: 'resource-center',
           name: 'ResourceCenter',
-          component: () => import('../views/ResourceCenter.vue')
+          component: () => import('../views/ModulePreview.vue'),
+          meta: { title: '资源工坊', eyebrow: '把知识整理成适合你的材料', icon: 'resource' }
         },
         {
           path: 'learning-path',
           name: 'LearningPath',
-          component: () => import('../views/LearningPath.vue')
+          component: () => import('../views/ModulePreview.vue'),
+          meta: { title: '学习计划', eyebrow: '把目标变成今天可以完成的任务', icon: 'plan' }
         },
         {
           path: 'ai-tutor',
           name: 'AITutor',
-          component: () => import('../views/AITutor.vue')
+          component: () => import('../views/ModulePreview.vue'),
+          meta: { title: '对话辅导', eyebrow: '从一个问题开始你的学习', icon: 'chat' }
         },
         {
           path: 'course-detail',
           name: 'CourseDetail',
-          component: () => import('../views/CourseDetail.vue')
+          component: () => import('../views/ModulePreview.vue'),
+          meta: { title: '课程内容', eyebrow: '把知识拆成可以理解的章节', icon: 'course' }
         },
         {
           path: 'exercise',
           name: 'ExercisePage',
-          component: () => import('../views/ExercisePage.vue')
+          component: () => import('../views/ModulePreview.vue'),
+          meta: { title: '练习中心', eyebrow: '用练习确认真正掌握的知识', icon: 'exercise' }
         },
         {
           path: 'learning-resource-network',
           name: 'LearningResourceNetwork',
-          component: () => import('../views/LearningResourceNetwork.vue')
+          component: () => import('../views/ModulePreview.vue'),
+          meta: { title: '知识图谱', eyebrow: '探索你的知识结构', icon: 'network' }
+        },
+        {
+          path: 'learning-analysis',
+          name: 'LearningAnalysis',
+          component: () => import('../views/ModulePreview.vue'),
+          meta: { title: '学情分析', eyebrow: '了解你的学习状态与下一步', icon: 'analysis' }
         },
         {
           path: 'question-nav-chat',
@@ -60,12 +72,6 @@ const router = createRouter({
           component: () => import('../views/QuestionNavChat.vue')
         }
       ]
-    },
-    {
-      path: '/loginRegister',
-      name: 'LoginRegister',
-      component: () => import('../views/LoginRegister.vue'),
-      meta: { requiresGuest: true }
     }
   ]
 })
