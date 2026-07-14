@@ -24,4 +24,10 @@ const router = createRouter({
   ],
 })
 
+router.beforeEach((to, from) => {
+  if (to.path === '/question-nav-chat' && from.path === '/resource-center' && !to.query.mode) {
+    return { path: '/question-nav-chat', query: { ...to.query, mode: 'resource' } }
+  }
+})
+
 export default router
