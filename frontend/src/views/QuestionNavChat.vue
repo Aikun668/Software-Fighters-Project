@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { ArrowUp, BookOpen, ChevronDown, Paperclip, Sparkles } from '@lucide/vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 const router = useRouter()
+const route = useRoute()
 const prompt = ref('')
 const sent = ref(false)
+const resourceMode = computed(() => route.query.mode === 'resource')
 const suggestions = [
   { label: '梳理 Transformer 学习路径', icon: Sparkles, path: '/learning-path' },
   { label: '生成一组专项练习', icon: BookOpen, path: '/exercise' },
@@ -20,8 +22,8 @@ const send = () => { if (prompt.value.trim()) sent.value = true }
       <div class="chat-heading">
         <span class="heading-mark"><BookOpen :size="26" :stroke-width="1.25" /></span>
         <div>
-          <h1>下午好——今天想研究什么？</h1>
-          <p>我是你的 AI 学习伙伴，随时为你答疑解惑、规划路径、陪伴进步。</p>
+          <h1>{{ resourceMode ? '想生成什么学习资料？' : '下午好——今天想研究什么？' }}</h1>
+          <p>{{ resourceMode ? '告诉我主题、难度和格式，我会整理成适合你的学习资源。' : '我是你的 AI 学习伙伴，随时为你答疑解惑、规划路径、陪伴进步。' }}</p>
         </div>
       </div>
 
@@ -34,9 +36,9 @@ const send = () => { if (prompt.value.trim()) sent.value = true }
       </div>
 
       <div class="composer" :class="{ sent }">
-        <textarea v-model="prompt" rows="4" placeholder="向我提问，或粘贴学习内容..." @keydown.enter.exact.prevent="send" />
+        <textarea v-model="prompt" rows="4" :placeholder="resourceMode ? '输入主题，我生成学习资料...' : '向我提问，或粘贴学习内容...'" @keydown.enter.exact.prevent="send" />
         <div class="composer-toolbar">
-          <button class="toolbar-select"><Sparkles :size="16" :stroke-width="1.45" />自动 <ChevronDown :size="14" /></button>
+          <button class="toolbar-select"><Sparkles :size="16" :stroke-width="1.45" />{{ resourceMode ? '资源生成' : '自动' }} <ChevronDown :size="14" /></button>
           <button><Paperclip :size="17" :stroke-width="1.45" />附件</button>
           <button><BookOpen :size="17" :stroke-width="1.45" />学习方式 <ChevronDown :size="14" /></button>
           <button class="send-button" aria-label="发送" @click="send"><ArrowUp :size="20" :stroke-width="1.6" /></button>
