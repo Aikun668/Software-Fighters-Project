@@ -4,7 +4,7 @@
 > **版本**：v1.0  
 > **创建日期**：2026-07-14  
 > **状态**：待用户确认  
-> **依赖**：sidebar-layout-design.md、dashboard-layout-design.md、knowledge-graph-layout-design.md、learning-plan-layout-design.md、exercise-center-layout-design.md  
+> **依赖**：sidebar-layout-design.md、knowledge-graph-layout-design.md、learning-plan-layout-design.md、exercise-center-layout-design.md  
 > **替代页面**：原「数据看板」与「我的画像」合并为本页
 
 ---
