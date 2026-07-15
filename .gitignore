@@ -23,6 +23,7 @@ Thumbs.db
 node_modules/
 dist/
 .vite/
+.worktrees/
 
 # Docs
 *.docx.bak
