@@ -1,5 +1,6 @@
   import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosResponse } from 'axios'
 import { ElMessage } from 'element-plus'
+import { useUserStore } from '@/stores/user'
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 /**
  * 创建 axios 实例

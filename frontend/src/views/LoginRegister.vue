@@ -420,15 +420,20 @@ const handleLogin = async () => {
     }
 
     const res = await login(loginData)
-    console.log(res)
-    
-    // 存储 token 到 localStorage
-    const token = typeof res === 'string' ? res : (res as any).data || res
+
+    // 后端返回 { token: "xxx", userInfo: {...} }
+    const loginRes = res as any
+    const token = loginRes?.token || (typeof res === 'string' ? res : '')
+    if (!token) {
+      loading.value = false
+      ElMessage.error('登录失败：未获取到 token')
+      return
+    }
     localStorage.setItem('token', token)
-    
+
     userStore.setProfile({
-      id: token,
-      name: loginForm.username,
+      id: loginRes?.userInfo?.id || token,
+      name: loginRes?.userInfo?.username || loginForm.username,
       avatar: '',
       email: '',
       major: '',
@@ -508,26 +513,12 @@ const handleRegister = async () => {
       username: registerForm.username
     }
 
-    const user = await register(registerData)
-    
-    // 注册成功后存储用户信息
-    const userId = typeof user === 'object' ? (user as any).id?.toString() || '1' : '1'
-    localStorage.setItem('token', userId)
-    
-    userStore.setProfile({
-      id: userId,
-      name: registerForm.username,
-      avatar: '',
-      email: registerForm.phone,
-      major: '',
-      grade: '',
-      learningGoals: [],
-      interests: []
-    })
+    await register(registerData)
 
-    ElMessage.success('注册成功！')
-
-    router.replace('/dashboard')
+    ElMessage.success('注册成功！请登录')
+    // 注册成功切换到登录页
+    isLogin.value = true
+    loginForm.username = registerForm.username
   } catch (error: any) {
     ElMessage.error(error.message || '注册失败，请重试')
   } finally {
