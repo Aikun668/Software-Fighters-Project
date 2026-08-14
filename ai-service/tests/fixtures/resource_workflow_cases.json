@@ -1,0 +1,62 @@
+[
+  {
+    "case_id": "content-transformer-basics",
+    "topic": "面向初学者解释 Transformer 自注意力机制",
+    "resource_type": "document",
+    "student_profile": {
+      "knowledge_base": 30,
+      "cognitive_style": "visual"
+    },
+    "expected_block_type": "section"
+  },
+  {
+    "case_id": "content-cnn-rnn-comparison",
+    "topic": "对比 CNN 与 RNN 的适用场景与差异",
+    "resource_type": "document",
+    "student_profile": {
+      "knowledge_base": 50,
+      "cognitive_style": "visual"
+    },
+    "expected_block_type": "section"
+  },
+  {
+    "case_id": "content-backprop-intro",
+    "topic": "反向传播入门学习资料",
+    "resource_type": "document",
+    "student_profile": {
+      "knowledge_base": 20,
+      "cognitive_style": "visual"
+    },
+    "expected_block_type": "section"
+  },
+  {
+    "case_id": "diagram-cnn-architecture",
+    "topic": "CNN 架构",
+    "resource_type": "interactive_diagram",
+    "student_profile": {
+      "knowledge_base": 40,
+      "cognitive_style": "visual"
+    },
+    "expected_block_type": "interactive_diagram"
+  },
+  {
+    "case_id": "diagram-backprop-flow",
+    "topic": "反向传播流程",
+    "resource_type": "interactive_diagram",
+    "student_profile": {
+      "knowledge_base": 30,
+      "cognitive_style": "visual"
+    },
+    "expected_block_type": "interactive_diagram"
+  },
+  {
+    "case_id": "diagram-attention-flow",
+    "topic": "注意力机制数据流",
+    "resource_type": "interactive_diagram",
+    "student_profile": {
+      "knowledge_base": 30,
+      "cognitive_style": "visual"
+    },
+    "expected_block_type": "interactive_diagram"
+  }
+]
