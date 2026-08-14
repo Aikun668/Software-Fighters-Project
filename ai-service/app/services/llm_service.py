@@ -145,105 +145,101 @@ class AgentModelProfile:
 
 # ── 开箱即用的预设 Profiles ──────────────────────────────────
 
-# ── 环境变量速记 ─────────────────────────────────────────────
-_DK_PRO = os.getenv("DEEPSEEK_API_KEY", "")
-_DK_FLASH = os.getenv("DEEPSEEK_API_KEY_FLASH", "")
-_DK_BASE = os.getenv("DEEPSEEK_BASE_URL", "")
-_DS_PLUS = os.getenv("DASHSCOPE_API_KEY_PLUS", "")
-_DS_MAX = os.getenv("DASHSCOPE_API_KEY_MAX", "")
-_DS_FLASH = os.getenv("DASHSCOPE_API_KEY_FLASH", "")
-_DS_BASE = os.getenv("DASHSCOPE_BASE_URL", "")
+# ── 环境变量速记（统一 DeepSeek 直连）─────────────────────────
+_DK_KEY = os.getenv("DEEPSEEK_API_KEY", "")
+_DK_BASE = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
+# 模型名集中管理：不在代码里散落供应商与模型名
+_MODEL_CHAT = os.getenv("DEEPSEEK_MODEL_CHAT", "deepseek-chat")
+_MODEL_REASONER = os.getenv("DEEPSEEK_MODEL_REASONER", "") or _MODEL_CHAT
 
-# ── 通道分配 ─────────────────────────────────────────────────
-# pro   (deepseek-v4-pro)         : 重推理 + 代码
-# plus  (qwen3.7-plus)            : 中等推理
-# flash (deepseek-v4-flash)       : 初筛 / 判断
-# max   (qwen3.7-max-2026-05-17)  : 练习 / 审查 / 备胎
+# ── 通道分配（两档）──────────────────────────────────────────
+# chat     (DEEPSEEK_MODEL_CHAT)     : 路由 / 初筛 / 判断 / 画像 / 轻量生成
+# reasoner (DEEPSEEK_MODEL_REASONER) : 重推理 + 代码 + 图解 + 项目 + 诊断
 
 PROFILE_DIRECTOR = AgentModelProfile(
     default=ModelConfig(
-        model="deepseek-v4-flash", temperature=0.0, max_tokens=256,
-        api_key=_DK_FLASH, base_url=_DK_BASE,
+        model=_MODEL_CHAT, temperature=0.0, max_tokens=256,
+        api_key=_DK_KEY, base_url=_DK_BASE,
     ),
 )
 
 PROFILE_CONTENT = AgentModelProfile(
     default=ModelConfig(
-        model="qwen3.7-max-2026-05-17", temperature=0.7, max_tokens=8192,
-        api_key=_DS_MAX, base_url=_DS_BASE,
+        model=_MODEL_REASONER, temperature=0.7, max_tokens=8192,
+        api_key=_DK_KEY, base_url=_DK_BASE,
     ),
     plan=ModelConfig(
-        model="qwen3.7-max-2026-05-17", temperature=0.3, max_tokens=4096,
-        api_key=_DS_MAX, base_url=_DS_BASE,
+        model=_MODEL_REASONER, temperature=0.3, max_tokens=4096,
+        api_key=_DK_KEY, base_url=_DK_BASE,
     ),
 )
 
 PROFILE_EXERCISE = AgentModelProfile(
     default=ModelConfig(
-        model="qwen3.7-max-2026-05-17", temperature=0.7, max_tokens=4096,
-        api_key=_DS_MAX, base_url=_DS_BASE,
+        model=_MODEL_REASONER, temperature=0.7, max_tokens=4096,
+        api_key=_DK_KEY, base_url=_DK_BASE,
     ),
     plan=ModelConfig(
-        model="qwen3.7-max-2026-05-17", temperature=0.3, max_tokens=2048,
-        api_key=_DS_MAX, base_url=_DS_BASE,
+        model=_MODEL_REASONER, temperature=0.3, max_tokens=2048,
+        api_key=_DK_KEY, base_url=_DK_BASE,
     ),
 )
 
 PROFILE_CODE = AgentModelProfile(
     default=ModelConfig(
-        model="qwen3.7-max-2026-05-17", temperature=0.5, max_tokens=8192,
-        api_key=_DS_MAX, base_url=_DS_BASE,
+        model=_MODEL_REASONER, temperature=0.5, max_tokens=8192,
+        api_key=_DK_KEY, base_url=_DK_BASE,
     ),
 )
 
 PROFILE_MINDMAP = AgentModelProfile(
     default=ModelConfig(
-        model="qwen3.7-max-2026-05-17", temperature=0.6, max_tokens=4096,
-        api_key=_DS_MAX, base_url=_DS_BASE,
+        model=_MODEL_CHAT, temperature=0.6, max_tokens=4096,
+        api_key=_DK_KEY, base_url=_DK_BASE,
     ),
 )
 
 PROFILE_READING = AgentModelProfile(
     default=ModelConfig(
-        model="deepseek-v4-pro", temperature=0.7, max_tokens=4096,
-        api_key=_DK_PRO, base_url=_DK_BASE,
+        model=_MODEL_CHAT, temperature=0.7, max_tokens=4096,
+        api_key=_DK_KEY, base_url=_DK_BASE,
     ),
 )
 
 PROFILE_FLASHCARD = AgentModelProfile(
     default=ModelConfig(
-        model="qwen3.7-plus", temperature=0.6, max_tokens=4096,
-        api_key=_DS_PLUS, base_url=_DS_BASE,
+        model=_MODEL_CHAT, temperature=0.6, max_tokens=4096,
+        api_key=_DK_KEY, base_url=_DK_BASE,
     ),
 )
 
 PROFILE_INTERACTIVE_DIAGRAM = AgentModelProfile(
     default=ModelConfig(
-        model="deepseek-v4-pro", temperature=0.5, max_tokens=8192,
-        api_key=_DK_PRO, base_url=_DK_BASE,
+        model=_MODEL_REASONER, temperature=0.5, max_tokens=8192,
+        api_key=_DK_KEY, base_url=_DK_BASE,
     ),
 )
 
 PROFILE_PROJECT = AgentModelProfile(
     default=ModelConfig(
-        model="deepseek-v4-pro", temperature=0.7, max_tokens=8192,
-        api_key=_DK_PRO, base_url=_DK_BASE,
+        model=_MODEL_REASONER, temperature=0.7, max_tokens=8192,
+        api_key=_DK_KEY, base_url=_DK_BASE,
     ),
 )
 
-# ── Diagnose / Profile（plus 通道）─────────────────────────────
+# ── Diagnose / Profile ────────────────────────────────────────
 
 PROFILE_DIAGNOSE = AgentModelProfile(
     default=ModelConfig(
-        model="qwen3.7-plus", temperature=0.3, max_tokens=4096,
-        api_key=_DS_PLUS, base_url=_DS_BASE,
+        model=_MODEL_REASONER, temperature=0.3, max_tokens=4096,
+        api_key=_DK_KEY, base_url=_DK_BASE,
     ),
 )
 
 PROFILE_STUDENT = AgentModelProfile(
     default=ModelConfig(
-        model="qwen3.7-plus", temperature=0.3, max_tokens=2048,
-        api_key=_DS_PLUS, base_url=_DS_BASE,
+        model=_MODEL_CHAT, temperature=0.3, max_tokens=2048,
+        api_key=_DK_KEY, base_url=_DK_BASE,
     ),
 )
 
@@ -251,15 +247,15 @@ PROFILE_STUDENT = AgentModelProfile(
 
 PROFILE_ANALYSIS = AgentModelProfile(
     default=ModelConfig(
-        model="deepseek-v4-flash", temperature=0.0, max_tokens=512,
-        api_key=_DK_FLASH, base_url=_DK_BASE,
+        model=_MODEL_CHAT, temperature=0.0, max_tokens=512,
+        api_key=_DK_KEY, base_url=_DK_BASE,
     ),
 )
 
 PROFILE_REVIEW = AgentModelProfile(
     default=ModelConfig(
-        model="qwen3.7-max-2026-05-17", temperature=0.0, max_tokens=1024,
-        api_key=_DS_MAX, base_url=_DS_BASE,
+        model=_MODEL_CHAT, temperature=0.0, max_tokens=1024,
+        api_key=_DK_KEY, base_url=_DK_BASE,
     ),
 )
 
@@ -305,7 +301,7 @@ def create_llm(
         api_key: 非空时优先于 OPENAI_API_KEY 环境变量。
         base_url: 非空时优先于 OPENAI_BASE_URL 环境变量。
     """
-    provider = os.getenv("LLM_PROVIDER", "spark").lower()
+    provider = os.getenv("LLM_PROVIDER", "openai").lower()
     if provider == "openai":
         return OpenAILLM(
             temperature=temperature,
@@ -565,18 +561,18 @@ class OpenAILLM:
         api_key: str = "",
         base_url: str = "",
     ):
-        self.base_url = (base_url or os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")).rstrip("/")
-        raw_key = api_key or os.getenv("OPENAI_API_KEY", "")
+        self.base_url = (base_url or os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")).rstrip("/")
+        raw_key = api_key or os.getenv("DEEPSEEK_API_KEY", "")
         self._all_keys = [k.strip() for k in raw_key.split(",") if k.strip()]
         self.api_key = _pick_key(raw_key)
-        self.model = model or os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
+        self.model = model or os.getenv("DEEPSEEK_MODEL_CHAT", "deepseek-chat")
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.use_mock = use_mock
 
         if not use_mock and not self.api_key:
             raise ValueError(
-                "OPENAI_API_KEY must be set in .env when use_mock=False"
+                "DEEPSEEK_API_KEY must be set in .env when use_mock=False"
             )
 
     async def chat(

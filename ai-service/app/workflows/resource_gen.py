@@ -103,7 +103,7 @@ class ResourceGenWorkflow(BaseWorkflow):
         use_mock: bool = False,
         validator=None,
         reviewer=None,
-        quality_mode: str = "active",
+        quality_mode: str = "shadow",
     ):
         super().__init__(use_mock=use_mock)
         self.content_agent = ContentAgent(
