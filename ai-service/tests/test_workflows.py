@@ -98,7 +98,8 @@ class TestResourceGenWorkflowInit:
         from app.workflows.resource_gen import ResourceGenWorkflow
         wf = ResourceGenWorkflow()
         assert wf.content_agent is not None
-        assert wf.exercise_agent is not None
+        assert wf.code_agent is not None
+        assert wf.interactive_diagram_agent is not None
         assert wf.use_mock is False
 
     def test_graph_builds(self):

@@ -30,6 +30,7 @@ class InteractiveDiagramState(TypedDict, total=False):
     topic: str
     diagram_type: str
     student_profile: dict
+    blocks: list[dict]
     html_content: str
     description: str
     response: str

@@ -282,8 +282,8 @@ class TestL3_AgentDispatch:
         result = await agent.run(state)
         assert isinstance(result, dict)
         blocks = result.get("blocks", [])
-        if blocks:
-            assert blocks[0]["type"] == "interactive_diagram"
+        assert blocks, "InteractiveDiagramAgent 应产出 blocks"
+        assert blocks[0]["type"] == "interactive_diagram"
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -561,7 +561,7 @@ class TestL6_EdgeCases:
 
     def test_workflow_direct_router_correctness_all_patterns(self):
         """验证所有路由表 pattern 至少能匹配一个示例输入（无死规则）"""
-        from app.orchestration.director import Director, TOPIC_TO_SINGLE_AGENT
+        from app.orchestration.director import Director
 
         director = Director(use_mock=True)
 

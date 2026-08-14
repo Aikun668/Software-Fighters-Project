@@ -166,15 +166,17 @@ class Director:
     # ── 规则路由（优先级分层 + 词根匹配）──
 
     def _rule_route(self, topic: str) -> RouteDecision | None:
-        """优先级分层匹配：具体资源 → 代码意图 → 项目 → 课程文档。
+        """优先级分层匹配：具体资源 → 报错诊断 → 代码意图 → 课程文档兜底。
 
         顺序即优先级。命中即返回，不继续检查。
         词根用 substring 匹配，覆盖 "写一个/编写/手写" 等全部变体。
+        content 作为最泛化兜底单独处理，避免其「怎么/如何」等泛化词
+        抢在报错诊断（code diagnosis）之前命中。
         """
         msg = topic.lower()
 
-        # ── Tier 1: 具体资源类型（最高优先级，先匹配）──
-        for agent, keywords in ROUTING_TIERS:
+        # ── Tier 1: 具体资源类型（最高优先级，先匹配；content 兜底单独处理）──
+        for agent, keywords in ROUTING_TIERS[:-1]:
             for kw in keywords:
                 if kw in msg:
                     sub = self._detect_sub_type(topic, agent)
@@ -184,7 +186,15 @@ class Director:
                         strategy="rule",
                     )
 
-        # ── Tier 2: 代码意图检测（词根匹配，排在 project 前 content 后）──
+        # ── Tier 2: 报错诊断（code diagnosis）──
+        if any(root in msg for root in DIAG_ROOTS):
+            return RouteDecision(
+                agent_name="code", sub_type="diagnosis",
+                rationale="报错诊断词根命中 → code",
+                strategy="rule",
+            )
+
+        # ── Tier 3: 代码意图检测（词根匹配）──
         if any(root in msg for root in CODE_ROOTS):
             sub = self._detect_sub_type(topic, "code")
             return RouteDecision(
@@ -192,6 +202,16 @@ class Director:
                 rationale=f"代码词根命中 → code",
                 strategy="rule",
             )
+
+        # ── Tier 4: 技术文档兜底 ──
+        for kw in ROUTING_TIERS[-1][1]:
+            if kw in msg:
+                sub = self._detect_sub_type(topic, "content")
+                return RouteDecision(
+                    agent_name="content", sub_type=sub,
+                    rationale=f"具体资源关键词 '{kw}' → content",
+                    strategy="rule",
+                )
 
         return None
 
