@@ -14,7 +14,12 @@ import sys
 import time
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+# 必须先加载 .env，再导入 app（llm_service 在 import 时读取环境变量）
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 from app.workflows.resource_gen import ResourceGenWorkflow
 
