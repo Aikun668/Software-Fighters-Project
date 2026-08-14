@@ -1,26 +1,22 @@
-"""ResourceGenWorkflow — 模块化单 Agent 资源生成工作流
+"""ResourceGenWorkflow — 资源生成工作流（带质量门控）
 
 设计原则：
   - Director 意图分类 → 路由到**单个** Agent 生成
   - 用户说「生成 CNN 代码」→ 只出代码，不出全家桶
   - 显式要求「完整学习资料包」时才走多 Agent（未来扩展）
 
-3 阶段流水线:
-  Stage 1: plan（可选，仅 content/mindmap 需要大纲）
-  Stage 2: generate → 单 Agent 执行
-  Stage 3: finalize → 聚合结果
-
-裁掉的 Agent:
-  - ReadingAgent: 虚假引用，不产出实质性内容
-  - ExerciseAgent: 练习中心已有完整闭环
-
-接入的 Agent:
-  - InteractiveDiagramAgent: 交互式可视化（新建）
-  - ProjectAgent: 微型项目实战（已有，接入路由）
+有界质量门控（首版仅 content / interactive_diagram）：
+  plan → generate → validate → review → repair(最多一次) → finalize
+  quality_mode:
+    - off    : 跳过质量门控，行为等价基线
+    - shadow : 记录 Validator/Judge 结论，但不触发修复或降级
+    - active : 允许一次 Repair，结构失败走内容降级
 """
 
 import asyncio
 import logging
+import time
+import uuid
 from typing import Any, TypedDict
 
 from langgraph.graph import StateGraph, END
@@ -41,6 +37,10 @@ from app.services.llm_service import (
     PROFILE_INTERACTIVE_DIAGRAM,
     PROFILE_PROJECT,
 )
+from app.services.resource_quality_gate import (
+    ResourceValidator,
+    ResourceReviewService,
+)
 from app.events.types import (
     StreamEvent, stage_start, stage_end, error_event, done_event,
 )
@@ -51,6 +51,9 @@ logger = logging.getLogger(__name__)
 # 需要大纲规划的 Agent
 PLAN_REQUIRED_AGENTS = frozenset({"content", "mindmap"})
 
+# 首版启用质量门控（Validator + Judge）的 Agent
+QUALITY_GATED_AGENTS = frozenset({"content", "interactive_diagram"})
+
 AGENT_LABELS: dict[str, str] = {
     "content": "技术文档",
     "interactive_diagram": "交互式可视化",
@@ -59,6 +62,8 @@ AGENT_LABELS: dict[str, str] = {
     "mindmap": "思维导图",
     "flashcard": "记忆闪卡",
 }
+
+QUALITY_MODES = frozenset({"off", "shadow", "active"})
 
 
 class ResourceGenState(TypedDict, total=False):
@@ -75,12 +80,31 @@ class ResourceGenState(TypedDict, total=False):
     event_queue: Any  # asyncio.Queue[StreamEvent]
     # 内部路由信息
     agent_name: str
+    route_strategy: str
+    run_id: str
+    # 质量门控
+    draft_blocks: list[dict]
+    validation_result: dict
+    review_status: str
+    review_reason: str
+    repair_instructions: list[str]
+    repair_attempted: bool
+    fallback_used: bool
+    final_status: str
+    error_type: str
+    stage_timings: dict[str, float]
 
 
 class ResourceGenWorkflow(BaseWorkflow):
-    """资源生成工作流 — 单 Agent 模块化调度"""
+    """资源生成工作流 — 单 Agent 模块化调度 + 有界质量门控"""
 
-    def __init__(self, use_mock: bool = False):
+    def __init__(
+        self,
+        use_mock: bool = False,
+        validator=None,
+        reviewer=None,
+        quality_mode: str = "active",
+    ):
         super().__init__(use_mock=use_mock)
         self.content_agent = ContentAgent(
             use_mock_llm=use_mock, model_profile=PROFILE_CONTENT
@@ -111,6 +135,16 @@ class ResourceGenWorkflow(BaseWorkflow):
             "flashcard": self.flashcard_agent,
         }
 
+        if quality_mode not in QUALITY_MODES:
+            raise ValueError(
+                f"quality_mode must be one of {sorted(QUALITY_MODES)}, got {quality_mode!r}"
+            )
+        self.quality_mode = quality_mode
+        self.validator = validator if validator is not None else ResourceValidator()
+        self.reviewer = (
+            reviewer if reviewer is not None else ResourceReviewService(use_mock=use_mock)
+        )
+
     @staticmethod
     def _emit(state: dict, event: StreamEvent) -> None:
         q = state.get("event_queue")
@@ -120,16 +154,37 @@ class ResourceGenWorkflow(BaseWorkflow):
             except asyncio.QueueFull:
                 pass
 
+    def _with_stage_timing(self, state: dict, stage: str, started_at: float, update: dict) -> dict:
+        timings = dict(state.get("stage_timings", {}))
+        timings[stage] = round((time.perf_counter() - started_at) * 1000, 2)
+        return {**update, "stage_timings": timings}
+
     def _build_graph(self):
         graph = StateGraph(ResourceGenState)
 
         graph.add_node("plan", self._plan_node)
         graph.add_node("generate", self._generate_node)
+        graph.add_node("validate", self._validate_node)
+        graph.add_node("review", self._review_node)
+        graph.add_node("repair", self._repair_node)
+        graph.add_node("fallback", self._fallback_node)
         graph.add_node("finalize", self._finalize_node)
 
         graph.set_entry_point("plan")
         graph.add_edge("plan", "generate")
-        graph.add_edge("generate", "finalize")
+        graph.add_edge("generate", "validate")
+        graph.add_conditional_edges("validate", self._after_validate, {
+            "review": "review",
+            "repair": "repair",
+            "fallback": "fallback",
+            "finalize": "finalize",
+        })
+        graph.add_conditional_edges("review", self._after_review, {
+            "repair": "repair",
+            "finalize": "finalize",
+        })
+        graph.add_edge("repair", "validate")
+        graph.add_edge("fallback", "finalize")
         graph.add_edge("finalize", END)
 
         return graph.compile()
@@ -139,11 +194,11 @@ class ResourceGenWorkflow(BaseWorkflow):
     # ═══════════════════════════════════════════════════════════════
 
     async def _plan_node(self, state: ResourceGenState) -> dict:
+        started = time.perf_counter()
         topic = state.get("topic", "")
         resource_type = state.get("resource_type", "")
         student_profile = state.get("student_profile", {})
 
-        # ── Director 路由 ──
         decision = await self.director.route(
             topic,
             resource_type=resource_type or None,
@@ -161,7 +216,6 @@ class ResourceGenWorkflow(BaseWorkflow):
             f" (strategy={decision.strategy}, sub_type={sub_type})"
         )
 
-        # ── 需要大纲的 Agent：运行 ContentAgent._plan_node ──
         outline: dict = {}
         if agent_name in PLAN_REQUIRED_AGENTS:
             self._emit(state, stage_start("outline",
@@ -181,68 +235,265 @@ class ResourceGenWorkflow(BaseWorkflow):
         self._emit(state, stage_end("plan",
             f"已选定 {label} 生成器，准备开始..."))
 
-        return {
+        run_id = state.get("run_id") or uuid.uuid4().hex[:12]
+        return self._with_stage_timing(state, "plan", started, {
             "agent_name": agent_name,
             "sub_type": sub_type,
             "outline": outline,
             "resource_type": resource_type,
-        }
+            "route_strategy": decision.strategy,
+            "run_id": run_id,
+            "repair_attempted": False,
+            "fallback_used": False,
+        })
 
     # ═══════════════════════════════════════════════════════════════
-    # Stage 2: 单 Agent 生成
+    # Stage 2: 单 Agent 生成（草稿写入 draft_blocks）
     # ═══════════════════════════════════════════════════════════════
 
-    async def _generate_node(self, state: ResourceGenState) -> dict:
+    async def _run_specialist(
+        self, state: ResourceGenState, agent_name: str,
+        repair_instructions: list[str] | None = None,
+    ) -> dict:
+        """构建 Agent state，必要时附加修复说明，并标准化 blocks/response。"""
         topic = state.get("topic", "")
         student_profile = state.get("student_profile", {})
         outline = state.get("outline", {})
-        agent_name = state.get("agent_name", "content")
         sub_type = state.get("sub_type")
 
-        label = AGENT_LABELS.get(agent_name, agent_name)
         agent = self._agent_map.get(agent_name)
         if agent is None:
             logger.error(f"Unknown agent: {agent_name}, falling back to content")
             agent = self.content_agent
             agent_name = "content"
 
+        agent_state = self._build_agent_state(
+            agent_name, topic, student_profile, outline, sub_type,
+        )
+        if repair_instructions:
+            agent_state["repair_instructions"] = repair_instructions
+
+        result = await agent.run(agent_state)
+        blocks = (result.get("blocks") or result.get("content_blocks") or []) if isinstance(result, dict) else []
+        response = result.get("response", "") if isinstance(result, dict) else str(result)
+        questions = result.get("questions", []) if isinstance(result, dict) else []
+
+        return {
+            "blocks": blocks,
+            "response": response,
+            "questions": questions,
+            "agent_name": agent_name,
+        }
+
+    async def _generate_node(self, state: ResourceGenState) -> dict:
+        started = time.perf_counter()
+        topic = state.get("topic", "")
+        agent_name = state.get("agent_name", "content")
+
+        label = AGENT_LABELS.get(agent_name, agent_name)
         self._emit(state, stage_start("generate", f"正在生成{label}，请稍后..."))
 
         try:
-            agent_state = self._build_agent_state(
-                agent_name, topic, student_profile, outline, sub_type,
-            )
-            result = await agent.run(agent_state)
+            result = await self._run_specialist(state, agent_name)
         except Exception as e:
             logger.exception(f"Agent '{agent_name}' generation failed, falling back to ContentAgent")
             self._emit(state, error_event("generate", f"{label}生成失败，尝试回退到课程文档"))
             try:
-                fallback_state = self._build_agent_state(
-                    "content", topic, student_profile, outline, None,
-                )
-                result = await self.content_agent.run(fallback_state)
+                result = await self._run_specialist(state, "content", None)
                 result["response"] = f"{label}暂时不可用，已为您生成课程文档: " + result.get("response", "")
+                agent_name = "content"
             except Exception as fb_e:
                 logger.exception(f"ContentAgent fallback also failed: {fb_e}")
-                result = {"blocks": [], "response": f"{label}生成失败，请稍后重试"}
+                result = {"blocks": [], "response": f"{label}生成失败，请稍后重试", "questions": []}
 
-        blocks = (result.get("blocks") or result.get("content_blocks") or []) if isinstance(result, dict) else []
-        response = result.get("response", "") if isinstance(result, dict) else str(result)
+        blocks = result.get("blocks", [])
+        response = result.get("response", "")
+        questions = result.get("questions", [])
 
         self._emit(state, stage_end("generate",
             f"{label}完成" + (f"，共 {len(blocks)} 个内容块" if blocks else "")))
 
         logger.info(
-            f"Agent '{agent_name}' generated {len(blocks)} blocks"
-            + (f" (sub_type={sub_type})" if sub_type else "")
-            + f" for topic '{topic}'"
+            f"Agent '{agent_name}' generated {len(blocks)} blocks for topic '{topic}'"
         )
 
-        return {
-            "content_blocks": blocks,
+        return self._with_stage_timing(state, "generate", started, {
+            "draft_blocks": blocks,
             "response": response,
-            "questions": result.get("questions", []) if isinstance(result, dict) else [],
+            "questions": questions,
+            "agent_name": agent_name,
+        })
+
+    # ═══════════════════════════════════════════════════════════════
+    # Stage 3: 质量门控（validate → review → repair/fallback）
+    # ═══════════════════════════════════════════════════════════════
+
+    async def _validate_node(self, state: ResourceGenState) -> dict:
+        started = time.perf_counter()
+        if self.quality_mode == "off":
+            return {}
+        draft_blocks = state.get("draft_blocks", [])
+        agent_name = state.get("agent_name", "content")
+        self._emit(state, stage_start("validate", "正在校验生成结果结构..."))
+        result = self.validator.validate(agent_name, draft_blocks)
+        validation_result = {
+            "passed": result.passed,
+            "reason": result.reason,
+            "issues": result.issues,
         }
+        self._emit(state, stage_end("validate",
+            "结构校验通过" if result.passed else "结构校验未通过"))
+        return self._with_stage_timing(state, "validate", started, {
+            "validation_result": validation_result,
+        })
+
+    def _after_validate(self, state: ResourceGenState) -> str:
+        if self.quality_mode == "off":
+            return "finalize"
+        validation_result = state.get("validation_result") or {}
+        if validation_result.get("passed", True):
+            return "review"
+        if self.quality_mode == "active":
+            return "fallback" if state.get("repair_attempted") else "repair"
+        # shadow：只记录，不干预
+        return "review"
+
+    async def _review_node(self, state: ResourceGenState) -> dict:
+        started = time.perf_counter()
+        agent_name = state.get("agent_name", "content")
+        if agent_name not in QUALITY_GATED_AGENTS:
+            return self._with_stage_timing(state, "review", started, {
+                "review_status": "not_applicable",
+                "review_reason": "该资源类型未启用 Judge",
+            })
+
+        topic = state.get("topic", "")
+        draft_blocks = state.get("draft_blocks", [])
+        student_profile = state.get("student_profile", {})
+        self._emit(state, stage_start("review", "正在进行质量评审..."))
+        try:
+            decision = await self.reviewer.review(
+                topic, agent_name, draft_blocks, student_profile,
+            )
+            update = {
+                "review_status": decision.status,
+                "review_reason": decision.reason,
+                "repair_instructions": decision.fixes,
+            }
+        except Exception as e:
+            logger.exception(f"Reviewer failed for agent '{agent_name}'")
+            update = {
+                "review_status": "skipped",
+                "review_reason": "Judge 不可用",
+                "repair_instructions": [],
+            }
+        self._emit(state, stage_end("review", f"评审完成：{update['review_status']}"))
+        return self._with_stage_timing(state, "review", started, update)
+
+    def _after_review(self, state: ResourceGenState) -> str:
+        if (
+            self.quality_mode == "active"
+            and state.get("review_status") == "repair"
+            and not state.get("repair_attempted")
+        ):
+            return "repair"
+        return "finalize"
+
+    async def _repair_node(self, state: ResourceGenState) -> dict:
+        started = time.perf_counter()
+        agent_name = state.get("agent_name", "content")
+        label = AGENT_LABELS.get(agent_name, agent_name)
+        instructions = state.get("repair_instructions", [])
+        self._emit(state, stage_start("repair", f"根据评审建议修复{label}..."))
+        try:
+            result = await self._run_specialist(state, agent_name, instructions)
+            update = {
+                "draft_blocks": result["blocks"],
+                "response": result["response"],
+                "questions": result.get("questions", []),
+                "repair_attempted": True,
+            }
+        except Exception as e:
+            logger.exception(f"Repair failed for agent '{agent_name}'")
+            self._emit(state, error_event("repair", "修复失败，保留原草稿"))
+            update = {"repair_attempted": True}
+        self._emit(state, stage_end("repair", "修复完成"))
+        return self._with_stage_timing(state, "repair", started, update)
+
+    async def _fallback_node(self, state: ResourceGenState) -> dict:
+        started = time.perf_counter()
+        topic = state.get("topic", "")
+        self._emit(state, stage_start("fallback", "生成受限，切换到课程文档降级..."))
+        try:
+            result = await self._run_specialist(state, "content", None)
+            blocks = result["blocks"]
+            vr = self.validator.validate("content", blocks)
+            if vr.passed:
+                update = {
+                    "draft_blocks": blocks,
+                    "response": result["response"],
+                    "questions": result.get("questions", []),
+                    "fallback_used": True,
+                }
+            else:
+                update = {
+                    "draft_blocks": blocks,
+                    "response": result["response"],
+                    "questions": result.get("questions", []),
+                    "fallback_used": True,
+                    "final_status": "error",
+                    "error": f"「{topic}」的资源生成失败，请稍后重试",
+                    "error_type": "fallback_invalid",
+                }
+        except Exception as e:
+            logger.exception(f"Fallback content generation failed: {e}")
+            self._emit(state, error_event("fallback", "降级生成失败"))
+            update = {
+                "draft_blocks": [],
+                "response": f"「{topic}」的资源生成失败，请稍后重试",
+                "fallback_used": True,
+                "final_status": "error",
+                "error": f"「{topic}」的资源生成失败，请稍后重试",
+                "error_type": "generation_failed",
+            }
+        self._emit(state, stage_end("fallback", "降级完成"))
+        return self._with_stage_timing(state, "fallback", started, update)
+
+    # ═══════════════════════════════════════════════════════════════
+    # Stage 4: Finalize
+    # ═══════════════════════════════════════════════════════════════
+
+    async def _finalize_node(self, state: ResourceGenState) -> dict:
+        started = time.perf_counter()
+        draft_blocks = state.get("draft_blocks", [])
+        questions = state.get("questions", [])
+        response = state.get("response", "")
+        topic = state.get("topic", "")
+        agent_name = state.get("agent_name", "content")
+        label = AGENT_LABELS.get(agent_name, agent_name)
+
+        self._emit(state, stage_start("finalize", "正在汇总生成结果..."))
+
+        if not response and draft_blocks:
+            response = f"已为您生成「{topic}」的{label}，共 {len(draft_blocks)} 个内容块。"
+        elif not response:
+            response = f"「{topic}」的{label}已生成完成。"
+
+        final_status = state.get("final_status") or "success"
+
+        self._emit(state, stage_end("finalize",
+            f"{label}已就绪" + (f"，共 {len(draft_blocks)} 个内容块" if draft_blocks else "")))
+
+        return self._with_stage_timing(state, "finalize", started, {
+            "content_blocks": draft_blocks,
+            "response": response,
+            "questions": questions,
+            "final_status": final_status,
+        })
+
+    # ═══════════════════════════════════════════════════════════════
+    # Agent state 构建工具
+    # ═══════════════════════════════════════════════════════════════
 
     def _build_agent_state(
         self, agent_name: str, topic: str,
@@ -343,31 +594,3 @@ class ResourceGenWorkflow(BaseWorkflow):
         # 取最高分，同分时 architecture 优先（最常见场景）
         best = max(scores, key=lambda k: (scores[k], k == "architecture"))
         return best
-
-    # ═══════════════════════════════════════════════════════════════
-    # Stage 3: Finalize
-    # ═══════════════════════════════════════════════════════════════
-
-    async def _finalize_node(self, state: ResourceGenState) -> dict:
-        content_blocks = state.get("content_blocks", [])
-        questions = state.get("questions", [])
-        response = state.get("response", "")
-        topic = state.get("topic", "")
-        agent_name = state.get("agent_name", "content")
-        label = AGENT_LABELS.get(agent_name, agent_name)
-
-        self._emit(state, stage_start("finalize", "正在汇总生成结果..."))
-
-        if not response and content_blocks:
-            response = f"已为您生成「{topic}」的{label}，共 {len(content_blocks)} 个内容块。"
-        elif not response:
-            response = f"「{topic}」的{label}已生成完成。"
-
-        self._emit(state, stage_end("finalize",
-            f"{label}已就绪" + (f"，共 {len(content_blocks)} 个内容块" if content_blocks else "")))
-
-        return {
-            "response": response,
-            "content_blocks": content_blocks,
-            "questions": questions,
-        }
