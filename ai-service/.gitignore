@@ -4,6 +4,7 @@ __pycache__/
 .pytest_cache/
 *.pyc
 *.pyo
+.env
 chroma_data/
 chroma_data_test/
 chroma_data_test2/
