@@ -213,7 +213,8 @@ INTENT_REGISTRY: list[IntentDef] = [
         params_model=VisualizeParams,
         prompt="用户希望生成图表、流程图或可视化内容。从消息中提取：topic(主题)",
         keywords=["画图", "图表", "流程图", "可视化", "画一下", "画一张",
-                  "结构图", "曲线图", "示意图"],
+                  "画出", "画个图", "绘制", "结构图", "架构图", "对比图",
+                  "曲线图", "示意图"],
         exclusive_keywords=[],
     ),
     IntentDef(
@@ -280,9 +281,15 @@ def _build_extraction_prompt() -> str:
 EXTRACTION_PROMPT = _build_extraction_prompt()
 
 # 意图互斥组：同组内只保留置信度最高的那个，过滤 LLM 噪声
+# 意图优先级：同分组内同分时高优先级胜出（数值越大越优先）
+_INTENT_PRIORITY: dict[str, int] = {
+    "visualize": 10,         # 可视化请求优先于资源生成
+    "solve_problem": 5,      # 解题优先于出题
+}
 # 注意：不要把跨功能域的意图放在同组，否则会误杀真多意图
 _MUTEX_GROUPS: list[set[str]] = [
     {"solve_problem", "exercise_gen"},  # 解题 vs 出题（真冲突：解现有题和出新题互斥）
+    {"visualize", "resource_gen"},      # 可视化优先：防 ContentAgent 的 summary 污染管线输入
 ]
 
 

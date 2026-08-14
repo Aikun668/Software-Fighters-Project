@@ -19,10 +19,11 @@ class VisualizeResult:
     code: str = ""
     title: str = ""
     reasoning: str = ""
+    warning: str = ""  # 非空时前端可展示免责声明（低置信度等）
 
     @staticmethod
-    def skip(reason: str = "") -> "VisualizeResult":
-        return VisualizeResult(should_visualize=False, reasoning=reason)
+    def skip(reason: str = "", warning: str = "") -> "VisualizeResult":
+        return VisualizeResult(should_visualize=False, reasoning=reason, warning=warning)
 
 
 class VisualizePipeline:
@@ -47,10 +48,9 @@ class VisualizePipeline:
             return VisualizeResult.skip(reason=analysis.get("reasoning", "无需可视化"))
 
         confidence = analysis.get("confidence", 0.5)
+        warning = ""
         if confidence < 0.6:
-            return VisualizeResult.skip(
-                reason=f"置信度过低 ({confidence:.2f})，跳过可视化"
-            )
+            warning = f"该图表由系统根据简短提示自动生成（置信度 {confidence:.2f}），可能存在细节缺失"
 
         render_type = analysis.get("render_type", "mermaid")
         description = analysis.get("description", "")
@@ -103,4 +103,5 @@ class VisualizePipeline:
             code=final_code,
             title=code_result.get("title", "图表"),
             reasoning=analysis.get("reasoning", ""),
+            warning=warning,
         )

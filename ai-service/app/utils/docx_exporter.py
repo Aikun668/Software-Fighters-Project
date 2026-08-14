@@ -49,11 +49,22 @@ class DocxTheme:
     heading_size: Pt = field(default_factory=lambda: Pt(16))
     subheading_size: Pt = field(default_factory=lambda: Pt(13))
     body_size: Pt = field(default_factory=lambda: Pt(11))
-    code_size: Pt = field(default_factory=lambda: Pt(9))
-    callout_size: Pt = field(default_factory=lambda: Pt(11))
+    code_size: Pt = field(default_factory=lambda: Pt(10))
 
 
 THEME = DocxTheme()
+
+
+def _set_run_fonts(run, latin_font: str, ea_font: str = "Microsoft YaHei"):
+    """Set both Latin and East-Asian fonts on a run to prevent CJK tofu boxes."""
+    run.font.name = latin_font
+    rPr = run._r.get_or_add_rPr()
+    rFonts = rPr.find(qn('w:rFonts'))
+    if rFonts is None:
+        rFonts = OxmlElement('w:rFonts')
+        rPr.insert(0, rFonts)
+    rFonts.set(qn('w:eastAsia'), ea_font)
+
 
 _INLINE_SPANS = re.compile(
     r'(\*\*(?P<bold>.+?)\*\*|'
@@ -123,7 +134,7 @@ def _add_formatted_paragraph(doc, text: str, font_size: Pt | None = None,
     for r in runs:
         run = p.add_run(r.text)
         if r.code:
-            run.font.name = THEME.code_font
+            _set_run_fonts(run, THEME.code_font)
             run.font.size = r.font_size or THEME.code_size
             run.font.color.rgb = THEME.accent
         else:
@@ -165,8 +176,8 @@ def _add_code_block(doc, code: str, language: str = ""):
         badge = doc.add_paragraph()
         _set_paragraph_spacing(badge, before=12, after=0)
         badge_run = badge.add_run(f" {language.upper()} ")
-        badge_run.font.name = THEME.code_font
-        badge_run.font.size = Pt(8)
+        _set_run_fonts(badge_run, THEME.code_font)
+        badge_run.font.size = THEME.code_size
         badge_run.font.color.rgb = THEME.white
         badge_run.font.bold = True
         _set_run_background(badge_run, THEME.primary)
@@ -178,7 +189,7 @@ def _add_code_block(doc, code: str, language: str = ""):
         p.paragraph_format.line_spacing = Pt(14)
         _set_paragraph_background(p, THEME.code_bg)
         run = p.add_run(line if line else ' ')
-        run.font.name = THEME.code_font
+        _set_run_fonts(run, THEME.code_font)
         run.font.size = THEME.code_size
         run.font.color.rgb = THEME.code_fg
     return True
@@ -191,10 +202,10 @@ def _add_callout_block(doc, heading: str, content: str):
     _set_paragraph_spacing(p_head, before=16, after=4)
     icon = p_head.add_run("▎")
     icon.font.color.rgb = THEME.accent
-    icon.font.size = Pt(14)
+    icon.font.size = THEME.body_size
     title_run = p_head.add_run(heading)
     title_run.font.name = THEME.body_font
-    title_run.font.size = THEME.callout_size
+    title_run.font.size = THEME.body_size
     title_run.font.bold = True
     title_run.font.color.rgb = THEME.secondary
 
@@ -211,11 +222,91 @@ def _add_callout_block(doc, heading: str, content: str):
         runs = _parse_inline_markdown(line)
         for r in runs:
             run = p_body.add_run(r.text)
-            run.font.name = THEME.code_font if r.code else THEME.body_font
+            if r.code:
+                _set_run_fonts(run, THEME.code_font)
+            else:
+                run.font.name = THEME.body_font
             run.font.size = r.font_size or THEME.body_size
             run.font.color.rgb = THEME.accent if r.code else THEME.black
             run.font.bold = r.bold
             run.font.italic = r.italic
+
+
+def _add_project_block(doc, content: dict):
+    """Render a project blueprint with milestones, each containing code."""
+    if not isinstance(content, dict):
+        _add_formatted_paragraph(doc, str(content))
+        return
+
+    title = content.get("title", "")
+    difficulty = content.get("difficulty", "beginner")
+    description = content.get("description", "")
+    objectives = content.get("learning_objectives", [])
+    tech_stack = content.get("tech_stack", [])
+    time_estimate = content.get("time_estimate", "")
+    milestones = content.get("milestones", [])
+
+    if title:
+        _add_heading_paragraph(doc, title, level=1)
+
+    # Meta info bar
+    meta_parts = []
+    if difficulty:
+        label = {"beginner": "入门", "intermediate": "进阶", "advanced": "高级"}.get(difficulty, difficulty)
+        meta_parts.append(f"难度: {label}")
+    if time_estimate:
+        meta_parts.append(f"预计时间: {time_estimate}")
+    if tech_stack:
+        meta_parts.append(f"技术栈: {', '.join(tech_stack)}")
+    if meta_parts:
+        _add_callout_block(doc, "项目概览", "  |  ".join(meta_parts))
+
+    if description:
+        _add_heading_paragraph(doc, "项目描述", level=2)
+        _add_formatted_paragraph(doc, description)
+
+    if objectives:
+        _add_heading_paragraph(doc, "学习目标", level=2)
+        for obj in objectives:
+            _add_formatted_paragraph(doc, f"- {obj}")
+
+    if not milestones:
+        return
+
+    _add_heading_paragraph(doc, "实现阶段", level=2)
+
+    for m in milestones:
+        step = m.get("step", "?")
+        m_title = m.get("title", f"阶段 {step}")
+        goal = m.get("goal", "")
+        deliverable = m.get("deliverable", "")
+        hint = m.get("hint", "")
+        explanation = m.get("explanation", "")
+        code = m.get("code", "")
+        expected_output = m.get("expected_output", "")
+
+        # Milestone heading
+        _add_heading_paragraph(doc, f"阶段 {step}: {m_title}", level=2)
+
+        if goal:
+            _add_formatted_paragraph(doc, f"**目标**: {goal}")
+        if deliverable:
+            _add_formatted_paragraph(doc, f"**产出物**: {deliverable}")
+        if hint:
+            _add_formatted_paragraph(doc, f"**提示**: {hint}")
+
+        if explanation:
+            _add_callout_block(doc, "教学说明", explanation)
+
+        if code:
+            _add_code_block(doc, code, "python")
+
+        if expected_output:
+            _add_callout_block(doc, "预期输出", expected_output)
+
+        # Separator between milestones
+        p = doc.add_paragraph()
+        _set_paragraph_spacing(p, before=8, after=4)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -304,7 +395,10 @@ def _render_content_to_docx(doc, content: str):
             bullet.font.color.rgb = THEME.accent
             for r in _parse_inline_markdown(item_text):
                 run = p.add_run(r.text)
-                run.font.name = THEME.code_font if r.code else THEME.body_font
+                if r.code:
+                    _set_run_fonts(run, THEME.code_font)
+                else:
+                    run.font.name = THEME.body_font
                 run.font.size = r.font_size or THEME.body_size
                 run.font.color.rgb = THEME.accent if r.code else THEME.black
                 run.font.bold = r.bold
@@ -333,6 +427,7 @@ def export_to_docx(
       - section: heading + body text with inline markdown
       - code:    dark-background code block
       - callout: prominent callout card
+      - project: project blueprint with milestones (each has explanation + code + expected output)
       - text/mindmap/mermaid/flash_cards/error: plain text fallback
     """
     doc = Document()
@@ -377,6 +472,9 @@ def export_to_docx(
 
             elif block_type == "callout":
                 _add_callout_block(doc, heading, content)
+
+            elif block_type == "project":
+                _add_project_block(doc, block.get("content", {}))
 
             elif block_type == "error":
                 _add_callout_block(doc, heading or "提示", content)
@@ -423,7 +521,7 @@ def _add_title_page(doc, title: str, sub_type: str):
     _set_paragraph_spacing(p_sub, before=0, after=24)
     run = p_sub.add_run(f"AI 智能学习系统 · {sub_label}")
     run.font.name = THEME.body_font
-    run.font.size = Pt(12)
+    run.font.size = THEME.body_size
     run.font.color.rgb = THEME.gray
 
     # Separator line
@@ -432,8 +530,8 @@ def _add_title_page(doc, title: str, sub_type: str):
     _set_paragraph_spacing(p_sep, before=0, after=24)
     run = p_sep.add_run("─" * 50)
     run.font.name = THEME.body_font
-    run.font.size = Pt(8)
-    run.font.color.rgb = THEME.light_gray
+    run.font.size = Pt(10)
+    run.font.color.rgb = THEME.gray
 
 
 def _add_footer(doc, title: str):
@@ -442,13 +540,13 @@ def _add_footer(doc, title: str):
     _set_paragraph_spacing(p_sep, before=30, after=6)
     p_sep.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run = p_sep.add_run("─" * 50)
-    run.font.size = Pt(8)
+    run.font.size = Pt(10)
     run.font.color.rgb = THEME.gray
 
     p_footer = doc.add_paragraph()
     p_footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run = p_footer.add_run(f"由 AI 智能学习系统生成 · {title}")
     run.font.name = THEME.body_font
-    run.font.size = Pt(9)
+    run.font.size = Pt(10)
     run.font.color.rgb = THEME.gray
     run.italic = True

@@ -12,8 +12,11 @@ system: |
 
   **不需要可视化 (should_visualize=false)** 的情况：
   - 纯定义/概念解释，无流程无结构
-  - 答案很短（<100字）
-  - 答案已经是代码片段
+  - 答案已经是可以直接运行的代码片段
+
+  重要优先级规则：
+  - 当用户消息中明确包含"画图/流程图/结构图/对比图/曲线图/架构图/画一张/画出/绘制"等可视化请求时，
+    即使 AI 答案较短，也应以用户意图为准返回 should_visualize=true，并从用户问题中提取可视化要素。
 
   ## 图表类型选择
 
@@ -81,18 +84,32 @@ system: |
     "confidence": 0.97
   }
 
-  示例 5 — 不需要可视化（简短回答）：
+  示例 5 — 不需要可视化（简短回答、无绘制请求）：
   学生问题：PyTorch 中 nn.Linear 的作用是什么？
   AI回答：nn.Linear 是 PyTorch 中的全连接层，用于对输入进行线性变换 y = xW^T + b。
   {
     "should_visualize": false,
-    "reasoning": "答案简短且是代码API说明，无需可视化",
+    "reasoning": "答案简短且是代码API说明，用户也未要求画图，无需可视化",
     "render_type": "",
     "chart_type": "",
     "description": "",
     "data_description": "",
     "visual_elements": [],
     "confidence": 0.99
+  }
+
+  示例 6 — 需要可视化（用户明确要求画图，即使 AI 答案很短）：
+  学生问题：画一张对比图比较SGD、Adam和RMSprop三种优化器的特点和适用场景。
+  AI回答：已为您生成「画一张对比图比较SGD、Adam和RMSprop三种优化器的特点和适用场景。」的技术速览，共 2 个内容块。
+  {
+    "should_visualize": true,
+    "reasoning": "用户明确要求画对比图，虽然AI回答只是摘要，但应从用户问题中提取SGD/Adam/RMSprop三维对比的可视化要素",
+    "render_type": "chartjs",
+    "chart_type": "bar",
+    "description": "SGD vs Adam vs RMSprop 三维对比：收敛速度、泛化能力、适用场景",
+    "data_description": "需展示三种优化器在训练速度、测试准确率、调参复杂度等维度的对比",
+    "visual_elements": ["SGD柱", "Adam柱", "RMSprop柱", "收敛速度轴", "准确率轴"],
+    "confidence": 0.85
   }
 
   ## 置信度评分

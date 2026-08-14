@@ -55,6 +55,11 @@ class VisualizationCenter:
                         logger.warning("可视化前置 tutor 失败: %s，使用问题文本降级", e)
                         answer = task.input
 
+                    # answer 为空壳 summary（如 ContentAgent 的"已为您生成...共 X 个内容块"）
+                    # 时，用 question 驱动 AnalysisAgent，避免因"答案<100字"被误杀
+                    if len(answer.strip()) < 100:
+                        answer = f"用户问题：{task.input}\n（基于问题本身推断可视化需求）"
+
                     async with asyncio.timeout(_VIS_HARD_TIMEOUT):
                         pipeline = self.visualize_pipeline or VisualizePipeline()
                         viz_result = await pipeline.run(
@@ -62,11 +67,14 @@ class VisualizationCenter:
                             answer=answer,
                         )
                     if viz_result.should_visualize:
-                        blocks.append({
+                        block = {
                             "type": viz_result.render_type,
                             "title": viz_result.title,
                             "code": viz_result.code,
-                        })
+                        }
+                        if viz_result.warning:
+                            block["warning"] = viz_result.warning
+                        blocks.append(block)
                 except asyncio.TimeoutError:
                     logger.warning(
                         "可视化超时 (%.0fs)，跳过图解: %s", _VIS_HARD_TIMEOUT, topic

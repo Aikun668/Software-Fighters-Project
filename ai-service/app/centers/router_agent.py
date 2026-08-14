@@ -5,6 +5,7 @@ from app.centers.schemas import CenterTask, ExecutionPlan
 from app.services.intent_extractor import (
     INTENT_CENTER_MAP,
     _CENTER_EXECUTION_ORDER,
+    _INTENT_PRIORITY,
     _MUTEX_GROUPS,
     INTENT_REGISTRY,
     IntentExtractor,
@@ -121,7 +122,10 @@ class RouterAgent:
         for group in _MUTEX_GROUPS:
             matched = [(s, d) for s, d in filtered if d.intent in group]
             if len(matched) > 1:
-                best_intent = max(matched, key=lambda x: x[0])[1].intent
+                # 同分时按 _INTENT_PRIORITY 打破平局（visualize > resource_gen）
+                best_intent = max(matched, key=lambda x: (
+                    x[0], _INTENT_PRIORITY.get(x[1].intent, 0)
+                ))[1].intent
                 filtered = [(s, d) for s, d in filtered
                             if d.intent not in group or d.intent == best_intent]
 

@@ -570,10 +570,10 @@ async def download_pptx(filename: str = Query(...)):
     safe_name = os.path.basename(filename)
     ext = os.path.splitext(safe_name)[1].lower()
     if ext != ".pptx":
-        return api_error(ErrorCode.VALIDATION_ERROR, "不支持的文件类型", status_code=400)
+        return api_error(ErrorCode.INVALID_REQUEST, "不支持的文件类型", status_code=400)
     file_path = os.path.join(_EXPORTS_DIR, safe_name)
     if not os.path.realpath(file_path).startswith(os.path.realpath(_EXPORTS_DIR)):
-        return api_error(ErrorCode.VALIDATION_ERROR, "非法文件路径", status_code=400)
+        return api_error(ErrorCode.INVALID_REQUEST, "非法文件路径", status_code=400)
     if not os.path.exists(file_path):
         return api_error(ErrorCode.NOT_FOUND, "文件不存在或已过期", status_code=404)
     return FileResponse(
@@ -611,10 +611,10 @@ async def download_docx(filename: str = Query(...)):
     safe_name = os.path.basename(filename)
     ext = os.path.splitext(safe_name)[1].lower()
     if ext != ".docx":
-        return api_error(ErrorCode.VALIDATION_ERROR, "不支持的文件类型", status_code=400)
+        return api_error(ErrorCode.INVALID_REQUEST, "不支持的文件类型", status_code=400)
     file_path = os.path.join(_EXPORTS_DIR, safe_name)
     if not os.path.realpath(file_path).startswith(os.path.realpath(_EXPORTS_DIR)):
-        return api_error(ErrorCode.VALIDATION_ERROR, "非法文件路径", status_code=400)
+        return api_error(ErrorCode.INVALID_REQUEST, "非法文件路径", status_code=400)
     if not os.path.exists(file_path):
         return api_error(ErrorCode.NOT_FOUND, "文件不存在或已过期", status_code=404)
     return FileResponse(
@@ -651,10 +651,10 @@ async def download_pdf(filename: str = Query(...)):
     safe_name = os.path.basename(filename)
     ext = os.path.splitext(safe_name)[1].lower()
     if ext != ".pdf":
-        return api_error(ErrorCode.VALIDATION_ERROR, "不支持的文件类型", status_code=400)
+        return api_error(ErrorCode.INVALID_REQUEST, "不支持的文件类型", status_code=400)
     file_path = os.path.join(_EXPORTS_DIR, safe_name)
     if not os.path.realpath(file_path).startswith(os.path.realpath(_EXPORTS_DIR)):
-        return api_error(ErrorCode.VALIDATION_ERROR, "非法文件路径", status_code=400)
+        return api_error(ErrorCode.INVALID_REQUEST, "非法文件路径", status_code=400)
     if not os.path.exists(file_path):
         return api_error(ErrorCode.NOT_FOUND, "文件不存在或已过期", status_code=404)
     return FileResponse(

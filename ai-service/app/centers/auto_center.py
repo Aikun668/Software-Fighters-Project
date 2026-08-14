@@ -1,3 +1,5 @@
+import re
+
 import logging
 
 from app.agents.diagnose_agent import DiagnoseAgent
@@ -10,7 +12,10 @@ from app.services.llm_service import PROFILE_CODE
 
 logger = logging.getLogger(__name__)
 
-# ── P1-1 Layer 1: 预过滤关键词，减少不必要的 LLM 调用 ──
+# ── P1-1 Layer 1: 预过滤，减少不必要的 LLM 调用 ──
+# 动名双条件：避免单字 "画" 误触 "画像"，同时覆盖 "画出/绘制/做" 等动词变体
+_DRAW_VERB_RE = re.compile(r"(画|绘制|生成|做)(一张|一个|一下|出|个|张)?")
+_DRAW_NOUN_RE = re.compile(r"(图|图表|流程|结构|架构|对比|曲线|示意|层次|关系)")
 _MUST_VISUALIZE_KW = [
     "步骤", "流程", "架构", "结构", "对比", "区别", "比较",
     "变化", "趋势", "关系", "层次", "示意图", "如图",
@@ -22,6 +27,9 @@ _SKIP_KW = ["定义", "概念", "是什么", "简称"]
 def _prefilter_visualize(question: str, answer: str) -> bool:
     """快速预过滤：强信号直接放行，明显弱信号跳过，中间地带交给 LLM。"""
     combined = question + answer[:300]
+    # 动名双正则：动词 + 名词同时命中 → 强可视化信号
+    if _DRAW_VERB_RE.search(combined) and _DRAW_NOUN_RE.search(combined):
+        return True
     if any(kw in combined for kw in _MUST_VISUALIZE_KW):
         return True
     if any(kw in combined for kw in _SKIP_KW) and answer.count("。") < 3:
@@ -138,12 +146,15 @@ class AutoCenter:
             "Tutor 图解增强: type=%s, title=%s, code_len=%d",
             result.render_type, result.title, len(result.code),
         )
-        return [{
+        block = {
             "type": "visualization",
             "sub_type": result.render_type,
             "heading": result.title,
             "content": result.code,
-        }]
+        }
+        if result.warning:
+            block["warning"] = result.warning
+        return [block]
 
     async def _run_diagnose(
         self,
