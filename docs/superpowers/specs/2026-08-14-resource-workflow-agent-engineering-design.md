@@ -142,6 +142,19 @@ Repair 将原计划、草稿和 Judge 建议交回同一个 Specialist，最多�
 
 记录但不预设虚假目标值的指标：路由命中、结构化输出有效、修复触发、修复后可交付、端到端耗时、Judge 跳过原因。
 
+## 可验证反馈闭环
+
+每次机制改动必须使用同一批固定案例、同一套运行字段和同一套人工复核标准比较前后差异。
+
+1. 为 `content` 与 `interactive_diagram` 固定 6 个案例，每类 3 个；每个案例只描述输入、期望资源类型和可验证结构，不规定 LLM 的逐字输出。
+2. 在当前行为上记录基线：案例 ID、路由结果、阶段耗时、结构化输出是否有效、降级与最终状态。
+3. Validator/Judge 首先运行在 Shadow 模式：记录它本会做出的结论，但不改变用户输出。
+4. 人工将每个案例标记为“可交付 / 应修复 / 不可交付”，与 Judge 的 `pass / repair` 对照，检查漏判与过度修复。
+5. Shadow 结果可接受后，才开启一次 Repair；使用同一批案例复跑，并记录修复、降级、耗时和最终状态。
+6. 生成对比报告：说明哪些问题被修复、哪些仍需人工判断、Judge 的误判情况和新增延迟。报告不把小样本结果包装成泛化质量结论。
+
+最小运行记录字段：`case_id`、`run_id`、`workflow_version`、`route_agent`、`route_strategy`、`stage_timings`、`validation_result`、`review_status`、`repair_attempted`、`fallback_used`、`final_status`、`error_type`。
+
 ## 实现阶段与验收顺序
 
 ### Phase 0：保留基线
