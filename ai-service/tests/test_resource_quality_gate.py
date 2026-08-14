@@ -1,11 +1,17 @@
-"""资源质量门控 — Validator 契约测试。
+"""资源质量门控 — Validator 与 Judge 契约测试。
 
-覆盖 content 与 interactive_diagram 两类资源的确定性结构校验。
-Validator 不调用 LLM，结果可复现。
+覆盖 content 与 interactive_diagram 两类资源：
+  - ResourceValidator：确定性结构校验，不调用 LLM。
+  - ResourceReviewService：轻量 LLM-as-Judge，只输出 pass | repair | skipped。
 """
 
-from app.services.resource_quality_gate import ResourceValidator
+import pytest
+from unittest.mock import AsyncMock
 
+from app.services.resource_quality_gate import ResourceValidator, ResourceReviewService
+
+
+# ── ResourceValidator（确定性，不调用 LLM）────────────────────────
 
 def test_content_validator_rejects_empty_blocks():
     result = ResourceValidator().validate("content", [])
@@ -30,3 +36,30 @@ def test_diagram_validator_accepts_renderable_block():
     blocks = [{"type": "interactive_diagram", "heading": "CNN", "content": "<svg></svg>"}]
     result = ResourceValidator().validate("interactive_diagram", blocks)
     assert result.passed is True
+
+
+# ── ResourceReviewService（轻量 Judge）─────────────────────────────
+
+@pytest.mark.asyncio
+async def test_review_service_normalizes_repair_and_limits_fixes():
+    service = ResourceReviewService(use_mock=True)
+    service._chat = AsyncMock(return_value='{"decision":"repair","reason":"缺少步骤","fixes":["补充目标", "补充示例", "补充总结", "忽略这条"]}')
+    result = await service.review("反向传播", "content", [{"type": "section", "heading": "概念", "content": "..."}], {})
+    assert result.status == "repair"
+    assert result.fixes == ["补充目标", "补充示例", "补充总结"]
+
+
+@pytest.mark.asyncio
+async def test_review_service_returns_skipped_on_invalid_json():
+    service = ResourceReviewService(use_mock=True)
+    service._chat = AsyncMock(return_value="not json")
+    result = await service.review("CNN", "interactive_diagram", [{"type": "interactive_diagram", "content": "<svg/>"}], {})
+    assert result.status == "skipped"
+
+
+@pytest.mark.asyncio
+async def test_review_service_normalizes_unknown_decision_to_pass():
+    service = ResourceReviewService(use_mock=True)
+    service._chat = AsyncMock(return_value='{"decision":"unknown","reason":"ok","fixes":[]}')
+    result = await service.review("CNN", "content", [{"type": "section", "heading": "概念", "content": "..."}], {})
+    assert result.status == "pass"

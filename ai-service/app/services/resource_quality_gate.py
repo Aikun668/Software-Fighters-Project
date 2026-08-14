@@ -1,12 +1,18 @@
-"""资源质量门控 — 确定性 Validator 与轻量 Judge 契约。
+"""资源质量门控 — 确定性 Validator 与轻量 LLM Judge。
 
 职责：
   - ValidationResult / ReviewDecision 是不可变结果类型。
   - ResourceValidator 不调用 LLM，只做确定性结构校验。
-  - 首版仅覆盖 content 与 interactive_diagram 两类资源，其余类型放行。
+  - ResourceReviewService 是轻量 LLM-as-Judge，只输出 pass | repair | skipped。
+  - 首版仅覆盖 content 与 interactive_diagram 两类资源，其余类型放行/跳过。
 """
 
 from dataclasses import dataclass, field
+from typing import Literal
+
+from app.services.llm_service import create_llm
+from app.utils.json_parser import parse_llm_json
+from app.utils.prompt_loader import build_prompt, interpolate_variables
 
 
 @dataclass(frozen=True)
@@ -14,6 +20,13 @@ class ValidationResult:
     passed: bool
     reason: str = ""
     issues: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class ReviewDecision:
+    status: Literal["pass", "repair", "skipped"]
+    reason: str = ""
+    fixes: list[str] = field(default_factory=list)
 
 
 class ResourceValidator:
@@ -36,3 +49,54 @@ class ResourceValidator:
             )
             return ValidationResult(valid, "" if valid else "缺少 interactive_diagram 内容块")
         return ValidationResult(True)
+
+
+_JUDGE_SCOPED_TYPES = frozenset({"content", "interactive_diagram"})
+
+_JUDGE_PROMPT_FILES = {
+    "content": "resource_judge.yaml",
+    "interactive_diagram": "visualize_judge.yaml",
+}
+
+
+class ResourceReviewService:
+    """轻量 LLM-as-Judge：只判断 pass | repair，故障时降级为 skipped。"""
+
+    def __init__(self, use_mock: bool = False, llm=None):
+        self.use_mock = use_mock
+        self._llm = llm
+
+    async def review(
+        self, topic, resource_type, content_blocks, student_profile
+    ) -> ReviewDecision:
+        if resource_type not in _JUDGE_SCOPED_TYPES:
+            return ReviewDecision("skipped", "该资源类型未启用 Judge")
+        try:
+            raw = await self._chat(topic, resource_type, content_blocks, student_profile)
+            data = parse_llm_json(raw, fallback={})
+            if not isinstance(data, dict) or "decision" not in data:
+                return ReviewDecision("skipped", "Judge 输出无法解析")
+            decision = "repair" if data.get("decision") == "repair" else "pass"
+            fixes = [
+                str(item) for item in data.get("fixes", [])[:3] if str(item).strip()
+            ]
+            return ReviewDecision(decision, str(data.get("reason", ""))[:60], fixes)
+        except Exception:
+            return ReviewDecision("skipped", "Judge 不可用")
+
+    async def _chat(self, topic, resource_type, content_blocks, student_profile) -> str:
+        """构建 Judge Prompt 并调用 LLM，返回原始文本。"""
+        filename = _JUDGE_PROMPT_FILES[resource_type]
+        system_prompt = build_prompt("tutor_agent", filename=filename, key="system")
+        user_template = build_prompt("tutor_agent", filename=filename, key="user")
+        user_prompt = interpolate_variables(
+            user_template,
+            {
+                "topic": topic,
+                "content_blocks": content_blocks,
+                "student_profile": student_profile or {},
+            },
+        )
+        llm = self._llm if self._llm is not None else create_llm(use_mock=self.use_mock)
+        messages = [{"role": "user", "content": user_prompt}]
+        return await llm.chat(messages, system_prompt=system_prompt)
