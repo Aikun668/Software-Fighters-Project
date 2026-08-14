@@ -368,6 +368,10 @@ async def resources_generate(body: ResourceGenRequest):
                         "questions": state.get("questions", []),
                         "response": state.get("response", ""),
                         "error": state.get("error", ""),
+                        "review_status": state.get("review_status", "not_applicable"),
+                        "repair_attempted": state.get("repair_attempted", False),
+                        "fallback_used": state.get("fallback_used", False),
+                        "final_status": state.get("final_status", "success"),
                     }))
                 except Exception as e:
                     logger.error(f"Resources generate workflow failed: {e}", exc_info=True)
@@ -2187,6 +2191,10 @@ async def inquiry_resolve(body: InquiryResolveRequest):
                         "questions": state.get("questions", []),
                         "response": state.get("response", ""),
                         "error": state.get("error", ""),
+                        "review_status": state.get("review_status", "not_applicable"),
+                        "repair_attempted": state.get("repair_attempted", False),
+                        "fallback_used": state.get("fallback_used", False),
+                        "final_status": state.get("final_status", "success"),
                     }))
                 except Exception as e:
                     logger.error(f"Inquiry resolve workflow failed: {e}", exc_info=True)

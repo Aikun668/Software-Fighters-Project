@@ -383,6 +383,64 @@ class TestL4_SSEStreamContract:
 
 
 # ═══════════════════════════════════════════════════════════════
+# L4b — SSE 质量门控元数据（Review Metadata）
+# ═══════════════════════════════════════════════════════════════
+
+class TestL4b_SSEReviewMetadata:
+    """验证 done 事件透传质量门控运行状态字段，非致命问题不被当作失败"""
+
+    @pytest.mark.asyncio
+    async def test_sse_done_contains_review_metadata(self, async_client):
+        output = {
+            **_mock_workflow_output("content"),
+            "review_status": "skipped",
+            "repair_attempted": False,
+            "fallback_used": False,
+            "final_status": "success",
+        }
+        with patch("internal_api._get_resource_workflow") as mock_get:
+            mock_workflow = AsyncMock()
+            mock_workflow.run = AsyncMock(return_value=output)
+            mock_get.return_value = mock_workflow
+
+            response = await async_client.post(
+                "/internal/resources/generate",
+                json={"topic": "Test", "user_id": 1},
+            )
+            events = await _consume_sse(response)
+            done_events = [e for e in events if e.get("type") == "done"]
+            assert len(done_events) == 1
+            done_data = done_events[0].get("data", {})
+            assert done_data.get("review_status") == "skipped"
+            assert done_data.get("repair_attempted") is False
+            assert done_data.get("fallback_used") is False
+            assert done_data.get("final_status") == "success"
+
+    @pytest.mark.asyncio
+    async def test_sse_skipped_review_is_not_error(self, async_client):
+        output = {
+            **_mock_workflow_output("content"),
+            "review_status": "skipped",
+            "repair_attempted": False,
+            "fallback_used": False,
+            "final_status": "success",
+        }
+        with patch("internal_api._get_resource_workflow") as mock_get:
+            mock_workflow = AsyncMock()
+            mock_workflow.run = AsyncMock(return_value=output)
+            mock_get.return_value = mock_workflow
+
+            response = await async_client.post(
+                "/internal/resources/generate",
+                json={"topic": "Test", "user_id": 1},
+            )
+            events = await _consume_sse(response)
+            assert not any(e.get("type") == "error" for e in events)
+            done_events = [e for e in events if e.get("type") == "done"]
+            assert len(done_events) == 1
+
+
+# ═══════════════════════════════════════════════════════════════
 # L5 — 真实 LLM 端到端链路（Real LLM Smoke Tests）
 # ═══════════════════════════════════════════════════════════════
 
