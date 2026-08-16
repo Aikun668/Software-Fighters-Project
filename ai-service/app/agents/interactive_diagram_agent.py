@@ -1,19 +1,22 @@
-"""InteractiveDiagramAgent — 交互式可视化生成智能体
+"""InteractiveDiagramAgent — 结构化交互图解生成智能体
 
-生成自包含 HTML 文件，使用 D3.js / SVG / Canvas 渲染 AI 课程相关的
-交互式可视化：模型架构、训练动态、注意力流、特征空间、算法步骤。
-前端通过 sandboxed iframe 渲染输出。
+模型只输出受限的 Schema v1 图解数据（不生成、不执行 HTML/脚本）。
+Vue 组件负责 SVG 渲染与节点点击交互。解析失败时回退到确定性结构化 fallback。
 """
 
-import html as _html
 import logging
-import re
 from typing import TypedDict
 
 from langgraph.graph import StateGraph
 
 from app.agents.base_agent import BaseAgent
 from app.utils.prompt_loader import interpolate_variables
+from app.services.diagram_schema import (
+    DIAGRAM_SCHEMA_VERSION,
+    validate_diagram_schema,
+    validate_diagram_result,
+    build_fallback_diagram,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -31,13 +34,14 @@ class InteractiveDiagramState(TypedDict, total=False):
     diagram_type: str
     student_profile: dict
     blocks: list[dict]
-    html_content: str
-    description: str
+    diagram: dict
+    diagram_source: str
+    diagram_schema_version: str
     response: str
 
 
 class InteractiveDiagramAgent(BaseAgent):
-    """交互式可视化 Agent — 输出 interactive_diagram 类型 block"""
+    """交互式可视化 Agent — 输出 interactive_diagram 类型 block（Schema v1）"""
 
     def __init__(self, config=None, use_mock_llm: bool = False,
                  model_profile=None):
@@ -56,22 +60,6 @@ class InteractiveDiagramAgent(BaseAgent):
         graph.set_entry_point("generate")
         graph.set_finish_point("generate")
         return graph.compile()
-
-    @staticmethod
-    def _validate_html(result: dict) -> list[str]:
-        issues = []
-        html = result.get("html_content", "")
-        if not isinstance(html, str) or len(html.strip()) < 100:
-            issues.append("html_content 过短（<100 字符），不是有效的 HTML 文件")
-            return issues
-        html_lower = html.lower()
-        has_svg = "svg" in html_lower and ("<svg" in html_lower or "<circle" in html_lower or "<rect" in html_lower or "<path" in html_lower)
-        has_canvas = "canvas" in html_lower and ("<canvas" in html_lower or "getcontext" in html_lower)
-        has_d3 = "d3" in html_lower and (".select" in html_lower or ".data" in html_lower or ".append" in html_lower)
-        has_script_with_viz = "<script" in html_lower and (".select" in html_lower or ".data" in html_lower or "svg" in html_lower or "canvas" in html_lower or "d3" in html_lower)
-        if not (has_svg or has_canvas or has_d3 or has_script_with_viz):
-            issues.append("HTML 未包含有效的可视化组件（SVG 元素 / Canvas API / D3 API 调用）")
-        return issues
 
     async def _generate_node(self, state: InteractiveDiagramState) -> dict:
         topic = state.get("topic", "")
@@ -98,126 +86,33 @@ class InteractiveDiagramAgent(BaseAgent):
         result = await self._call_llm_json(
             system_prompt=sys_prompt,
             user_prompt=user_prompt,
-            expected_key="html_content",
+            expected_key="diagram",
             fallback={},
-            validator=self._validate_html,
+            validator=validate_diagram_result,
         )
 
-        html_content = result.get("html_content", "") if result else ""
-        description = result.get("description", "") if result else ""
-
-        if not html_content:
-            html_content, description = self._fallback_html(topic, diagram_type)
-        else:
-            html_content = self._sanitize_html_output(html_content)
-            description = _html.escape(description) if description else ""
+        diagram = result.get("diagram") if isinstance(result, dict) else None
+        source = "model"
+        if not isinstance(diagram, dict) or validate_diagram_schema(diagram):
+            diagram = build_fallback_diagram(topic, diagram_type)
+            source = "fallback"
 
         blocks = [{
             "type": "interactive_diagram",
-            "heading": f"{topic} — 交互式可视化",
-            "content": html_content,
-            "description": description,
-            "diagram_type": diagram_type,
+            "heading": diagram.get("title", topic),
+            "content": diagram.get("summary", ""),
+            "diagram": diagram,
         }]
 
         logger.info(
             f"InteractiveDiagramAgent generated {diagram_type} "
-            f"({len(html_content)} chars) for topic '{topic}'"
+            f"diagram (source={source}, nodes={len(diagram.get('nodes', []))}) "
+            f"for topic '{topic}'"
         )
         return {
             "blocks": blocks,
             "response": f"已生成「{topic}」的交互式可视化演示。",
-            "html_content": html_content,
-            "description": description,
+            "diagram": diagram,
+            "diagram_source": source,
+            "diagram_schema_version": DIAGRAM_SCHEMA_VERSION,
         }
-
-    @staticmethod
-    def _sanitize_html_output(html_content: str) -> str:
-        """移除 LLM 生成 HTML 中的 XSS 向量。先 HTML 解码后再清理，防止编码绕过。"""
-        import html as _h
-        # 先做一轮 HTML 实体解码，防止 &#99;lick 等编码绕过
-        decoded = _h.unescape(html_content)
-        # 移除危险标签及其内容
-        for tag in ("script", "iframe", "object", "embed", "meta", "link", "base", "form"):
-            decoded = re.sub(rf'<\s*{tag}\b[^>]*>.*?<\s*/\s*{tag}\s*>', '', decoded, flags=re.IGNORECASE | re.DOTALL)
-            decoded = re.sub(rf'<\s*{tag}\b[^>]*/?\s*>', '', decoded, flags=re.IGNORECASE)
-        # 移除 on* 事件处理器属性
-        decoded = re.sub(r'\s+on\w+\s*=\s*["\'][^"\']*["\']', '', decoded, flags=re.IGNORECASE)
-        decoded = re.sub(r'\s+on\w+\s*=\s*[^\s>]+', '', decoded, flags=re.IGNORECASE)
-        # 移除 javascript: / data:text/html: URI
-        decoded = re.sub(r'(javascript|data\s*:\s*text/html)\s*:', '', decoded, flags=re.IGNORECASE)
-        return decoded
-
-    @staticmethod
-    def _fallback_html(topic: str, diagram_type: str) -> tuple[str, str]:
-        """静态 fallback — 构造一个简单的 SVG 占位图"""
-        escaped_topic = _html.escape(topic)
-        description = (
-            f"「{escaped_topic}」的{DIAGRAM_TYPES.get(diagram_type, '可视化')}演示。"
-            f"由于生成受限，当前为简化版本，建议刷新重试。"
-        )
-        html = f"""<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{escaped_topic} — 交互式可视化</title>
-<style>
-  body {{ font-family: 'Segoe UI', sans-serif; margin: 0; padding: 20px;
-         background: #0f172a; color: #e2e8f0; display: flex;
-         flex-direction: column; align-items: center; }}
-  h2 {{ color: #38bdf8; margin-bottom: 8px; }}
-  p {{ color: #94a3b8; margin-bottom: 24px; }}
-  svg {{ background: #1e293b; border-radius: 12px; }}
-  .node {{ fill: #38bdf8; stroke: #0f172a; stroke-width: 2; cursor: pointer; }}
-  .node:hover {{ fill: #818cf8; }}
-  .edge {{ stroke: #475569; stroke-width: 2; }}
-  text.label {{ fill: #e2e8f0; font-size: 13px; text-anchor: middle;
-                  dominant-baseline: central; pointer-events: none; }}
-</style>
-</head>
-<body>
-<h2>{escaped_topic} — 交互式可视化</h2>
-<p>{_html.escape(description)}</p>
-<div id="tooltip" style="display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
-     background:#1e293b;color:#e2e8f0;padding:8px 16px;border-radius:8px;border:1px solid #38bdf8;z-index:100;"></div>
-<svg width="600" height="400" viewBox="0 0 600 400">
-  <defs>
-    <marker id="arrow" markerWidth="10" markerHeight="7" refX="10" refY="3.5"
-            orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#475569"/></marker>
-  </defs>
-  <line x1="100" y1="200" x2="230" y2="120" class="edge" marker-end="url(#arrow)"/>
-  <line x1="100" y1="200" x2="230" y2="280" class="edge" marker-end="url(#arrow)"/>
-  <line x1="350" y1="120" x2="480" y2="160" class="edge" marker-end="url(#arrow)"/>
-  <line x1="350" y1="200" x2="480" y2="200" class="edge" marker-end="url(#arrow)"/>
-  <line x1="350" y1="280" x2="480" y2="240" class="edge" marker-end="url(#arrow)"/>
-  <circle cx="100" cy="200" r="36" class="node" id="input"/>
-  <text x="100" y="200" class="label">输入</text>
-  <circle cx="230" cy="120" r="36" class="node" id="layer1"/>
-  <text x="230" y="120" class="label">层 1</text>
-  <circle cx="230" cy="280" r="36" class="node" id="layer1b"/>
-  <text x="230" y="280" class="label">层 2</text>
-  <circle cx="350" cy="120" r="36" class="node" id="hidden1"/>
-  <text x="350" y="120" class="label">隐藏 1</text>
-  <circle cx="350" cy="200" r="36" class="node" id="hidden2"/>
-  <text x="350" y="200" class="label">隐藏 2</text>
-  <circle cx="350" cy="280" r="36" class="node" id="hidden3"/>
-  <text x="350" y="280" class="label">隐藏 3</text>
-  <circle cx="480" cy="200" r="36" class="node" id="output"/>
-  <text x="480" y="200" class="label">输出</text>
-</svg>
-<script>
-  document.querySelectorAll('.node').forEach(node => {{
-    node.addEventListener('click', () => {{
-      const info = document.getElementById('tooltip');
-      if (info) {{
-        info.textContent = '节点: ' + (node.id || '未命名');
-        info.style.display = 'block';
-        setTimeout(() => {{ info.style.display = 'none'; }}, 2000);
-      }}
-    }});
-  }});
-</script>
-</body>
-</html>"""
-        return html, description
