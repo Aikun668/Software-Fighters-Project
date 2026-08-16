@@ -43,6 +43,7 @@ def build_run_record(case_id: str, state: dict, elapsed_ms: int) -> dict:
         "error_type": state.get("error_type", ""),
         "diagram_source": state.get("diagram_source", ""),
         "diagram_schema_version": state.get("diagram_schema_version", ""),
+        "diagram_artifact_path": state.get("diagram_artifact_path", ""),
         "elapsed_ms": elapsed_ms,
     }
 
@@ -52,7 +53,19 @@ def load_cases(path: str) -> list[dict]:
         return json.load(f)
 
 
-async def run_one(workflow: ResourceGenWorkflow, case: dict) -> dict:
+def _extract_diagram(state: dict) -> dict | None:
+    """从最终 content_blocks 提取 interactive_diagram 的 diagram Schema（无 key/日志）。"""
+    for block in state.get("content_blocks", []) or []:
+        if isinstance(block, dict) and block.get("type") == "interactive_diagram":
+            diagram = block.get("diagram")
+            if isinstance(diagram, dict):
+                return diagram
+    return None
+
+
+async def run_one(
+    workflow: ResourceGenWorkflow, case: dict, artifact_dir: Path | None = None,
+) -> dict:
     started = time.perf_counter()
     try:
         state = await workflow.run({
@@ -64,7 +77,18 @@ async def run_one(workflow: ResourceGenWorkflow, case: dict) -> dict:
     except Exception as e:
         state = {"final_status": "error", "error_type": type(e).__name__}
     elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
-    return build_run_record(case["case_id"], state, elapsed_ms)
+    record = build_run_record(case["case_id"], state, elapsed_ms)
+
+    # 仅 interactive_diagram 案例保存最终 Schema v1 产物（不含 key/原始 LLM 回复/日志）
+    if artifact_dir is not None:
+        diagram = _extract_diagram(state)
+        if diagram is not None:
+            artifact_path = artifact_dir / f"{case['case_id']}.diagram.json"
+            artifact_path.write_text(
+                json.dumps(diagram, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+            record["diagram_artifact_path"] = str(artifact_path)
+    return record
 
 
 async def run_all(args) -> int:
@@ -74,11 +98,12 @@ async def run_all(args) -> int:
 
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact_dir = output_path.parent  # diagram 产物与 JSONL 同目录
 
     count = 0
     with output_path.open("w", encoding="utf-8") as f:
         for case in cases:
-            record = await run_one(workflow, case)
+            record = await run_one(workflow, case, artifact_dir)
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
             print(json.dumps(record, ensure_ascii=False))
             count += 1
