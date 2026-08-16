@@ -9,4 +9,5 @@ def test_record_contains_all_required_fields():
         "case_id", "run_id", "workflow_version", "route_agent", "route_strategy",
         "stage_timings", "validation_result", "review_status", "repair_attempted",
         "fallback_used", "final_status", "error_type",
+        "diagram_source", "diagram_schema_version",
     }

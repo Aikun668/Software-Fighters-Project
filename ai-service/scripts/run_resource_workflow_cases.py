@@ -41,6 +41,8 @@ def build_run_record(case_id: str, state: dict, elapsed_ms: int) -> dict:
         "fallback_used": state.get("fallback_used", False),
         "final_status": state.get("final_status", ""),
         "error_type": state.get("error_type", ""),
+        "diagram_source": state.get("diagram_source", ""),
+        "diagram_schema_version": state.get("diagram_schema_version", ""),
         "elapsed_ms": elapsed_ms,
     }
 

@@ -10,6 +10,7 @@
 from dataclasses import dataclass, field
 from typing import Literal
 
+from app.services.diagram_schema import validate_diagram_schema
 from app.services.llm_service import create_llm
 from app.utils.json_parser import parse_llm_json
 from app.utils.prompt_loader import build_prompt, interpolate_variables
@@ -42,13 +43,39 @@ class ResourceValidator:
             )
             return ValidationResult(valid, "" if valid else "缺少完整 section 内容块")
         if resource_type == "interactive_diagram":
-            valid = any(
-                block.get("type") == "interactive_diagram"
-                and bool(str(block.get("content", "")).strip())
-                for block in content_blocks
-            )
-            return ValidationResult(valid, "" if valid else "缺少 interactive_diagram 内容块")
+            for block in content_blocks:
+                if not isinstance(block, dict) or block.get("type") != "interactive_diagram":
+                    continue
+                issues = validate_diagram_schema(block.get("diagram"))
+                if issues:
+                    return ValidationResult(False, "; ".join(issues), issues)
+                return ValidationResult(True)
+            return ValidationResult(False, "缺少 interactive_diagram 内容块")
         return ValidationResult(True)
+
+
+def _format_diagram_for_judge(content_blocks) -> str:
+    """把图解 block 转成可读的节点/边描述，供 Judge 评审（不评审 HTML）。"""
+    for block in content_blocks or []:
+        if isinstance(block, dict) and block.get("type") == "interactive_diagram":
+            diagram = block.get("diagram") or {}
+            lines = []
+            if diagram.get("title"):
+                lines.append(f"标题：{diagram.get('title')}")
+            if diagram.get("summary"):
+                lines.append(f"概述：{diagram.get('summary')}")
+            nodes = diagram.get("nodes", [])
+            lines.append("节点：" + "；".join(
+                f"{n.get('label', '')}（{n.get('detail', '')}）"
+                for n in nodes if isinstance(n, dict)
+            ))
+            edges = diagram.get("edges", [])
+            lines.append("关系：" + "；".join(
+                f"{e.get('source', '')}→{e.get('target', '')}（{e.get('label', '')}）"
+                for e in edges if isinstance(e, dict)
+            ))
+            return "\n".join(lines)
+    return "（无图解数据）"
 
 
 _JUDGE_SCOPED_TYPES = frozenset({"content", "interactive_diagram"})
@@ -89,14 +116,12 @@ class ResourceReviewService:
         filename = _JUDGE_PROMPT_FILES[resource_type]
         system_prompt = build_prompt("tutor_agent", filename=filename, key="system")
         user_template = build_prompt("tutor_agent", filename=filename, key="user")
-        user_prompt = interpolate_variables(
-            user_template,
-            {
-                "topic": topic,
-                "content_blocks": content_blocks,
-                "student_profile": student_profile or {},
-            },
-        )
+        variables = {"topic": topic, "student_profile": student_profile or {}}
+        if resource_type == "interactive_diagram":
+            variables["diagram_view"] = _format_diagram_for_judge(content_blocks)
+        else:
+            variables["content_blocks"] = content_blocks
+        user_prompt = interpolate_variables(user_template, variables)
         llm = self._llm if self._llm is not None else create_llm(use_mock=self.use_mock)
         messages = [{"role": "user", "content": user_prompt}]
         return await llm.chat(messages, system_prompt=system_prompt)

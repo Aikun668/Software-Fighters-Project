@@ -92,6 +92,8 @@ class ResourceGenState(TypedDict, total=False):
     fallback_used: bool
     final_status: str
     error_type: str
+    diagram_source: str
+    diagram_schema_version: str
     stage_timings: dict[str, float]
 
 
@@ -283,6 +285,8 @@ class ResourceGenWorkflow(BaseWorkflow):
             "response": response,
             "questions": questions,
             "agent_name": agent_name,
+            "diagram_source": result.get("diagram_source", "") if isinstance(result, dict) else "",
+            "diagram_schema_version": result.get("diagram_schema_version", "") if isinstance(result, dict) else "",
         }
 
     async def _generate_node(self, state: ResourceGenState) -> dict:
@@ -322,6 +326,8 @@ class ResourceGenWorkflow(BaseWorkflow):
             "response": response,
             "questions": questions,
             "agent_name": agent_name,
+            "diagram_source": result.get("diagram_source", ""),
+            "diagram_schema_version": result.get("diagram_schema_version", ""),
         })
 
     # ═══════════════════════════════════════════════════════════════
@@ -412,6 +418,8 @@ class ResourceGenWorkflow(BaseWorkflow):
                 "response": result["response"],
                 "questions": result.get("questions", []),
                 "repair_attempted": True,
+                "diagram_source": result.get("diagram_source", ""),
+                "diagram_schema_version": result.get("diagram_schema_version", ""),
             }
         except Exception as e:
             logger.exception(f"Repair failed for agent '{agent_name}'")

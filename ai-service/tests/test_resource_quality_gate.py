@@ -32,10 +32,18 @@ def test_diagram_validator_rejects_wrong_block_type():
     assert "interactive_diagram" in result.reason
 
 
-def test_diagram_validator_accepts_renderable_block():
-    blocks = [{"type": "interactive_diagram", "heading": "CNN", "content": "<svg></svg>"}]
+def test_diagram_validator_accepts_valid_schema():
+    from app.services.diagram_schema import build_fallback_diagram
+    diagram = build_fallback_diagram("CNN", "architecture")
+    blocks = [{"type": "interactive_diagram", "heading": "CNN", "content": "摘要", "diagram": diagram}]
     result = ResourceValidator().validate("interactive_diagram", blocks)
     assert result.passed is True
+
+
+def test_diagram_validator_rejects_invalid_schema():
+    blocks = [{"type": "interactive_diagram", "heading": "CNN", "content": "摘要", "diagram": {"schema_version": "v2"}}]
+    result = ResourceValidator().validate("interactive_diagram", blocks)
+    assert result.passed is False
 
 
 # ── ResourceReviewService（轻量 Judge）─────────────────────────────
