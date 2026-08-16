@@ -94,7 +94,26 @@ def _mock_workflow_output(agent_name: str) -> dict:
             "response": "已生成代码案例。",
         },
         "interactive_diagram": {
-            "content_blocks": [{"type": "interactive_diagram", "heading": "可视化", "content": "<html>...</html>"}],
+            "content_blocks": [{
+                "type": "interactive_diagram",
+                "heading": "可视化",
+                "content": "输入图像依次通过卷积、池化和分类层。",
+                "diagram": {
+                    "schema_version": "v1",
+                    "title": "可视化",
+                    "summary": "输入图像依次通过卷积、池化和分类层。",
+                    "layout": "layered",
+                    "nodes": [
+                        {"id": "input", "label": "输入", "detail": "原始数据", "layer": 0},
+                        {"id": "process", "label": "处理", "detail": "特征提取", "layer": 1},
+                        {"id": "output", "label": "输出", "detail": "结果", "layer": 2},
+                    ],
+                    "edges": [
+                        {"source": "input", "target": "process", "label": "数据流"},
+                        {"source": "process", "target": "output", "label": "结果"},
+                    ],
+                },
+            }],
             "questions": [],
             "response": "已生成交互式可视化。",
         },
@@ -143,11 +162,10 @@ class TestL1_InputValidation:
         assert "topic" in response.json()["error"].lower()
 
     def test_whitespace_only_topic(self, client):
-        """纯空格 topic: Pydantic min_length=1 不拒绝 3 空格，这是一个验证盲区（已报告）"""
+        """纯空格 topic 在 API 层 strip 后应返回 400，不进入工作流"""
         response = client.post("/internal/resources/generate", json={"topic": "   ", "user_id": 1})
-        # 当前行为: Pydantic 接受纯空格字符串（空格算字符），由下游处理
-        # TODO: 应在 API 层 strip 后检查非空，参见审查报告 M7
-        assert response.status_code in (200, 400)
+        assert response.status_code == 400
+        assert "topic" in response.json()["error"].lower()
 
     def test_missing_body(self, client):
         """空请求体被拒绝"""
@@ -155,17 +173,25 @@ class TestL1_InputValidation:
         assert response.status_code == 400
 
     def test_invalid_resource_type_accepted_but_not_matched(self, client):
-        """无效 resource_type 不阻塞请求，Director 走 rule/LLM 回退"""
-        response = client.post("/internal/resources/generate", json={
-            "topic": "Python基础", "resource_type": "invalid_type_xyz",
-        })
+        """无效 resource_type 不阻塞请求，Director 走 rule/LLM 回退（scoped mock workflow）"""
+        with patch("internal_api._get_resource_workflow") as mock_get:
+            mock_workflow = AsyncMock()
+            mock_workflow.run = AsyncMock(return_value=_mock_workflow_output("content"))
+            mock_get.return_value = mock_workflow
+            response = client.post("/internal/resources/generate", json={
+                "topic": "Python基础", "resource_type": "invalid_type_xyz",
+            })
         assert response.status_code == 200  # 不回退 400，由 Director 处理
 
     def test_topic_with_special_chars(self, client):
-        """特殊字符 topic 通过验证"""
-        response = client.post("/internal/resources/generate", json={
-            "topic": "C++ & Python 对比：谁更好？",
-        })
+        """特殊字符 topic 通过验证（scoped mock workflow）"""
+        with patch("internal_api._get_resource_workflow") as mock_get:
+            mock_workflow = AsyncMock()
+            mock_workflow.run = AsyncMock(return_value=_mock_workflow_output("content"))
+            mock_get.return_value = mock_workflow
+            response = client.post("/internal/resources/generate", json={
+                "topic": "C++ & Python 对比：谁更好？",
+            })
         assert response.status_code == 200
 
 
@@ -274,7 +300,7 @@ class TestL3_AgentDispatch:
             assert len(result["project_title"]) > 0
 
     @pytest.mark.asyncio
-    async def test_interactive_diagram_agent_produces_html(self):
+    async def test_interactive_diagram_agent_produces_diagram_schema(self):
         from app.agents.interactive_diagram_agent import InteractiveDiagramAgent
 
         agent = InteractiveDiagramAgent(use_mock_llm=True)
@@ -284,6 +310,10 @@ class TestL3_AgentDispatch:
         blocks = result.get("blocks", [])
         assert blocks, "InteractiveDiagramAgent 应产出 blocks"
         assert blocks[0]["type"] == "interactive_diagram"
+        diagram = blocks[0].get("diagram")
+        assert isinstance(diagram, dict), "应产出结构化 diagram，而非 HTML"
+        assert diagram.get("schema_version") == "v1"
+        assert "<" not in str(blocks[0].get("content", "")), "content 不应含 HTML"
 
 
 # ═══════════════════════════════════════════════════════════════

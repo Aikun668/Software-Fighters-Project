@@ -346,6 +346,8 @@ async def profile_chat(body: ProfileChatRequest):
 async def resources_generate(body: ResourceGenRequest):
     body = sanitize_model(body)
     topic = body.topic.strip()
+    if not topic:
+        return api_error(ErrorCode.INVALID_REQUEST, "topic 不能为空白", status_code=400)
     student_profile = body.student_profile
     resource_type = body.resource_type
 
