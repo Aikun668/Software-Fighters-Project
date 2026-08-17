@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from app.services.diagram_schema import validate_diagram_schema
-from app.services.llm_service import create_llm
+from app.services.llm_service import create_llm, PROFILE_REVIEW
 from app.utils.json_parser import parse_llm_json
 from app.utils.prompt_loader import build_prompt, interpolate_variables
 
@@ -93,6 +93,18 @@ class ResourceReviewService:
         self.use_mock = use_mock
         self._llm = llm
 
+    def _build_llm(self):
+        """从 PROFILE_REVIEW 构建默认 Judge LLM（确定性：temperature=0.0）。"""
+        cfg = PROFILE_REVIEW.default
+        return create_llm(
+            model=cfg.model or None,
+            temperature=cfg.temperature,
+            max_tokens=cfg.max_tokens,
+            use_mock=self.use_mock,
+            api_key=cfg.api_key,
+            base_url=cfg.base_url,
+        )
+
     async def review(
         self, topic, resource_type, content_blocks, student_profile
     ) -> ReviewDecision:
@@ -122,6 +134,6 @@ class ResourceReviewService:
         else:
             variables["content_blocks"] = content_blocks
         user_prompt = interpolate_variables(user_template, variables)
-        llm = self._llm if self._llm is not None else create_llm(use_mock=self.use_mock)
+        llm = self._llm if self._llm is not None else self._build_llm()
         messages = [{"role": "user", "content": user_prompt}]
         return await llm.chat(messages, system_prompt=system_prompt)

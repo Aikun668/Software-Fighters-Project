@@ -6,7 +6,7 @@
 """
 
 import pytest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.services.resource_quality_gate import ResourceValidator, ResourceReviewService
 
@@ -71,3 +71,30 @@ async def test_review_service_normalizes_unknown_decision_to_pass():
     service._chat = AsyncMock(return_value='{"decision":"unknown","reason":"ok","fixes":[]}')
     result = await service.review("CNN", "content", [{"type": "section", "heading": "概念", "content": "..."}], {})
     assert result.status == "pass"
+
+
+# ── Judge 默认 LLM 使用 PROFILE_REVIEW ────────────────────────────
+
+def test_default_llm_matches_profile_review():
+    from app.services.llm_service import PROFILE_REVIEW
+    service = ResourceReviewService(use_mock=True)
+    llm = service._build_llm()
+    assert llm.temperature == PROFILE_REVIEW.default.temperature
+    assert llm.max_tokens == PROFILE_REVIEW.default.max_tokens
+    assert llm.model == PROFILE_REVIEW.default.model
+
+
+@pytest.mark.asyncio
+async def test_injected_llm_avoids_default_creation():
+    fake_llm = MagicMock()
+    fake_llm.chat = AsyncMock(return_value='{"decision":"pass","reason":"ok","fixes":[]}')
+    service = ResourceReviewService(use_mock=True, llm=fake_llm)
+    with patch.object(
+        ResourceReviewService, "_build_llm",
+        side_effect=AssertionError("注入 llm 时不应创建默认 LLM"),
+    ):
+        result = await service.review(
+            "topic", "content", [{"type": "section", "heading": "h", "content": "c"}], {}
+        )
+    assert result.status == "pass"
+    fake_llm.chat.assert_awaited_once()
