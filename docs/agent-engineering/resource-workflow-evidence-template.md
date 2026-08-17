@@ -28,13 +28,26 @@ diagram 案例额外有 diagram_source、diagram_schema_version、diagram_artifa
 
 - 第一次运行该案例 review_status=repair；本轮重跑同一案例，review_status=pass，review_reason 为「内容紧扣自注意力主题，知识结构合理，分节讲解…可交付」。
 - 人工复核本轮 artifact：7 个 content block（6 个 section + 1 个 callout），内容紧扣「Transformer 自注意力」，全文不含 violence 相关词（杀/暴力/武器/爆炸/伤害/攻击 均无命中）。
-- 结论：第一次的 repair 是 LLM Judge 的非确定性判断波动，不是稳定的内容缺陷——同一案例重跑即翻转成 pass。
+- 结论：第一次的 repair 是旧配置（temperature=0.7）下的 Judge 非确定性判断波动，不是稳定的内容缺陷——改用确定性 PROFILE_REVIEW（temperature=0.0）后见下方校准结果。
 
 ### 是内容问题、Judge 误判，还是安全过滤影响？
 
 - 内容无问题：validation_result=pass，7 blocks 完整、紧扣主题、无 violence 词。
 - SafetyPipeline 的 violence 日志是误报：本轮 stderr 仍记录 violations=['violence']，但产物无 violence 词、Judge 判 pass。因此该日志与 Judge 结论无因果关系（violence 日志持续触发，但 Judge 本轮仍判 pass）。
 - 未改任何安全规则：本轮只记录证据，未修改 content safety filter / quality_mode / LLM Provider。
+
+## Judge 稳定性校准（temperature=0.0，PROFILE_REVIEW）
+
+对 3 个已保存 content artifact 各调用 Judge 3 次（共 9 次），不重新生成内容：
+
+| case_id | 3 次结果 |
+|---------|---------|
+| content-transformer-basics | pass / pass / pass |
+| content-cnn-rnn-comparison | pass / pass / pass |
+| content-backprop-intro | skipped / pass / pass |
+
+- 8/9 为 pass；1 次 skipped 由 LLM 返回空响应导致（基础设施偶发，非 Judge 判断波动）。
+- 结论：temperature=0.0 后，Judge 对同一固定 artifact 的结论稳定为 pass，未复现旧配置（0.7）下 transformer 的 repair 波动。
 
 ## diagram 复核结论（3 个 diagram 案例）
 
@@ -60,5 +73,5 @@ Active 轮未运行：diagram 证据通过前继续维持 shadow，不切 active
 
 - 哪些问题被修复：diagram 从「模型生成 HTML → JSON 解析失败 → fallback → Judge repair」变为「模型生成 Schema v1 → 解析成功 → model 产物 → Judge pass」；3/3 案例 source=model、schema=v1、主题匹配。
 - content transformer repair 的定性：第一次 repair 未复现——重跑同案例为 pass，且产物无 violence 词；SafetyPipeline 的 violence 日志为误报且与 Judge 结论无因果关系（violence 仍触发但 Judge 判 pass）。未改任何安全规则。
-- Judge 误判情况：diagram 3/3 pass 与人工一致；content 的 repair→pass 说明 Judge 存在跨轮非确定性（同一输入不同结论），属 LLM-as-Judge 固有波动，非稳定误判。
+- Judge 稳定性：旧配置（temperature=0.7）下 Judge 存在跨轮非确定性（transformer 第一次 repair、重跑 pass），尚未隔离稳定性；改用确定性 PROFILE_REVIEW（temperature=0.0）后，9 次校准 8 pass + 1 skipped（空响应），结论稳定。
 - 新增延迟：diagram 单案例 30–70s，较 HTML 版 175–205s 明显下降。
