@@ -37,6 +37,7 @@ def build_run_record(case_id: str, state: dict, elapsed_ms: int) -> dict:
         "stage_timings": state.get("stage_timings", {}),
         "validation_result": state.get("validation_result", {}),
         "review_status": state.get("review_status", "not_applicable"),
+        "review_reason": state.get("review_reason", ""),
         "repair_attempted": state.get("repair_attempted", False),
         "fallback_used": state.get("fallback_used", False),
         "final_status": state.get("final_status", ""),
@@ -44,6 +45,7 @@ def build_run_record(case_id: str, state: dict, elapsed_ms: int) -> dict:
         "diagram_source": state.get("diagram_source", ""),
         "diagram_schema_version": state.get("diagram_schema_version", ""),
         "diagram_artifact_path": state.get("diagram_artifact_path", ""),
+        "artifact_path": state.get("artifact_path", ""),
         "elapsed_ms": elapsed_ms,
     }
 
@@ -79,15 +81,30 @@ async def run_one(
     elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
     record = build_run_record(case["case_id"], state, elapsed_ms)
 
-    # 仅 interactive_diagram 案例保存最终 Schema v1 产物（不含 key/原始 LLM 回复/日志）
     if artifact_dir is not None:
+        # 所有 case 保存最终交付 artifact（content_blocks + response）
+        full_artifact_path = artifact_dir / f"{case['case_id']}.artifact.json"
+        full_artifact_path.write_text(
+            json.dumps(
+                {
+                    "content_blocks": state.get("content_blocks", []),
+                    "response": state.get("response", ""),
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        record["artifact_path"] = str(full_artifact_path)
+
+        # 仅 interactive_diagram 额外保存 Schema v1 产物（不含 key/原始 LLM 回复/日志）
         diagram = _extract_diagram(state)
         if diagram is not None:
-            artifact_path = artifact_dir / f"{case['case_id']}.diagram.json"
-            artifact_path.write_text(
+            diagram_path = artifact_dir / f"{case['case_id']}.diagram.json"
+            diagram_path.write_text(
                 json.dumps(diagram, ensure_ascii=False, indent=2), encoding="utf-8"
             )
-            record["diagram_artifact_path"] = str(artifact_path)
+            record["diagram_artifact_path"] = str(diagram_path)
     return record
 
 

@@ -14,7 +14,7 @@
 
 | case_id | 人工标记 | Judge 结论 | 是否一致 | diagram_source | schema | 节点/边与主题 | 耗时(ms) | 已知限制 |
 |---------|---------|-----------|---------|----------------|--------|--------------|---------|---------|
-| content-transformer-basics | 应修复 | repair | 一致 | — | — | — | 157690 | content safety 误报（非本任务范围） |
+| content-transformer-basics | 应修复 | repair | 一致 | — | — | — | 157690 | SafetyPipeline 曾记录 violence 日志，尚未证明与 Judge repair 存在因果关系 |
 | content-cnn-rnn-comparison | 可交付 | pass | 一致 | — | — | — | 42372 | — |
 | content-backprop-intro | 可交付 | pass | 一致 | — | — | — | 126806 | — |
 | diagram-cnn-architecture | 可交付 | pass | 一致 | model | v1 | 匹配（输入→卷积→池化→全连接→输出，10 节点 9 边） | 43306 | — |
@@ -42,6 +42,6 @@ Active 轮未运行：diagram 证据通过前继续维持 shadow，不切 active
 ## 结论（不把样本结果包装成泛化质量结论）
 
 - **哪些问题被修复**：diagram 从「模型生成 HTML → JSON 解析失败 → fallback → Judge repair」变为「模型生成 Schema v1 → 解析成功 → model 产物 → Judge pass」；3/3 案例 source=model、schema=v1、主题匹配。
-- **哪些仍需人工判断**：content-transformer-basics 的 repair 由 content safety 过滤器对「violence」的误报引起（非 diagram 范围）；content 产物未单独保存 artifact，未做逐字复核。
+- **哪些仍需人工判断**：content-transformer-basics 被 Judge 判 repair 的原因待查——SafetyPipeline 曾记录 violence 日志，但尚未证明该日志与 Judge repair 存在因果关系（未改任何安全规则）；content 产物未单独保存 artifact，未做逐字复核。
 - **Judge 误判情况**：无（diagram 3/3 pass 与人工一致）。
 - **新增延迟**：diagram 单案例 40–70s（含 plan/generate/review），较 HTML 版 175–205s 明显下降。
