@@ -23,6 +23,8 @@ class ContentState(TypedDict, total=False):
     content_blocks: list[dict]
     blocks: list[dict]
     response: str
+    repair_instructions: list[str]
+    previous_blocks: list[dict]
 
 
 class ContentAgent(BaseAgent):
@@ -198,6 +200,23 @@ class ContentAgent(BaseAgent):
 
         return {"outline": outline, "sub_type": sub_type, "stage": "planned"}
 
+    @staticmethod
+    def _build_repair_context(repair_instructions: list[str], previous_blocks: list[dict]) -> str:
+        """把修复建议与原草稿拼成注入 LLM prompt 的上下文。"""
+        if not repair_instructions:
+            return ""
+        lines = ["[修复要求] 请根据以下修复建议修订内容（在原始草稿基础上修改，而非从零重写）："]
+        for i, ins in enumerate(repair_instructions, 1):
+            lines.append(f"{i}. {ins}")
+        if previous_blocks:
+            lines.append("\n原始草稿（参考）：")
+            for b in previous_blocks:
+                if isinstance(b, dict):
+                    heading = b.get("heading", "")
+                    content = b.get("content", "")
+                    lines.append(f"## {heading}\n{content}")
+        return "\n".join(lines)
+
     async def _generate_node(self, state: ContentState) -> dict:
         """生成内容块 — 按 sub_type 走不同生成路径"""
         topic = state.get("topic", "")
@@ -206,12 +225,17 @@ class ContentAgent(BaseAgent):
         student_profile = state.get("student_profile", {})
         comparison = state.get("comparison", False)
 
+        repair_context = self._build_repair_context(
+            state.get("repair_instructions") or [],
+            state.get("previous_blocks") or [],
+        )
+
         if sub_type == "guide":
             blocks = self._render_guide(topic, outline)
         elif comparison:
-            blocks = await self._generate_comparison(topic, outline, student_profile)
+            blocks = await self._generate_comparison(topic, outline, student_profile, repair_context)
         else:
-            blocks = await self._generate_overview(topic, outline)
+            blocks = await self._generate_overview(topic, outline, repair_context)
 
         safe_blocks = self._apply_safety_filter(blocks)
 
@@ -219,7 +243,7 @@ class ContentAgent(BaseAgent):
         response = f"已为您生成「{topic}」的{doc_label}，共 {len(safe_blocks)} 个内容块。"
         return {"blocks": safe_blocks, "response": response, "stage": "generated"}
 
-    async def _generate_overview(self, topic: str, outline: dict) -> list[dict]:
+    async def _generate_overview(self, topic: str, outline: dict, repair_context: str = "") -> list[dict]:
         """技术速览 — 按 sections 逐块展开"""
         sections = outline.get("sections", [])
         intro = outline.get("intro", f"{topic}技术解析")
@@ -238,6 +262,8 @@ class ContentAgent(BaseAgent):
                 user_tpl,
                 {"topic": topic, "knowledge_context": focus},
             )
+            if repair_context:
+                user_prompt = user_prompt + "\n\n" + repair_context
 
             try:
                 result = await self._call_llm_json(
@@ -257,7 +283,7 @@ class ContentAgent(BaseAgent):
             blocks.append({"type": "callout", "heading": "核心要点", "content": key_takeaway})
         return blocks
 
-    async def _generate_comparison(self, topic: str, outline: dict, student_profile: dict) -> list[dict]:
+    async def _generate_comparison(self, topic: str, outline: dict, student_profile: dict, repair_context: str = "") -> list[dict]:
         """对比分析文档 — 保留原有逻辑"""
         subsections = outline.get("subsections", [])
         intro = outline.get("intro", f"{topic}对比分析")
@@ -287,6 +313,8 @@ class ContentAgent(BaseAgent):
                     "knowledge_context": "", "student_profile": profile_text,
                 },
             )
+            if repair_context:
+                user_prompt = user_prompt + "\n\n" + repair_context
 
             try:
                 result = await self._call_llm_json(

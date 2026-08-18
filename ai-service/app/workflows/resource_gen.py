@@ -89,6 +89,7 @@ class ResourceGenState(TypedDict, total=False):
     review_reason: str
     repair_instructions: list[str]
     repair_attempted: bool
+    pre_repair_blocks: list[dict]
     fallback_used: bool
     final_status: str
     error_type: str
@@ -256,8 +257,9 @@ class ResourceGenWorkflow(BaseWorkflow):
     async def _run_specialist(
         self, state: ResourceGenState, agent_name: str,
         repair_instructions: list[str] | None = None,
+        previous_blocks: list[dict] | None = None,
     ) -> dict:
-        """构建 Agent state，必要时附加修复说明，并标准化 blocks/response。"""
+        """构建 Agent state，必要时附加修复说明与原草稿，并标准化 blocks/response。"""
         topic = state.get("topic", "")
         student_profile = state.get("student_profile", {})
         outline = state.get("outline", {})
@@ -274,6 +276,8 @@ class ResourceGenWorkflow(BaseWorkflow):
         )
         if repair_instructions:
             agent_state["repair_instructions"] = repair_instructions
+        if previous_blocks:
+            agent_state["previous_blocks"] = previous_blocks
 
         result = await agent.run(agent_state)
         blocks = (result.get("blocks") or result.get("content_blocks") or []) if isinstance(result, dict) else []
@@ -410,10 +414,12 @@ class ResourceGenWorkflow(BaseWorkflow):
         agent_name = state.get("agent_name", "content")
         label = AGENT_LABELS.get(agent_name, agent_name)
         instructions = state.get("repair_instructions", [])
+        pre_blocks = state.get("draft_blocks", [])
         self._emit(state, stage_start("repair", f"根据评审建议修复{label}..."))
         try:
-            result = await self._run_specialist(state, agent_name, instructions)
+            result = await self._run_specialist(state, agent_name, instructions, pre_blocks)
             update = {
+                "pre_repair_blocks": pre_blocks,
                 "draft_blocks": result["blocks"],
                 "response": result["response"],
                 "questions": result.get("questions", []),

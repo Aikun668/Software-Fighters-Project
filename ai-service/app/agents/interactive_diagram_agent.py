@@ -4,6 +4,7 @@
 Vue 组件负责 SVG 渲染与节点点击交互。解析失败时回退到确定性结构化 fallback。
 """
 
+import json
 import logging
 from typing import TypedDict
 
@@ -38,6 +39,8 @@ class InteractiveDiagramState(TypedDict, total=False):
     diagram_source: str
     diagram_schema_version: str
     response: str
+    repair_instructions: list[str]
+    previous_blocks: list[dict]
 
 
 class InteractiveDiagramAgent(BaseAgent):
@@ -61,6 +64,24 @@ class InteractiveDiagramAgent(BaseAgent):
         graph.set_finish_point("generate")
         return graph.compile()
 
+    @staticmethod
+    def _build_repair_context(repair_instructions: list[str], previous_blocks: list[dict]) -> str:
+        """把修复建议与原图解拼成注入 LLM prompt 的上下文。"""
+        if not repair_instructions:
+            return ""
+        lines = ["[修复要求] 请根据以下修复建议修订图解（在原始图解基础上修改，而非从零重写）："]
+        for i, ins in enumerate(repair_instructions, 1):
+            lines.append(f"{i}. {ins}")
+        previous_diagram = None
+        for b in previous_blocks or []:
+            if isinstance(b, dict) and b.get("type") == "interactive_diagram":
+                previous_diagram = b.get("diagram")
+                break
+        if isinstance(previous_diagram, dict):
+            lines.append("\n原始图解（参考）：")
+            lines.append(json.dumps(previous_diagram, ensure_ascii=False))
+        return "\n".join(lines)
+
     async def _generate_node(self, state: InteractiveDiagramState) -> dict:
         topic = state.get("topic", "")
         diagram_type = state.get("diagram_type", "architecture")
@@ -82,6 +103,12 @@ class InteractiveDiagramAgent(BaseAgent):
                 "student_profile": self._format_profile(student_profile),
             },
         )
+        repair_context = self._build_repair_context(
+            state.get("repair_instructions") or [],
+            state.get("previous_blocks") or [],
+        )
+        if repair_context:
+            user_prompt = user_prompt + "\n\n" + repair_context
 
         result = await self._call_llm_json(
             system_prompt=sys_prompt,

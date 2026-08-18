@@ -39,6 +39,8 @@ def build_run_record(case_id: str, state: dict, elapsed_ms: int) -> dict:
         "review_status": state.get("review_status", "not_applicable"),
         "review_reason": state.get("review_reason", ""),
         "repair_attempted": state.get("repair_attempted", False),
+        "repair_instructions": state.get("repair_instructions", []),
+        "pre_repair_artifact_path": state.get("pre_repair_artifact_path", ""),
         "fallback_used": state.get("fallback_used", False),
         "final_status": state.get("final_status", ""),
         "error_type": state.get("error_type", ""),
@@ -96,6 +98,19 @@ async def run_one(
             encoding="utf-8",
         )
         record["artifact_path"] = str(full_artifact_path)
+
+        # repair 后保存 pre-repair artifact
+        if state.get("repair_attempted") and state.get("pre_repair_blocks"):
+            pre_path = artifact_dir / f"{case['case_id']}.pre-repair.json"
+            pre_path.write_text(
+                json.dumps(
+                    {"content_blocks": state.get("pre_repair_blocks", [])},
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            record["pre_repair_artifact_path"] = str(pre_path)
 
         # 仅 interactive_diagram 额外保存 Schema v1 产物（不含 key/原始 LLM 回复/日志）
         diagram = _extract_diagram(state)
