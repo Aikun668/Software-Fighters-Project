@@ -430,7 +430,7 @@ class ResourceGenWorkflow(BaseWorkflow):
         except Exception as e:
             logger.exception(f"Repair failed for agent '{agent_name}'")
             self._emit(state, error_event("repair", "修复失败，保留原草稿"))
-            update = {"repair_attempted": True}
+            update = {"pre_repair_blocks": pre_blocks, "repair_attempted": True}
         self._emit(state, stage_end("repair", "修复完成"))
         return self._with_stage_timing(state, "repair", started, update)
 

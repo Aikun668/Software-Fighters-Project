@@ -231,7 +231,10 @@ class ContentAgent(BaseAgent):
         )
 
         if sub_type == "guide":
-            blocks = self._render_guide(topic, outline)
+            if repair_context:
+                blocks = await self._generate_guide_repair(topic, outline, repair_context)
+            else:
+                blocks = self._render_guide(topic, outline)
         elif comparison:
             blocks = await self._generate_comparison(topic, outline, student_profile, repair_context)
         else:
@@ -331,6 +334,27 @@ class ContentAgent(BaseAgent):
         key_takeaway = outline.get("key_takeaway", f"掌握{topic}的对比要点。")
         blocks.append({"type": "callout", "heading": "对比要点", "content": key_takeaway})
         return blocks
+
+    async def _generate_guide_repair(self, topic: str, outline: dict, repair_context: str) -> list[dict]:
+        """guide 修复：用 LLM 消费修复建议与原草稿，修订步骤后重新渲染，维持 blocks 契约。"""
+        sys_prompt = self._load_extra_prompt("guide.yaml", key="system")
+        user_tpl = self._load_extra_prompt("guide.yaml", key="user_template")
+        user_prompt = interpolate_variables(user_tpl, {"topic": topic})
+        user_prompt = user_prompt + "\n\n" + repair_context
+        try:
+            result = await self._call_llm_json(
+                system_prompt=sys_prompt, user_prompt=user_prompt,
+                expected_key="steps", fallback={},
+            )
+            if isinstance(result, dict) and result.get("steps"):
+                revised = dict(outline)
+                for key in ("scenario", "prerequisites", "steps", "pitfalls", "key_takeaway"):
+                    if result.get(key):
+                        revised[key] = result[key]
+                outline = revised
+        except Exception as e:
+            logger.exception(f"Guide repair LLM failed, using original outline: {e}")
+        return self._render_guide(topic, outline)
 
     def _render_guide(self, topic: str, outline: dict) -> list[dict]:
         """实战攻略 — plan 已给出完整内容，直接格式化"""
