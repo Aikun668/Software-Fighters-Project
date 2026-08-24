@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 
 import ResourceInputPanel from '@/components/ResourceInputPanel.vue'
+import ResourceResult from '@/components/ResourceResult.vue'
 import WorkflowTimeline from '@/components/WorkflowTimeline.vue'
 import { generateResource } from '@/api/resourceSse'
 import type { DonePayload, PageState, ResourceType, SseEvent } from '@/types/resource'
@@ -67,11 +68,12 @@ async function handleSubmit(payload: { topic: string; resourceType: ResourceType
           <p>{{ errorMessage }}</p>
           <p class="error-hint">你的主题已经保留，可以直接重新生成。</p>
         </div>
-        <div v-else-if="done" class="response-preview">
-          <p class="result-kicker">{{ selectedType === 'document' ? '课程资料' : '交互图解' }}</p>
-          <h2>{{ topic }}</h2>
-          <p>{{ done.response || '资源已经生成，接下来可以阅读结果。' }}</p>
-        </div>
+        <ResourceResult
+          v-else-if="done"
+          :topic="topic"
+          :response="done.response || '资源已经生成，接下来可以阅读结果。'"
+          :blocks="done.content_blocks"
+        />
         <div v-else class="streaming-state">
           <span class="loading-dot" aria-hidden="true" />
           <p>正在整理资源，请稍候…</p>
