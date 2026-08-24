@@ -3,6 +3,7 @@ import { ref } from 'vue'
 
 import ResourceInputPanel from '@/components/ResourceInputPanel.vue'
 import ResourceResult from '@/components/ResourceResult.vue'
+import QualitySummary from '@/components/QualitySummary.vue'
 import WorkflowTimeline from '@/components/WorkflowTimeline.vue'
 import { generateResource } from '@/api/resourceSse'
 import type { DonePayload, PageState, ResourceType, SseEvent } from '@/types/resource'
@@ -73,6 +74,13 @@ async function handleSubmit(payload: { topic: string; resourceType: ResourceType
           :topic="topic"
           :response="done.response || '资源已经生成，接下来可以阅读结果。'"
           :blocks="done.content_blocks"
+        />
+        <QualitySummary
+          v-if="done"
+          :review-status="done.review_status"
+          :repair-attempted="done.repair_attempted"
+          :fallback-used="done.fallback_used"
+          :final-status="done.final_status"
         />
         <div v-else class="streaming-state">
           <span class="loading-dot" aria-hidden="true" />
