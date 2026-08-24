@@ -1,0 +1,28 @@
+{
+  "name": "learning-resource-showcase",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5174",
+    "build": "npm run type-check && npm run build-only",
+    "build-only": "vite build",
+    "type-check": "vue-tsc --build",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "vue": "^3.5.32"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.6",
+    "@vue/tsconfig": "^0.9.1",
+    "@vue/test-utils": "^2.4.11",
+    "@tsconfig/node24": "^24.0.4",
+    "@types/node": "^24.12.2",
+    "jsdom": "^30.0.1",
+    "typescript": "~6.0.0",
+    "vite": "^8.0.8",
+    "vitest": "^4.1.10",
+    "vue-tsc": "^3.2.6"
+  }
+}
