@@ -56,7 +56,7 @@ showcase-web/                  # 新 Vue 3 + TypeScript + Vite 应用
 
 采用 Vue 3、TypeScript、Vite 和原生 scoped CSS；不引入 Element Plus、Pinia、图表库或新的 UI 依赖。界面状态仅在当前页面生命周期内存在。
 
-开发服务通过 Vite 代理将 `/ai-api/*` 转发至 `http://127.0.0.1:8001/*`。这样浏览器请求同源开发地址，不需要为新的 Vite 端口修改 AI 服务 CORS；生产部署策略不在第一版范围内。
+开发服务通过 Vite 代理将 `/ai-api/*` 转发至 AI 服务的 `http://127.0.0.1:8001/internal/*`。这样浏览器请求同源开发地址，不需要为新的 Vite 端口修改 AI 服务 CORS；生产部署策略不在第一版范围内。
 
 ### 后端契约
 
@@ -74,7 +74,7 @@ Content-Type: application/json
 }
 ```
 
-该请求由 Vite 代理转发为 AI 服务的 `POST /resources/generate`。前端以 `fetch()` 读取 `ReadableStream` 并自行解析 SSE；不用 `EventSource`，因为它不能发送 POST body。
+该请求由 Vite 代理转发为 AI 服务的 `POST /internal/resources/generate`。前端以 `fetch()` 读取 `ReadableStream` 并自行解析 SSE；不用 `EventSource`，因为它不能发送 POST body。
 
 消费的事件：
 

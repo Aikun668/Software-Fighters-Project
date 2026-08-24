@@ -57,7 +57,7 @@ API 模块只负责请求和 SSE 解析；类型文件只负责契约；展示�
 
 **Files:** 创建 `showcase-web/package.json`、`index.html`、`.gitignore`、`tsconfig.json`、`tsconfig.app.json`、`tsconfig.node.json`、`vite.config.ts`、`vitest.config.ts`、`src/main.ts`、`src/App.vue`、`src/vite-env.d.ts`、`src/test/setup.ts`、`src/styles/base.css` 和后续页面接入前的 `src/views/ResourceWorkbenchView.vue` 最小占位页。
 
-**Produces:** port `5174` 的 Vite 应用；`/ai-api/*` 代理到 `http://127.0.0.1:8001/*` 并移除 `/ai-api` 前缀；后续测试共用的 Vitest/jsdom 配置。
+**Produces:** port `5174` 的 Vite 应用；`/ai-api/*` 代理到 `http://127.0.0.1:8001/internal/*`；后续测试共用的 Vitest/jsdom 配置。
 
 - [ ] **Step 1: 创建工程和基础入口**
 
@@ -65,7 +65,7 @@ API 模块只负责请求和 SSE 解析；类型文件只负责契约；展示�
 
 - [ ] **Step 2: 配置代理和应用壳**
 
-Vite 配置使用 `server.port = 5174`，代理 target 为 `http://127.0.0.1:8001`，rewrite 为 `path.replace(/^\/ai-api/, '')`。`App.vue` 只渲染 `ResourceWorkbenchView`，不引入旧 `frontend/` 的 `Home.vue` 或 Router。
+Vite 配置使用 `server.port = 5174`，代理 target 为 `http://127.0.0.1:8001`，rewrite 为 `path.replace(/^\/ai-api/, '/internal')`。`App.vue` 只渲染 `ResourceWorkbenchView`，不引入旧 `frontend/` 的 `Home.vue` 或 Router。
 
 - [ ] **Step 3: 验证并提交**
 
