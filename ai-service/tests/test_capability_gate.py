@@ -145,3 +145,23 @@ class TestChatCenterGateWiring:
         plan = await chat_center.route("   ", mode="auto")
         assert plan.is_clear is False
         assert plan.tasks[0].mode == "inquiry"
+
+
+class TestGateConstrainsRouterCenter:
+    """Task 4 回归：gate 判定的能力 kind 必须约束二级路由的中心选择。
+
+    评审 cap-02：gate=VISUALIZATION 但关键词路由回落 tutor（时序图不在
+    旧词表内）→ 编排未进入。修复后必须直建对应中心；多意图路径不受影响。
+    """
+
+    @pytest.mark.asyncio
+    async def test_gate_kind_without_router_hit_still_enters_center(self, chat_center):
+        plan = await chat_center.route("帮我生成一张TCP三次握手的时序图", mode="auto")
+        assert plan.tasks[0].mode == "visualization"
+        assert plan.intent_meta.get("route") == "VISUALIZATION"
+
+    @pytest.mark.asyncio
+    async def test_multi_intent_plan_not_collapsed(self, chat_center):
+        plan = await chat_center.route("帮我规划Python学习路径，安排学习计划，再出几道题目", mode="auto")
+        modes = {t.mode for t in plan.tasks}
+        assert {"plan", "exercise"} <= modes

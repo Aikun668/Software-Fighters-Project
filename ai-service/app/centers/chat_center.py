@@ -32,6 +32,15 @@ from app.services.llm_service import (
 
 logger = logging.getLogger(__name__)
 
+# CapabilityKind → ResultAgent 编排中心（Task 11 评审回归项：
+# gate 判定了能力，二级路由就必须进入对应中心，不得回落 tutor）
+_KIND_TO_CENTER = {
+    "PLAN": "plan",
+    "RESOURCE": "resource",
+    "EXERCISE": "exercise",
+    "VISUALIZATION": "visualization",
+}
+
 
 class ChatCenter:
     def __init__(
@@ -167,6 +176,17 @@ class ChatCenter:
             context=context,
             max_intents=max_intents,
         )
+        expected_center = _KIND_TO_CENTER.get(decision.kind.value)
+        if expected_center and not any(t.mode == expected_center for t in plan.tasks):
+            # 二级关键词路由未命中 gate 判定的中心（回落 tutor）时，
+            # 以显式 mode 直建对应中心的单任务计划，保证 gate 判定权威
+            plan = await self._get_router().route(
+                message=message,
+                mode=decision.kind.value.lower(),
+                student_profile=student_profile,
+                context=context,
+                max_intents=max_intents,
+            )
         # 能力路径同样带观测元数据，供 execute 边界产出审计日志
         plan.intent_meta.update({
             "route": decision.kind.value,
