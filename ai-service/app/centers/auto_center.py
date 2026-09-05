@@ -83,6 +83,15 @@ class AutoCenter:
             })
             blocks = state.get("content_blocks", [])
             response = state.get("response", "")
+            if state.get("sanity_error_code"):
+                return CenterResult(
+                    mode="auto",
+                    intent=task.intent,
+                    event_type="error",
+                    error="回答生成失败，请稍后重试",
+                    agent="TutorAgent",
+                    sequence=task.sequence,
+                )
 
             # ── 图解增强：Tutor 回答后判断是否需要补图 ──
             viz_blocks = await self._maybe_visualize(messages, response)

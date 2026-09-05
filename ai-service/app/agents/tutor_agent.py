@@ -9,6 +9,9 @@ from app.services.domain_router import get_domain_router
 from app.services.hallucination_guard import HallucinationGuard, kb_verify
 from app.services.knowledge_base import get_kb
 from app.services.llm_service import PROFILE_DIRECTOR, OpenAILLM
+from app.services.context_builder import ContextBuilder
+from app.services.response_sanity import SanityVerdict, run_with_sanity_check
+from app.services.summary_maintainer import SummaryMaintainer
 from app.utils.prompt_loader import build_prompt, interpolate_variables
 
 logger = logging.getLogger(__name__)
@@ -61,6 +64,8 @@ class TutorAgent(BaseAgent):
         )
         self.use_mock_llm = use_mock_llm
         self._clarity_llm = None
+        self.context_builder = ContextBuilder()
+        self.summary_maintainer = SummaryMaintainer()
 
     def build_graph(self) -> "CompiledStateGraph":
         graph = StateGraph(TutorState)
@@ -202,11 +207,13 @@ class TutorAgent(BaseAgent):
 
         knowledge_context = ""
         kb_top_score: float | None = None
+        kb_candidates: list[dict] = []
         try:
             kb = get_kb()
             if not kb.is_empty():
                 docs = kb.search(query, top_k=3)
                 if docs:
+                    kb_candidates = docs
                     kb_top_score = docs[0].get("score")
                     # format_context 重新 search 一次，但结果一致（幂等）
                     # 直接用 docs 构建 context 避免重复查询
@@ -220,6 +227,7 @@ class TutorAgent(BaseAgent):
         return {
             "knowledge_context": knowledge_context,
             "kb_top_score": kb_top_score,
+            "kb_candidates": kb_candidates,
         }
 
     async def _respond_node(self, state: TutorState) -> dict:
@@ -233,9 +241,6 @@ class TutorAgent(BaseAgent):
         course_id = state.get("course_id", "")
         style = state.get("style", "standard")
         socratic_round = state.get("socratic_round", 0)
-
-        truncated = self._truncate_messages(messages)
-        profile_text = self._format_profile(student_profile)
 
         # ── Layer 1+2: 领域路由 + KB 门控 ──
         query = self._build_rag_query(messages)
@@ -273,8 +278,8 @@ class TutorAgent(BaseAgent):
             system_with_context = interpolate_variables(
                 socratic_prompt,
                 {
-                    "student_profile": profile_text,
-                    "knowledge_context": knowledge_context,
+                    "student_profile": "",
+                    "knowledge_context": "",
                     "socratic_instruction": socratic_instruction,
                     "domain_context": domain_context,
                     "reply_strategy": strategy_prompt,
@@ -284,8 +289,8 @@ class TutorAgent(BaseAgent):
             system_with_context = interpolate_variables(
                 self.system_prompt,
                 {
-                    "student_profile": profile_text,
-                    "knowledge_context": knowledge_context,
+                    "student_profile": "",
+                    "knowledge_context": "",
                     "domain_context": domain_context,
                     "reply_strategy": strategy_prompt,
                 },
@@ -307,23 +312,54 @@ class TutorAgent(BaseAgent):
                 except Exception:
                     pass
 
-        # Inject conversation summary (LLM-compressed history)
+        current_message = ""
+        for message in reversed(messages):
+            if isinstance(message, dict) and message.get("role") == "user":
+                current_message = self._extract_text(message.get("content", ""))
+                break
         conversation_summary = state.get("conversation_summary", "")
-        if conversation_summary:
-            truncated_summary = conversation_summary[:1200]
-            system_with_context += (
-                "\n\n## 对话历史摘要（经过压缩的早期对话记录）\n"
-                + truncated_summary
-                + "\n---"
-            )
+        if self.summary_maintainer.should_update(messages, current_message):
+            conversation_summary = self.summary_maintainer.update(
+                conversation_summary, messages, current_message,
+            ).to_text()
+        built_context = self.context_builder.build(
+            system=system_with_context,
+            current_message=current_message,
+            history=messages,
+            summary=conversation_summary,
+            student_profile=student_profile,
+            kb_candidates=(state.get("kb_candidates") or []) if knowledge_context else [],
+        )
+        truncated = self._truncate_messages(built_context.messages())
+        system_with_context = built_context.system_prompt()
 
-        api_success = True
-        try:
+        async def generate_once(_context):
             response = ""
             async for chunk in self.llm.chat_stream(
                 truncated, system_prompt=system_with_context
             ):
                 response += chunk
+            return response
+
+        api_success = True
+        retry_count = 0
+        try:
+            sanity = await run_with_sanity_check(
+                generate_once,
+                built_context,
+                request_message=current_message,
+            )
+            if sanity.verdict is SanityVerdict.ACCEPT:
+                response = sanity.text or ""
+                retry_count = max(0, sanity.attempts - 1)
+            else:
+                return {
+                    "response": "",
+                    "domain": domain,
+                    "sanity_error_code": sanity.error_code,
+                    "retry_count": max(0, sanity.attempts - 1),
+                    "conversation_summary": conversation_summary,
+                }
         except (ConnectionError, RuntimeError, ValueError) as e:
             logger.error(f"Tutor respond failed: {e}")
             response = "抱歉，我暂时无法回答这个问题。请稍后再试。"
@@ -340,4 +376,9 @@ class TutorAgent(BaseAgent):
             except Exception as e:
                 logger.warning(f"Hallucination guard check failed: {e}")
 
-        return {"response": response, "domain": domain}
+        return {
+            "response": response,
+            "domain": domain,
+            "retry_count": retry_count,
+            "conversation_summary": conversation_summary,
+        }

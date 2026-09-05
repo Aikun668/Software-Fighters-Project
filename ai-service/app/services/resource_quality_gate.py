@@ -103,6 +103,7 @@ class ResourceReviewService:
             use_mock=self.use_mock,
             api_key=cfg.api_key,
             base_url=cfg.base_url,
+            thinking_enabled=cfg.thinking_enabled,
         )
 
     async def review(

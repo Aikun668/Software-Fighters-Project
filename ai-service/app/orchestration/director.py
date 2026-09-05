@@ -120,6 +120,7 @@ class Director:
                     model=cfg.model or None,
                     temperature=cfg.temperature,
                     max_tokens=cfg.max_tokens,
+                    thinking_enabled=cfg.thinking_enabled,
                     use_mock=self.use_mock,
                 )
             else:

@@ -8,7 +8,7 @@ LLM Provider 策略模式
 通过 LLM_PROVIDER 环境变量切换，Agent 层无感知。
 
 Per-agent 模型选择：
-  - ModelConfig: 单次 LLM 调用的参数集（model, temperature, max_tokens）
+  - ModelConfig: 单次 LLM 调用的参数集（model, temperature, max_tokens, thinking_enabled）
   - AgentModelProfile: 将 Agent 角色（default/plan/generate）映射到 ModelConfig
   - 预设 profiles: 开箱即用的 Director/Content/Exercise/Code/MindMap/Reading 配置
 """
@@ -114,12 +114,14 @@ class ModelConfig:
         model: 模型名称（空字符串 = 使用环境变量默认值）
         temperature: 生成温度 (0.0 = 确定性, 1.0 = 最高随机性)
         max_tokens: 最大输出 token 数
+        thinking_enabled: 是否启用模型思考模式（默认关闭，保证普通对话直接产出正文）
         api_key: API Key（空字符串 = 使用环境变量 DEEPSEEK_API_KEY）
         base_url: API Base URL（空字符串 = 使用环境变量 DEEPSEEK_BASE_URL）
     """
     model: str = ""
     temperature: float = 0.7
     max_tokens: int = 8192
+    thinking_enabled: bool = False
     api_key: str = ""
     base_url: str = ""
 
@@ -167,10 +169,12 @@ PROFILE_DIRECTOR = AgentModelProfile(
 PROFILE_CONTENT = AgentModelProfile(
     default=ModelConfig(
         model=_MODEL_REASONER, temperature=0.7, max_tokens=8192,
+        thinking_enabled=True,
         api_key=_LLM_KEY, base_url=_LLM_BASE,
     ),
     plan=ModelConfig(
         model=_MODEL_REASONER, temperature=0.3, max_tokens=4096,
+        thinking_enabled=True,
         api_key=_LLM_KEY, base_url=_LLM_BASE,
     ),
 )
@@ -178,10 +182,12 @@ PROFILE_CONTENT = AgentModelProfile(
 PROFILE_EXERCISE = AgentModelProfile(
     default=ModelConfig(
         model=_MODEL_REASONER, temperature=0.7, max_tokens=4096,
+        thinking_enabled=True,
         api_key=_LLM_KEY, base_url=_LLM_BASE,
     ),
     plan=ModelConfig(
         model=_MODEL_REASONER, temperature=0.3, max_tokens=2048,
+        thinking_enabled=True,
         api_key=_LLM_KEY, base_url=_LLM_BASE,
     ),
 )
@@ -189,6 +195,7 @@ PROFILE_EXERCISE = AgentModelProfile(
 PROFILE_CODE = AgentModelProfile(
     default=ModelConfig(
         model=_MODEL_REASONER, temperature=0.5, max_tokens=8192,
+        thinking_enabled=True,
         api_key=_LLM_KEY, base_url=_LLM_BASE,
     ),
 )
@@ -217,6 +224,7 @@ PROFILE_FLASHCARD = AgentModelProfile(
 PROFILE_INTERACTIVE_DIAGRAM = AgentModelProfile(
     default=ModelConfig(
         model=_MODEL_REASONER, temperature=0.5, max_tokens=8192,
+        thinking_enabled=True,
         api_key=_LLM_KEY, base_url=_LLM_BASE,
     ),
 )
@@ -224,6 +232,7 @@ PROFILE_INTERACTIVE_DIAGRAM = AgentModelProfile(
 PROFILE_PROJECT = AgentModelProfile(
     default=ModelConfig(
         model=_MODEL_REASONER, temperature=0.7, max_tokens=8192,
+        thinking_enabled=True,
         api_key=_LLM_KEY, base_url=_LLM_BASE,
     ),
 )
@@ -233,6 +242,7 @@ PROFILE_PROJECT = AgentModelProfile(
 PROFILE_DIAGNOSE = AgentModelProfile(
     default=ModelConfig(
         model=_MODEL_REASONER, temperature=0.3, max_tokens=4096,
+        thinking_enabled=True,
         api_key=_LLM_KEY, base_url=_LLM_BASE,
     ),
 )
@@ -291,6 +301,7 @@ def create_llm(
     model: str | None = None,
     api_key: str = "",
     base_url: str = "",
+    thinking_enabled: bool = False,
 ) -> Any:
     """LLM Provider 工厂——根据 LLM_PROVIDER 环境变量选择后端。
 
@@ -311,6 +322,7 @@ def create_llm(
             model=model,
             api_key=api_key,
             base_url=base_url,
+            thinking_enabled=thinking_enabled,
         )
     return SparkLLM(
         temperature=temperature,
@@ -561,6 +573,7 @@ class OpenAILLM:
         model: str | None = None,
         api_key: str = "",
         base_url: str = "",
+        thinking_enabled: bool = False,
     ):
         self.base_url = (base_url or os.getenv("DEEPSEEK_BASE_URL", "") or os.getenv("MINIMAX_BASE_URL", "https://api.minimax.cn/v1")).rstrip("/")
         raw_key = api_key or os.getenv("DEEPSEEK_API_KEY", "") or os.getenv("MINIMAX_API_KEY", "")
@@ -569,6 +582,7 @@ class OpenAILLM:
         self.model = model or os.getenv("DEEPSEEK_MODEL_CHAT", "") or os.getenv("MINIMAX_MODEL_CHAT", "MiniMax-M3")
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.thinking_enabled = thinking_enabled
         self.use_mock = use_mock
 
         if not use_mock and not self.api_key:
@@ -593,6 +607,7 @@ class OpenAILLM:
             keys = [self.api_key]
 
         last_error = None
+        retry_without_thinking = False
         async with _llm_semaphore:
             for attempt in range(_MAX_RETRIES + len(keys)):
                 key = keys[attempt % len(keys)]
@@ -607,6 +622,7 @@ class OpenAILLM:
                                     "messages": full_messages,
                                     "temperature": self.temperature,
                                     "max_tokens": self.max_tokens,
+                                    "thinking": {"type": "enabled" if self.thinking_enabled else "disabled"},
                                     "stream": False,
                                 },
                                 headers={
@@ -624,7 +640,17 @@ class OpenAILLM:
                                             raise _KeyRejectedError(resp.status, err_text)
                                     raise RuntimeError(f"OpenAI HTTP error {resp.status}: {err_text[:200]}")
                                 data = await resp.json()
-                                return data["choices"][0]["message"]["content"]
+                                content = data["choices"][0]["message"].get("content") or ""
+                                if content or not self.thinking_enabled:
+                                    return content
+                                logger.warning(
+                                    "LLM response ended without final content; "
+                                    "retrying with thinking disabled (model=%s)",
+                                    self.model,
+                                )
+                                retry_without_thinking = True
+                    if retry_without_thinking:
+                        break
                 except _KeyRejectedError:
                     continue
                 except asyncio.TimeoutError:
@@ -635,6 +661,17 @@ class OpenAILLM:
                     if attempt < _MAX_RETRIES + len(keys) - 1:
                         logger.warning(f"OpenAI network error (attempt {attempt+1}, key={key[:12]}...), retrying: {e}")
                         await asyncio.sleep(1.0)
+
+        if retry_without_thinking:
+            fallback_llm = OpenAILLM(
+                temperature=self.temperature,
+                max_tokens=self.max_tokens,
+                model=self.model,
+                api_key=self.api_key,
+                base_url=self.base_url,
+                thinking_enabled=False,
+            )
+            return await fallback_llm.chat(messages, system_prompt)
 
         logger.error(f"OpenAI connection failed after {_MAX_RETRIES + len(keys)} attempts: {last_error}")
         raise RuntimeError(f"OpenAI connection failed: {last_error}")
@@ -658,11 +695,15 @@ class OpenAILLM:
         if not keys:
             keys = [self.api_key]
 
+        retry_without_thinking = False
         async with _llm_stream_semaphore:
             last_error = None
             for attempt in range(_MAX_RETRIES + len(keys)):
                 key = keys[attempt % len(keys)]
                 per_key_sem = await _acquire_per_key(key)
+                reasoning_chars = 0
+                final_content_chars = 0
+                finish_reason = None
                 try:
                     async with asyncio.timeout(180.0), per_key_sem:
                         async with _create_session() as session:
@@ -673,6 +714,7 @@ class OpenAILLM:
                                     "messages": full_messages,
                                     "temperature": self.temperature,
                                     "max_tokens": self.max_tokens,
+                                    "thinking": {"type": "enabled" if self.thinking_enabled else "disabled"},
                                     "stream": True,
                                 },
                                 headers={
@@ -696,15 +738,43 @@ class OpenAILLM:
                                         continue
                                     chunk = line[6:]
                                     if chunk == "[DONE]":
-                                        return
+                                        if final_content_chars:
+                                            return
+                                        if self.thinking_enabled:
+                                            logger.warning(
+                                                "LLM stream ended without final content; "
+                                                "retrying with thinking disabled "
+                                                "(model=%s, finish_reason=%s, reasoning_chars=%s)",
+                                                self.model,
+                                                finish_reason,
+                                                reasoning_chars,
+                                            )
+                                            retry_without_thinking = True
+                                            break
+                                        logger.error(
+                                            "LLM stream ended without content "
+                                            "(model=%s, finish_reason=%s)",
+                                            self.model,
+                                            finish_reason,
+                                        )
+                                        raise RuntimeError("LLM empty final content")
                                     try:
                                         data = json.loads(chunk)
-                                        delta = data["choices"][0].get("delta", {})
+                                        choice = data["choices"][0]
+                                        finish_reason = choice.get("finish_reason") or finish_reason
+                                        delta = choice.get("delta", {})
+                                        reasoning = delta.get("reasoning_content", "")
+                                        reasoning_chars += len(reasoning or "")
                                         content = delta.get("content", "")
                                         if content:
+                                            final_content_chars += len(content)
                                             yield content
                                     except (json.JSONDecodeError, KeyError, IndexError):
                                         continue
+                                if retry_without_thinking:
+                                    break
+                    if retry_without_thinking:
+                        break
                 except _KeyRejectedError:
                     continue
                 except asyncio.TimeoutError:
@@ -719,7 +789,19 @@ class OpenAILLM:
                     logger.error(f"OpenAI stream connection error: {e}")
                     raise RuntimeError(f"OpenAI connection failed: {e}")
 
-            raise RuntimeError(f"OpenAI stream failed with all keys: {last_error}")
+            if not retry_without_thinking:
+                raise RuntimeError(f"OpenAI stream failed with all keys: {last_error}")
+
+        fallback_llm = OpenAILLM(
+            temperature=self.temperature,
+            max_tokens=self.max_tokens,
+            model=self.model,
+            api_key=self.api_key,
+            base_url=self.base_url,
+            thinking_enabled=False,
+        )
+        async for content in fallback_llm.chat_stream(messages, system_prompt):
+            yield content
 
     def _build_messages(
         self, messages: list[dict], system_prompt: str

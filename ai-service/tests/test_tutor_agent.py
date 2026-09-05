@@ -194,6 +194,63 @@ class TestTutorAgentGraph:
         assert "抱歉" in result["response"]
 
 
+class TestConversationFoundationWiring:
+    """真实 Tutor 出口必须消费精简上下文，并对空回答只重试一次。"""
+
+    @pytest.mark.asyncio
+    async def test_retries_empty_reply_with_filtered_context(self, monkeypatch):
+        class ScriptedLLM:
+            def __init__(self):
+                self.calls = []
+
+            async def chat_stream(self, messages, system_prompt=""):
+                self.calls.append((messages, system_prompt))
+                reply = "" if len(self.calls) == 1 else "TCP 三次握手用于确认双方收发能力。"
+                if reply:
+                    yield reply
+
+        with patch("app.agents.base_agent.create_llm", return_value=AsyncMock()):
+            agent = TutorAgent(use_mock_llm=True)
+        llm = ScriptedLLM()
+        agent.llm = llm
+
+        class GeneralRouter:
+            def classify(self, *args, **kwargs):
+                return "general"
+
+            def should_inject_kb(self, *args, **kwargs):
+                return False
+
+            def should_inject_analogy(self, *args, **kwargs):
+                return False
+
+        async def clear_clarity(_message):
+            return {"has_clear_goal": True, "has_blocker": False, "needs_clarification": False}
+
+        monkeypatch.setattr("app.agents.tutor_agent.get_domain_router", lambda: GeneralRouter())
+        monkeypatch.setattr(agent, "_classify_clarity", clear_clarity)
+
+        result = await agent._respond_node({
+            "messages": [
+                {"role": "user", "content": "我们在学 TCP/IP。"},
+                {"role": "assistant", "content": "可以从握手开始理解。"},
+                {"role": "user", "content": "TCP 为什么需要三次握手？"},
+            ],
+            "student_profile": {
+                "cognitive_style": "偏好先直观后公式",
+                "interest_direction": "摄影",
+            },
+            "knowledge_context": "",
+        })
+
+        assert result["response"] == "TCP 三次握手用于确认双方收发能力。"
+        assert len(llm.calls) == 2
+        first_messages, first_system = llm.calls[0]
+        assert first_messages[-1] == {"role": "user", "content": "TCP 为什么需要三次握手？"}
+        assert "偏好先直观后公式" in first_system
+        assert "摄影" not in first_system
+
+
 class TestMultimodalContentExtraction:
     """多模态 content 的文本提取"""
 
