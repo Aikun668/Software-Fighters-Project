@@ -1,0 +1,1402 @@
+{
+  "dataset": "chat_foundation_v1.jsonl",
+  "client": "FakeEvalClient",
+  "total": 60,
+  "capability_false_trigger_rate": 0.0,
+  "capability_recognition_rate": 1.0,
+  "sse_done_rate": 1.0,
+  "sanity_violations": 0,
+  "sanity_breakdown": {},
+  "route_mismatches": 0,
+  "needs_review": [
+    {
+      "id": "nq-03",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "nq-04",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "nq-05",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "nq-06",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "nq-07",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "nq-08",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "nq-09",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "nq-10",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "nq-11",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "nq-12",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "nq-13",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "nq-14",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "nq-15",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "nq-16",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "nq-17",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "nq-18",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "nq-19",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "nq-20",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "cf-03",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "cf-04",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "cf-05",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "cf-07",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "cf-08",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "cf-09",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "cf-11",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "cf-12",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "uc-01",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "uc-02",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "uc-03",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "uc-04",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "uc-05",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "uc-06",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "uc-08",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "af-01",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "af-05",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "af-06",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "af-07",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "nt-03",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "nt-04",
+      "reason": "must_include_unverified_or_failed"
+    }
+  ],
+  "records": [
+    {
+      "id": "nq-01",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": false
+    },
+    {
+      "id": "nq-02",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": false
+    },
+    {
+      "id": "nq-03",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "神经网络"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "nq-04",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "全局解释器锁"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "nq-05",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "训练"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "nq-06",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "注意力",
+          "Q",
+          "K"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "nq-07",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "物理内存"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "nq-08",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "梯度",
+          "链式"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "nq-09",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "B+树"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "nq-10",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "TLS"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "nq-11",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "自己"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "nq-12",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "互斥",
+          "循环等待"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "nq-13",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "先验"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "nq-14",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "滑动",
+          "特征"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "nq-15",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "线性"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "nq-16",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "提交历史"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "nq-17",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "增长"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "nq-18",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "字节码"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "nq-19",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "损失",
+          "梯度"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "nq-20",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "内存"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "cf-01",
+      "category": "context_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": false
+    },
+    {
+      "id": "cf-02",
+      "category": "context_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": false
+    },
+    {
+      "id": "cf-03",
+      "category": "context_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "过拟合"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "cf-04",
+      "category": "context_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "反向传播"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "cf-05",
+      "category": "context_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "UDP"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "cf-06",
+      "category": "context_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": false
+    },
+    {
+      "id": "cf-07",
+      "category": "context_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "HTTP"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "cf-08",
+      "category": "context_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "梯度"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "cf-09",
+      "category": "context_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "GIL"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "cf-10",
+      "category": "context_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": false
+    },
+    {
+      "id": "cf-11",
+      "category": "context_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "卷积"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "cf-12",
+      "category": "context_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "交叉熵"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "uc-01",
+      "category": "user_correction",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "挥手"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "uc-02",
+      "category": "user_correction",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "GIL",
+          "Python"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "uc-03",
+      "category": "user_correction",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "调度"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "uc-04",
+      "category": "user_correction",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "卷积"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "uc-05",
+      "category": "user_correction",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "时间复杂度"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "uc-06",
+      "category": "user_correction",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "Mac"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "uc-07",
+      "category": "user_correction",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": false
+    },
+    {
+      "id": "uc-08",
+      "category": "user_correction",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "考试"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "af-01",
+      "category": "ambiguous_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "CNN"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "af-02",
+      "category": "ambiguous_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": false
+    },
+    {
+      "id": "af-03",
+      "category": "ambiguous_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": false
+    },
+    {
+      "id": "af-04",
+      "category": "ambiguous_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": false
+    },
+    {
+      "id": "af-05",
+      "category": "ambiguous_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "过拟合"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "af-06",
+      "category": "ambiguous_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "索引"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "af-07",
+      "category": "ambiguous_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "递归"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "af-08",
+      "category": "ambiguous_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": false
+    },
+    {
+      "id": "cap-01",
+      "category": "capability_request",
+      "expected_route": "VISUALIZATION",
+      "actual_route": "VISUALIZATION",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": false
+    },
+    {
+      "id": "cap-02",
+      "category": "capability_request",
+      "expected_route": "VISUALIZATION",
+      "actual_route": "VISUALIZATION",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": false
+    },
+    {
+      "id": "cap-03",
+      "category": "capability_request",
+      "expected_route": "EXERCISE",
+      "actual_route": "EXERCISE",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": false
+    },
+    {
+      "id": "cap-04",
+      "category": "capability_request",
+      "expected_route": "EXERCISE",
+      "actual_route": "EXERCISE",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": false
+    },
+    {
+      "id": "cap-05",
+      "category": "capability_request",
+      "expected_route": "PLAN",
+      "actual_route": "PLAN",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": false
+    },
+    {
+      "id": "cap-06",
+      "category": "capability_request",
+      "expected_route": "PLAN",
+      "actual_route": "PLAN",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": false
+    },
+    {
+      "id": "cap-07",
+      "category": "capability_request",
+      "expected_route": "RESOURCE",
+      "actual_route": "RESOURCE",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": false
+    },
+    {
+      "id": "cap-08",
+      "category": "capability_request",
+      "expected_route": "RESOURCE",
+      "actual_route": "RESOURCE",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": false
+    },
+    {
+      "id": "nt-01",
+      "category": "no_false_trigger",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": false
+    },
+    {
+      "id": "nt-02",
+      "category": "no_false_trigger",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": false
+    },
+    {
+      "id": "nt-03",
+      "category": "no_false_trigger",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "二分"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    },
+    {
+      "id": "nt-04",
+      "category": "no_false_trigger",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "must_include": [
+          "递归"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是离线评测的固定回答：进程是资源分配的基本单位，线程共享进程资源，TCP 三次握手用于确认双向可达。",
+      "needs_review": true
+    }
+  ],
+  "gates": {
+    "capability_false_trigger_rate": true,
+    "capability_recognition_rate": true,
+    "sse_done_rate": true,
+    "sanity_violations": true
+  }
+}

@@ -54,3 +54,21 @@
 - 机械复查：60/60 与真实 `CapabilityGate.decide()` 零分歧（含"知识图谱是什么？"正确落 NORMAL_CHAT）。
 - 人工抽检：cap-01/03/05 采用设计文档合同样例原文；nt-01 为计划点名的防误触发样例；uc-01 采用计划原例"不是，我说的是挥手"。
 - 标定原则：能力请求必须"明确动词 + 明确产物"成对；模糊诉求、概念解释、举例请求一律 NORMAL_CHAT。
+
+## 评测运行器（Task 10 · 2026-09-05 接入）
+
+`run_chat_eval.py`：绕开页面，逐条调用与线上相同的 `ChatCenter.route`；
+一级路由指标真实（确定性 CapabilityGate，离线可复跑），回答由可注入客户端产出。
+
+```bash
+# 标准离线运行（fake 客户端 + 真实路由），报告写入 evals/reports/
+python evals/run_chat_eval.py
+
+# 故障注入：验证 SSE 退化会被门禁拦下（退出码 1）
+python evals/run_chat_eval.py --client broken
+```
+
+- 门禁：误触发率 ≤5%、能力识别率 ≥90%、SSE done 率 ≥99%、空/重复/截断/泄露 = 0；任一不达标退出码 1。
+- 客户端协议：`async run(sample) -> (answer, terminal_event)`；真实 LLM 客户端在 Task 11 解冻评审时按同协议接入。
+- 离线运行的 `needs_review` 条目 = `must_include` 无法离线验证的内容断言；真实运行后由人工按 rubric 裁决。
+- 回归测试：`ai-service/tests/test_run_chat_eval.py`（含路由退化/SSE 退化非零退出的门禁测试）。

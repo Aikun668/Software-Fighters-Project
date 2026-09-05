@@ -1,0 +1,1308 @@
+{
+  "dataset": "chat_foundation_v1.jsonl",
+  "client": "LiveEvalClient",
+  "llm_model_chat": "deepseek-chat",
+  "total": 60,
+  "capability_false_trigger_rate": 0.0,
+  "capability_recognition_rate": 1.0,
+  "sse_done_rate": 1.0,
+  "normal_sse_done_rate": 1.0,
+  "sanity_violations": 3,
+  "sanity_breakdown": {
+    "empty": 3
+  },
+  "route_mismatches": 0,
+  "needs_review": [
+    {
+      "id": "nq-09",
+      "reason": "must_include_unverified_or_failed"
+    },
+    {
+      "id": "cap-01",
+      "reason": "sanity:empty"
+    },
+    {
+      "id": "cap-02",
+      "reason": "orchestration_not_entered"
+    },
+    {
+      "id": "cap-05",
+      "reason": "sanity:empty"
+    },
+    {
+      "id": "cap-06",
+      "reason": "sanity:empty"
+    }
+  ],
+  "records": [
+    {
+      "id": "nq-01",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "进程是计算机科学中的一个核心概念，尤其在操作系统和人工智能系统（比如训练模型时多进程并行）中非常重要。让我们从直观到严谨，一步步来看。 ## 一、直观解释：进程是什么？ **一句话**：进程是**正在运行的程序实例**。 你可以把**程序*…",
+      "needs_review": false
+    },
+    {
+      "id": "nq-02",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "TCP（传输控制协议）需要**三次握手**来建立可靠的双向连接，这背后涉及两个核心问题：**确认双方都具备收发能力**，以及**同步初始序列号（ISN）**。 --- ## ① 直观解释：为什么不能两次，为什么不是四次？ 想象一个场景：两个…",
+      "needs_review": false
+    },
+    {
+      "id": "nq-03",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "很好的问题！这是AI初学者最常问的问题之一。让我用三层方式帮你理清这两个概念。 ## ① 直观解释 **机器学习（Machine Learning）** 是一个更大的领域——它让计算机**从数据中学习规律**，而不需要人类显式编写规则。就像…",
+      "needs_review": false
+    },
+    {
+      "id": "nq-04",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "# Python 的 GIL 是什么？ ## 一、直观理解 **GIL（Global Interpreter Lock，全局解释器锁）** 是 CPython（Python 的官方解释器）中的一个互斥锁，它确保**同一时刻只有一个线程**能…",
+      "needs_review": false
+    },
+    {
+      "id": "nq-05",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "好的，这是一个非常经典且重要的问题！理解过拟合是学习机器学习和人工智能的关键一步。我们把它拆解成两个部分来看。 ### 1. 什么是过拟合？ **直观解释（是什么、为什么）：** 想象你在准备一场数学考试。你为了考高分，不是去理解数学原理，…",
+      "needs_review": false
+    },
+    {
+      "id": "nq-06",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "好的！Transformer 的自注意力机制（Self-Attention）是它的核心创新之一。我们分三层来拆解，从直观到严谨，最后给个数值例子。 --- ### ① 直观解释：它是什么？为什么需要它？ **一句话**：自注意力机制让序列中…",
+      "needs_review": false
+    },
+    {
+      "id": "nq-07",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是个很经典的计算机系统问题，也是理解操作系统、数据库和AI框架内存管理的基础。我们从直观理解、底层逻辑到具体例子，分三层来拆解。 --- ### ① 直观解释：它们是什么，为什么需要区分？ **物理内存（Physical Memory）*…",
+      "needs_review": false
+    },
+    {
+      "id": "nq-08",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "# 梯度消失（Vanishing Gradient） 梯度消失是深度学习中一个非常经典的问题，让我从直观到严谨，分三层帮你理解。 --- ## 一、直观解释：是什么、为什么 **一句话理解**：在深层神经网络中，反向传播时梯度从输出层向输入…",
+      "needs_review": false
+    },
+    {
+      "id": "nq-09",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [
+          "B+树"
+        ],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "# 为什么数据库索引能加快查询？ 这个问题问得很好！要理解索引为什么能加速查询，我先带你从直观感受说起。 ## ① 直观解释：从\"翻书\"到\"查目录\" 想象一本**没有目录**的《算法导论》，你想找\"红黑树\"那一节，只能从第1页一页页翻——这…",
+      "needs_review": true
+    },
+    {
+      "id": "nq-10",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是一个经典的计算机网络问题。虽然它不直接属于“人工智能”领域，但作为计算机科学的基础知识，我很乐意为你解答。 简单来说，**HTTPS 是 HTTP 的安全版本**。它们的主要区别在于**安全性**和**传输方式**。 我们可以从三个层次…",
+      "needs_review": false
+    },
+    {
+      "id": "nq-11",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "递归（Recursion）是计算机科学和数学中的一个核心概念。让我从直观到严谨，层层递进地为你解释。 --- ## 一、直观理解：什么是递归？ **递归就是“自己调用自己”**——一个函数在它的定义中直接或间接地调用自身。 想象一下俄罗斯套…",
+      "needs_review": false
+    },
+    {
+      "id": "nq-12",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "死锁是操作系统中一个经典且重要的概念。要回答你的问题，我们先从直观理解入手，再给出严谨的定义。 ### ① 直观解释（是什么、为什么） 想象一个十字路口，四个方向的车辆都想要直行，但每辆车都占住了自己所在车道的入口，同时又在等待其他车道的车…",
+      "needs_review": false
+    },
+    {
+      "id": "nq-13",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "# 贝叶斯定理 ## 一、直观理解 贝叶斯定理描述的是**当我们获得新信息后，如何更新对一个事件发生的信念**。它回答的核心问题是： > 在已知某些\"证据\"（B）出现的条件下，某个\"原因\"（A）发生的概率是多少？ 用一个生活例子来感受一下：…",
+      "needs_review": false
+    },
+    {
+      "id": "nq-14",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "卷积核（Kernel/Filter）是CNN中最核心的组件。我用三层递进的方式来解释它的工作原理。 --- ## ① 直观解释：卷积核在做什么？ 想象你拿着一只手电筒，在图片上滑动着照——每次只照亮一个局部区域（比如3×3像素）。卷积核就是…",
+      "needs_review": false
+    },
+    {
+      "id": "nq-15",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这个问题问得很好，它触及了神经网络为什么**强大**的核心。如果激活函数是线性的，那么无论网络有多少层，它都等价于一个单层的线性模型，表达能力会大打折扣。 --- ## ① 直观解释（是什么、为什么） **一句话：线性函数的线性组合仍然是线…",
+      "needs_review": false
+    },
+    {
+      "id": "nq-16",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是一个很好的问题！虽然 Git 本身不属于人工智能或计算机科学的理论核心，但它是 AI 工程师日常开发中必不可少的工具，我来帮你梳理清楚。 ## 🎯 直观理解（是什么、为什么） **Merge（合并）** 和 **Rebase（变基）**…",
+      "needs_review": false
+    },
+    {
+      "id": "nq-17",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "# 时间复杂度（Time Complexity） ## 一、直观理解 时间复杂度是**描述算法运行时间随输入规模增长而变化的趋势**，而不是具体的运行秒数。 打个比方：假设你要整理房间里的书—— - **方法A**：一本一本看，每次只拿一本…",
+      "needs_review": false
+    },
+    {
+      "id": "nq-18",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "JVM（Java Virtual Machine，Java虚拟机）是一个很好的问题！让我从直观到严谨给你分层讲解。 --- ## ① 直观理解：JVM 是什么？ **一句话：JVM 是 Java 程序的\"运行环境\"，负责把字节码翻译成计算机…",
+      "needs_review": false
+    },
+    {
+      "id": "nq-19",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "反向传播（Backpropagation）是深度学习中训练神经网络的核心算法。它的本质是**计算损失函数对每个参数的梯度**，然后用梯度下降法更新参数，让预测误差逐步减小。 --- ## 一、直观理解：为什么叫“反向”？ 想象你在玩一个**…",
+      "needs_review": false
+    },
+    {
+      "id": "nq-20",
+      "category": "normal_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "好问题！Redis 的速度快几乎是它最出名的标签之一，官方数据显示它的读写性能可以达到 **10万+ 次/秒**。这并非偶然，而是多种设计策略叠加的结果。 为了让你直观理解，我们把它拆解成 **内存存储**、**单线程模型**、**高效数据…",
+      "needs_review": false
+    },
+    {
+      "id": "cf-01",
+      "category": "context_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "好问题！既然你理解了进程和线程在**资源分配**上的核心区别，我们再来把**调度**这块儿说透。 --- ## ① 直观解释：它们“被调度”的粒度不同 **进程**是“大块头”的调度单位（比如打开一个浏览器是一个进程）。 **线程**是“小…",
+      "needs_review": false
+    },
+    {
+      "id": "cf-02",
+      "category": "context_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这个问题问得非常好！两次握手确实看起来更省事，但**两次握手无法解决一个核心问题：无法确认“自己发送的包，对方是否已经正确接收并准备好接收数据”**，更关键的是，它无法处理**网络中滞留的旧连接请求**。 我们分三步来理解： --- ###…",
+      "needs_review": false
+    },
+    {
+      "id": "cf-03",
+      "category": "context_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "没问题，我们换个更生活化的方式来理解。 ## 一句话版本 **过拟合就是：死记硬背，而不是真正学会。** ## 打个比方 想象你要教一个小朋友认识**猫**。 - **正常学习**：你给他看了10张猫的照片，他总结出规律——\"有尖耳朵、有胡…",
+      "needs_review": false
+    },
+    {
+      "id": "cf-04",
+      "category": "context_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "没问题，我们换一个更贴近生活的例子——**猜价格**。 --- ### 🎯 直观例子：猜西瓜价格 假设卖瓜老伯有一个魔法西瓜，它的价格 \\( y \\) 只由两个因素决定：**重量** \\( x_1 \\) 和 **甜度** \\( x_2 \\)…",
+      "needs_review": false
+    },
+    {
+      "id": "cf-05",
+      "category": "context_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "UDP 适合**对实时性要求高、能容忍少量丢包**的场景。因为它没有 TCP 的三次握手、确认重传等机制，延迟更低、开销更小。 典型例子： - **直播 / 视频通话**：偶尔掉一帧画面没关系，但卡顿不可接受。 - **在线游戏**：玩家位…",
+      "needs_review": false
+    },
+    {
+      "id": "cf-06",
+      "category": "context_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "第二步确实容易让人困惑，因为它**同时干了两件事**。我用一个生活场景帮你理解： --- ## 场景类比：打电话 想象你给朋友打电话： | 步骤 | 对话 | 含义 | |------|------|------| | ① 你拨号 | “喂…",
+      "needs_review": false
+    },
+    {
+      "id": "cf-07",
+      "category": "context_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "好问题！这其实是一个**分层**的关系，很多初学者容易把它们搞混。我们可以用一个很形象的类比来理解： - **HTTP/2** 是**“语言”**：它规定了浏览器和服务器之间**怎么说话**（比如如何高效地打包数据、如何复用连接）。 - *…",
+      "needs_review": false
+    },
+    {
+      "id": "cf-08",
+      "category": "context_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "是的，梯度消失和梯度爆炸其实是**同一个根源**——反向传播时梯度逐层连乘——只是结果走向了两个极端。 --- ## ① 直观解释 想象你在向一群传话的人打听消息： - **梯度消失**：每传一层，消息就衰减一点，传到队伍最前面的人那里时，…",
+      "needs_review": false
+    },
+    {
+      "id": "cf-09",
+      "category": "context_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "**能。** 多进程可以完全绕开 GIL，因为每个进程都有自己独立的 Python 解释器和内存空间，互不干扰。 --- ### 直观理解 GIL 是**进程内**的锁——它锁的是\"一个进程里同时只能跑一个线程\"。但如果你开多个进程，每个进…",
+      "needs_review": false
+    },
+    {
+      "id": "cf-10",
+      "category": "context_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "抱歉，我上一条回答只开了个头。让我完整地把 B+ 树讲透，从直观到严谨，再给个具体例子。 --- ## 一、直观理解：B+树是什么 想象一本**带目录和页边索引的词典**： - **内部节点（非叶子）** = 目录页，只告诉你\"哪个字母/词…",
+      "needs_review": false
+    },
+    {
+      "id": "cf-11",
+      "category": "context_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "好的，我们来深入聊聊 `padding`（填充）的作用。这是一个非常关键的概念，理解了它，你对卷积神经网络的理解会更上一层楼。 --- ### ① 直观解释：padding 到底在干什么？ 想象一下，你有一张照片，想用一个放大镜（卷积核）在…",
+      "needs_review": false
+    },
+    {
+      "id": "cf-12",
+      "category": "context_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "好的，我们来拆解一下**交叉熵**的公式。交叉熵在分类问题中非常常用，它衡量的是**两个概率分布之间的差异**。 ### ① 直观解释（是什么、为什么） 想象你在考试做选择题，正确答案是 A。你的模型经过计算，给出了一个“信心程度”分布：认…",
+      "needs_review": false
+    },
+    {
+      "id": "uc-01",
+      "category": "user_correction",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "抱歉，是我理解错了！你说的是**断开连接时的四次挥手**（TCP四次挥手），而不是建立连接的三次握手。我重新来回答。 --- ## TCP 断开连接 — 四次挥手 ### ① 直观解释（是什么、为什么） TCP 是全双工通信，即**数据可以…",
+      "needs_review": false
+    },
+    {
+      "id": "uc-02",
+      "category": "user_correction",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "抱歉，我理解偏了！你问的是 **Python 的 GIL（Global Interpreter Lock，全局解释器锁）**，这是个非常经典且容易混淆的概念。我们分三层来看： --- ## ① 直观解释：GIL 是什么？为什么存在？ **一…",
+      "needs_review": false
+    },
+    {
+      "id": "uc-03",
+      "category": "user_correction",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "抱歉，我之前理解错了！你问的是**进程调度算法**。让我来系统地讲一下。 --- ## 进程调度算法 ### 一、直观理解（是什么、为什么） 进程调度算法就是**操作系统决定\"下一个该让哪个进程占用CPU\"的策略**。就像餐厅服务员决定先给…",
+      "needs_review": false
+    },
+    {
+      "id": "uc-04",
+      "category": "user_correction",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "抱歉，是我听岔了！你问的是 **CNN（卷积神经网络，Convolutional Neural Network）**。 CNN 是深度学习中最经典的架构之一，尤其在**图像处理**领域取得了革命性突破。下面我分三层给你讲清楚。 --- ##…",
+      "needs_review": false
+    },
+    {
+      "id": "uc-05",
+      "category": "user_correction",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "抱歉，刚才只提了空间复杂度，漏掉了时间复杂度。我们来看一下： ## 时间复杂度分析 假设这段代码的核心结构是： ```python def two_sum(nums, target): n = len(nums) for i in rang…",
+      "needs_review": false
+    },
+    {
+      "id": "uc-06",
+      "category": "user_correction",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "抱歉，我默认按 Windows 环境回答了，这是我的疏忽。既然你用的是 Mac，我们来看看 macOS 上正确配置环境变量的方法。 --- ## macOS 环境变量配置（以 zsh 为例） macOS 从 Catalina 开始默认使用 …",
+      "needs_review": false
+    },
+    {
+      "id": "uc-07",
+      "category": "user_correction",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "好的，抱歉刚才弄混了，我们回到**第一问**。不过你提到“这份卷子”，我这边看不到具体题目内容。 为了帮你准确分析，**你可以把第一问的题目文字发给我**，或者**上传题目的截图/图片**。我看到具体内容后，会按下面这个思路帮你拆解： 1.…",
+      "needs_review": false
+    },
+    {
+      "id": "uc-08",
+      "category": "user_correction",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "抱歉，我刚才理解偏了。你问的是**数据结构这门课的期末考试重点**，对吗？ 不同学校的考纲会有差异，但数据结构期末通常围绕以下几个核心模块展开，你可以对照自己的教材和课件查漏补缺： --- ### 1. 线性结构（必考，占分大） - **链…",
+      "needs_review": false
+    },
+    {
+      "id": "af-01",
+      "category": "ambiguous_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "卷积神经网络（CNN）在图像处理领域确实非常强大，但它也有自己的边界。我从优缺点两方面帮你梳理一下，这样你能更清楚地判断它适合什么场景。 ### ✅ 优点 1. **局部感知与参数共享（省参数）** - 每个神经元只关注图像的局部区域（感受…",
+      "needs_review": false
+    },
+    {
+      "id": "af-02",
+      "category": "ambiguous_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这个问题问得很好——初学者容易在这两者之间纠结。我的建议是：**先学机器学习，再过渡到深度学习**，理由如下。 --- ## ① 直观解释：为什么先学机器学习 机器学习像**学骑自行车**，深度学习像**学骑摩托车**。摩托车更快更炫，但如…",
+      "needs_review": false
+    },
+    {
+      "id": "af-03",
+      "category": "ambiguous_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "当然有！Transformer 虽然强大，但它并不是唯一的架构。在深度学习/人工智能的发展历程中，主要有以下几大类经典架构，各有各的“看家本领”： --- ### 1. 卷积神经网络（CNN） - **核心思想**：通过卷积核在局部区域提取…",
+      "needs_review": false
+    },
+    {
+      "id": "af-04",
+      "category": "ambiguous_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这个问题问得好——选择其实取决于你的**目标**和**背景**。我们不妨把两个框架的核心差异拆开来看，再做决定。 --- ### 1. 直观理解：它们是什么？ - **PyTorch**：以“动态计算图”著称。你可以把它想象成**边写边画*…",
+      "needs_review": false
+    },
+    {
+      "id": "af-05",
+      "category": "ambiguous_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "你问的是“过拟合的常见错误/误区”还是“机器学习中常见的错误”？我先按**过拟合相关的常见误区**来回答，因为这是初学者最容易踩坑的地方。 --- ### 一、常见误区 **误区1：认为“模型在训练集上准确率越高越好”** - 直观理解：模…",
+      "needs_review": false
+    },
+    {
+      "id": "af-06",
+      "category": "ambiguous_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "这是一个很好的问题——**索引并非万能**，在某些场景下，它反而会成为性能的“拖油瓶”。我们从三个层面来看： ### 1. 直观解释：什么时候“抄近路”反而绕远路？ 全表扫描就像在图书馆里**一本一本地翻书**（线性查找）；而索引就像书后的…",
+      "needs_review": false
+    },
+    {
+      "id": "af-07",
+      "category": "ambiguous_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "你问到点子上了——面试考递归，一般不会只问“什么是递归”，而是通过**代码题**来考察你对递归思想的理解和运用能力。 我帮你梳理一下常见的考察方向和应对思路，这样你准备起来更有针对性。 --- ### 1. 核心考察点：基线条件与递归关系 …",
+      "needs_review": false
+    },
+    {
+      "id": "af-08",
+      "category": "ambiguous_followup",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "当然可以！我们来把今天的内容梳理一下： **今天聊的核心概念：进程和线程** 1. **进程（Process）**：是**资源分配**的基本单位。你可以把它想象成一个“独立运行的应用程序实例”，它拥有自己独立的内存空间、文件句柄等系统资源。…",
+      "needs_review": false
+    },
+    {
+      "id": "cap-01",
+      "category": "capability_request",
+      "expected_route": "VISUALIZATION",
+      "actual_route": "VISUALIZATION",
+      "route_correct": true,
+      "first_task_mode": "visualization",
+      "terminal_event": "done",
+      "sanity_verdict": "RETRY_ONCE",
+      "sanity_reason": "empty",
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": true,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": "empty"
+      },
+      "output_excerpt": "",
+      "needs_review": true
+    },
+    {
+      "id": "cap-02",
+      "category": "capability_request",
+      "expected_route": "VISUALIZATION",
+      "actual_route": "VISUALIZATION",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "好的！进程状态转换是一个经典的操作系统概念，我用一张**状态转换图**来帮你直观理解。 ```mermaid flowchart TD A[创建态 New] -->|\"1. 进程创建完成<br/>（分配PCB、资源）\"| B[就绪态 Rea…",
+      "needs_review": true
+    },
+    {
+      "id": "cap-03",
+      "category": "capability_request",
+      "expected_route": "EXERCISE",
+      "actual_route": "EXERCISE",
+      "route_correct": true,
+      "first_task_mode": "exercise",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": true,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "已为您生成「5 道进程调 度选择题」的 5 道练习题。",
+      "needs_review": false
+    },
+    {
+      "id": "cap-04",
+      "category": "capability_request",
+      "expected_route": "EXERCISE",
+      "actual_route": "EXERCISE",
+      "route_correct": true,
+      "first_task_mode": "exercise",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": true,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "已为您生成「10 Java 填空题」的 10 道练习题。",
+      "needs_review": false
+    },
+    {
+      "id": "cap-05",
+      "category": "capability_request",
+      "expected_route": "PLAN",
+      "actual_route": "PLAN",
+      "route_correct": true,
+      "first_task_mode": "plan",
+      "terminal_event": "done",
+      "sanity_verdict": "RETRY_ONCE",
+      "sanity_reason": "empty",
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": true,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": "empty"
+      },
+      "output_excerpt": "",
+      "needs_review": true
+    },
+    {
+      "id": "cap-06",
+      "category": "capability_request",
+      "expected_route": "PLAN",
+      "actual_route": "PLAN",
+      "route_correct": true,
+      "first_task_mode": "plan",
+      "terminal_event": "done",
+      "sanity_verdict": "RETRY_ONCE",
+      "sanity_reason": "empty",
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": true,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": "empty"
+      },
+      "output_excerpt": "",
+      "needs_review": true
+    },
+    {
+      "id": "cap-07",
+      "category": "capability_request",
+      "expected_route": "RESOURCE",
+      "actual_route": "RESOURCE",
+      "route_correct": true,
+      "first_task_mode": "resource",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": true,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "已为您生成「帮我生成一份注意力机制的学习文档」的技术速览，共 7 个内容块。",
+      "needs_review": false
+    },
+    {
+      "id": "cap-08",
+      "category": "capability_request",
+      "expected_route": "RESOURCE",
+      "actual_route": "RESOURCE",
+      "route_correct": true,
+      "first_task_mode": "resource",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": true,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "已生成 8 张记忆闪卡",
+      "needs_review": false
+    },
+    {
+      "id": "nt-01",
+      "category": "no_false_trigger",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "# 知识图谱：从直观理解到技术细节 ## 一、直观理解 🧭 知识图谱（Knowledge Graph）本质上是一种**用“图”结构来组织知识**的方式——把现实世界中的**实体**（人、地点、组织、概念等）看作“节点”，把它们之间的**关系…",
+      "needs_review": false
+    },
+    {
+      "id": "nt-02",
+      "category": "no_false_trigger",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "好的！TCP（传输控制协议）是计算机网络里最核心的协议之一，也是很多面试和考试的重点。你感觉没学懂很正常，因为它涉及的机制比较多。我们**从直观到严谨**，一层层来拆解。 --- ### ① 直观理解：TCP 是干什么的？ 想象你是一个快递…",
+      "needs_review": false
+    },
+    {
+      "id": "nt-03",
+      "category": "no_false_trigger",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "看到你在二分查找边界条件上卡住了——这几乎是每个学算法的同学都踩过的坑，别担心，我们一起来把它彻底搞清楚！💪 --- ## 一、直观理解：二分查找在做什么？ 二分查找的本质是**在一个有序数组中，通过不断缩小搜索范围来找到目标值**。就像查…",
+      "needs_review": false
+    },
+    {
+      "id": "nt-04",
+      "category": "no_false_trigger",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "route_correct": true,
+      "first_task_mode": "auto",
+      "terminal_event": "done",
+      "sanity_verdict": "ACCEPT",
+      "sanity_reason": null,
+      "machine_checks": {
+        "route": true,
+        "sse_done": true,
+        "orchestration_entered": false,
+        "must_include": [],
+        "must_not_include": [],
+        "sanity": null
+      },
+      "output_excerpt": "当然可以！递归是一个非常经典且重要的概念，尤其是在算法和编程中。我们先从直观理解开始，再一步步深入。 --- ### ① 直观解释：什么是递归？ **递归**就是“函数自己调用自己”的一种编程技巧。它把一个大的问题不断分解成**更小的、同类…",
+      "needs_review": false
+    }
+  ],
+  "gates": {
+    "capability_false_trigger_rate": true,
+    "capability_recognition_rate": true,
+    "sse_done_rate": true,
+    "normal_sse_done_rate": true,
+    "sanity_violations": false
+  }
+}
