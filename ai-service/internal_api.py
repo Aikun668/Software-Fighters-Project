@@ -2066,6 +2066,10 @@ async def unified_chat(body: UnifiedChatRequest):
     return await _unified_chat(body)
 
 
+# 推荐抽取（LLM 调用）在 done 之前进行的超时预算，防止终止事件被阻塞
+RECOMMENDATION_EXTRACTION_TIMEOUT_SEC = 10.0
+
+
 async def _unified_chat(body: UnifiedChatRequest):
     body = sanitize_model(body)
     message = body.message.strip()
@@ -2096,7 +2100,8 @@ async def _unified_chat(body: UnifiedChatRequest):
                     if isinstance(event.data, str):
                         assistant_content += event.data
                     elif isinstance(event.data, dict):
-                        assistant_content += event.data.get("content", "")
+                        # 正文键兼容：TutorAgent 用 response，部分中心用 content
+                        assistant_content += event.data.get("response", "") or event.data.get("content", "")
                 sse = event.to_sse()
 
                 # Defer DONE event so recommendation can be inserted before it
@@ -2112,12 +2117,16 @@ async def _unified_chat(body: UnifiedChatRequest):
             return
 
         # Check for exercise recommendation (before DONE)
+        # 超时兜底：推荐抽取依赖 LLM，卡住时不得阻塞终止事件（页面会一直转圈）
         try:
             if assistant_content.strip():
-                extracted = await extract_knowledge_nodes(
-                    course_id="ai_intro",
-                    user_message=message,
-                    assistant_reply=assistant_content[:2000],
+                extracted = await asyncio.wait_for(
+                    extract_knowledge_nodes(
+                        course_id="ai_intro",
+                        user_message=message,
+                        assistant_reply=assistant_content[:2000],
+                    ),
+                    timeout=RECOMMENDATION_EXTRACTION_TIMEOUT_SEC,
                 )
                 primary_nodes = extracted.get("primary", [])
                 if primary_nodes:
@@ -2128,12 +2137,17 @@ async def _unified_chat(body: UnifiedChatRequest):
                         node_name=node.get("name", ""),
                     )
                     yield rec.to_sse()
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Recommendation check timed out after %.1fs, skipping",
+                RECOMMENDATION_EXTRACTION_TIMEOUT_SEC,
+            )
         except Exception as exc:
             logger.warning(f"Recommendation check skipped: {exc}")
 
-        # Yield deferred DONE event(s)
-        for sse in pending_done:
-            yield sse
+        # Yield deferred DONE event(s)：终止责任唯一，多个内部 done 收敛为一个
+        if pending_done:
+            yield pending_done[0]
 
         # Guarantee a DONE event if none was emitted
         if not pending_done:
