@@ -112,3 +112,89 @@ class TestAutoCenterRouting:
         assert result.agent == "ProfileAgent"
         assert "current_profile" in result.payload
 
+
+
+class TestCapabilityProductResponse:
+    """Task 2/3 回归：能力产物 payload 必须带用户可读 response，
+    否则统一聊天里用户看到空回答（评审 cap-01/05/06 空回答根因）。"""
+
+    @pytest.fixture
+    def result_agent(self):
+        from app.centers.result_agent import ResultAgent
+        return ResultAgent()
+
+    @staticmethod
+    async def _content_payloads(result_agent, mode, payload):
+        plan = ExecutionPlan(
+            tasks=[CenterTask(mode=mode, intent="x", input="x", params={}, context={})],
+        )
+        events = []
+        async for event in result_agent.execute(plan):
+            events.append(event)
+        return [e.data for e in events if e.type.value == "content" and isinstance(e.data, dict)]
+
+    @pytest.mark.asyncio
+    async def test_plan_payload_gains_response_summary(self, result_agent):
+        from app.centers.plan_center import PlanCenter
+        from app.centers.result_agent import ResultAgent
+        from app.centers.schemas import CenterResult
+
+        class FakePlanCenter:
+            async def execute(self, task):
+                return CenterResult(
+                    mode="plan", intent="learning_path", event_type="plan",
+                    payload={
+                        "type": "plan", "title": "Python 7 天入门", "topic": "Python",
+                        "total_steps": 3, "estimated_days": 7,
+                        "steps": [{"title": "环境搭建"}, {"title": "基础语法"}, {"title": "小项目"}],
+                    },
+                    agent="ScheduleAgent", sequence=0,
+                )
+
+        agent = ResultAgent(plan_center=FakePlanCenter())
+        payloads = await self._content_payloads(agent, "plan", {})
+        assert payloads, "plan 中心必须产出 content 事件"
+        response = payloads[0].get("response", "")
+        assert response, "plan payload 必须合成非空 response"
+        assert "Python 7 天入门" in response
+        assert "3" in response
+
+    @pytest.mark.asyncio
+    async def test_visualization_payload_gains_response_summary(self, result_agent):
+        from app.centers.result_agent import ResultAgent
+        from app.centers.schemas import CenterResult
+
+        class FakeVizCenter:
+            async def execute(self, task):
+                return CenterResult(
+                    mode="visualization", intent="visualize", event_type="visualization",
+                    payload={
+                        "type": "visualization", "topic": "TCP 三次握手",
+                        "blocks": [{"type": "visualization", "content": "graph TD"}],
+                    },
+                    agent="VisualizationCenter", sequence=0,
+                )
+
+        agent = ResultAgent(visualization_center=FakeVizCenter())
+        payloads = await self._content_payloads(agent, "visualization", {})
+        assert payloads, "visualization 中心必须产出 content 事件"
+        response = payloads[0].get("response", "")
+        assert response, "visualization payload 必须合成非空 response"
+        assert "TCP 三次握手" in response
+
+    @pytest.mark.asyncio
+    async def test_existing_response_not_rewritten(self, result_agent):
+        from app.centers.result_agent import ResultAgent
+        from app.centers.schemas import CenterResult
+
+        class FakeResourceCenter:
+            async def execute(self, task):
+                return CenterResult(
+                    mode="resource", intent="resource_gen", event_type="content",
+                    payload={"response": "已为您生成学习文档，共 7 个内容块。"},
+                    agent="ResourceGenWorkflow", sequence=0,
+                )
+
+        agent = ResultAgent(resource_center=FakeResourceCenter())
+        payloads = await self._content_payloads(agent, "resource", {})
+        assert payloads[0]["response"] == "已为您生成学习文档，共 7 个内容块。"
