@@ -114,8 +114,8 @@ class ModelConfig:
         model: 模型名称（空字符串 = 使用环境变量默认值）
         temperature: 生成温度 (0.0 = 确定性, 1.0 = 最高随机性)
         max_tokens: 最大输出 token 数
-        api_key: API Key（空字符串 = 使用环境变量 MINIMAX_API_KEY）
-        base_url: API Base URL（空字符串 = 使用环境变量 MINIMAX_BASE_URL）
+        api_key: API Key（空字符串 = 使用环境变量 DEEPSEEK_API_KEY）
+        base_url: API Base URL（空字符串 = 使用环境变量 DEEPSEEK_BASE_URL）
     """
     model: str = ""
     temperature: float = 0.7
@@ -145,12 +145,13 @@ class AgentModelProfile:
 
 # ── 开箱即用的预设 Profiles ──────────────────────────────────
 
-# ── 环境变量速记（统一 MiniMax Token Plan 直连）───────────────
-_MM_KEY = os.getenv("MINIMAX_API_KEY", "")
-_MM_BASE = os.getenv("MINIMAX_BASE_URL", "https://api.minimax.cn/v1")
+# ── 环境变量速记（统一 LLM 直连；当前供应商：DeepSeek）────────
+# 兼容回退：DEEPSEEK_API_KEY 缺失时回退旧 MINIMAX_API_KEY 变量
+_LLM_KEY = os.getenv("DEEPSEEK_API_KEY", "") or os.getenv("MINIMAX_API_KEY", "")
+_LLM_BASE = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
 # 模型名集中管理：不在代码里散落供应商与模型名
-_MODEL_CHAT = os.getenv("MINIMAX_MODEL_CHAT", "MiniMax-M3")
-_MODEL_REASONER = os.getenv("MINIMAX_MODEL_REASONER", "") or _MODEL_CHAT
+_MODEL_CHAT = os.getenv("DEEPSEEK_MODEL_CHAT", "deepseek-v4-flash")
+_MODEL_REASONER = os.getenv("DEEPSEEK_MODEL_REASONER", "") or _MODEL_CHAT
 
 # ── 通道分配（两档）──────────────────────────────────────────
 # chat     (MINIMAX_MODEL_CHAT)     : 路由 / 初筛 / 判断 / 画像 / 轻量生成
@@ -159,71 +160,71 @@ _MODEL_REASONER = os.getenv("MINIMAX_MODEL_REASONER", "") or _MODEL_CHAT
 PROFILE_DIRECTOR = AgentModelProfile(
     default=ModelConfig(
         model=_MODEL_CHAT, temperature=0.0, max_tokens=256,
-        api_key=_MM_KEY, base_url=_MM_BASE,
+        api_key=_LLM_KEY, base_url=_LLM_BASE,
     ),
 )
 
 PROFILE_CONTENT = AgentModelProfile(
     default=ModelConfig(
         model=_MODEL_REASONER, temperature=0.7, max_tokens=8192,
-        api_key=_MM_KEY, base_url=_MM_BASE,
+        api_key=_LLM_KEY, base_url=_LLM_BASE,
     ),
     plan=ModelConfig(
         model=_MODEL_REASONER, temperature=0.3, max_tokens=4096,
-        api_key=_MM_KEY, base_url=_MM_BASE,
+        api_key=_LLM_KEY, base_url=_LLM_BASE,
     ),
 )
 
 PROFILE_EXERCISE = AgentModelProfile(
     default=ModelConfig(
         model=_MODEL_REASONER, temperature=0.7, max_tokens=4096,
-        api_key=_MM_KEY, base_url=_MM_BASE,
+        api_key=_LLM_KEY, base_url=_LLM_BASE,
     ),
     plan=ModelConfig(
         model=_MODEL_REASONER, temperature=0.3, max_tokens=2048,
-        api_key=_MM_KEY, base_url=_MM_BASE,
+        api_key=_LLM_KEY, base_url=_LLM_BASE,
     ),
 )
 
 PROFILE_CODE = AgentModelProfile(
     default=ModelConfig(
         model=_MODEL_REASONER, temperature=0.5, max_tokens=8192,
-        api_key=_MM_KEY, base_url=_MM_BASE,
+        api_key=_LLM_KEY, base_url=_LLM_BASE,
     ),
 )
 
 PROFILE_MINDMAP = AgentModelProfile(
     default=ModelConfig(
         model=_MODEL_CHAT, temperature=0.6, max_tokens=4096,
-        api_key=_MM_KEY, base_url=_MM_BASE,
+        api_key=_LLM_KEY, base_url=_LLM_BASE,
     ),
 )
 
 PROFILE_READING = AgentModelProfile(
     default=ModelConfig(
         model=_MODEL_CHAT, temperature=0.7, max_tokens=4096,
-        api_key=_MM_KEY, base_url=_MM_BASE,
+        api_key=_LLM_KEY, base_url=_LLM_BASE,
     ),
 )
 
 PROFILE_FLASHCARD = AgentModelProfile(
     default=ModelConfig(
         model=_MODEL_CHAT, temperature=0.6, max_tokens=4096,
-        api_key=_MM_KEY, base_url=_MM_BASE,
+        api_key=_LLM_KEY, base_url=_LLM_BASE,
     ),
 )
 
 PROFILE_INTERACTIVE_DIAGRAM = AgentModelProfile(
     default=ModelConfig(
         model=_MODEL_REASONER, temperature=0.5, max_tokens=8192,
-        api_key=_MM_KEY, base_url=_MM_BASE,
+        api_key=_LLM_KEY, base_url=_LLM_BASE,
     ),
 )
 
 PROFILE_PROJECT = AgentModelProfile(
     default=ModelConfig(
         model=_MODEL_REASONER, temperature=0.7, max_tokens=8192,
-        api_key=_MM_KEY, base_url=_MM_BASE,
+        api_key=_LLM_KEY, base_url=_LLM_BASE,
     ),
 )
 
@@ -232,14 +233,14 @@ PROFILE_PROJECT = AgentModelProfile(
 PROFILE_DIAGNOSE = AgentModelProfile(
     default=ModelConfig(
         model=_MODEL_REASONER, temperature=0.3, max_tokens=4096,
-        api_key=_MM_KEY, base_url=_MM_BASE,
+        api_key=_LLM_KEY, base_url=_LLM_BASE,
     ),
 )
 
 PROFILE_STUDENT = AgentModelProfile(
     default=ModelConfig(
         model=_MODEL_CHAT, temperature=0.3, max_tokens=2048,
-        api_key=_MM_KEY, base_url=_MM_BASE,
+        api_key=_LLM_KEY, base_url=_LLM_BASE,
     ),
 )
 
@@ -248,14 +249,14 @@ PROFILE_STUDENT = AgentModelProfile(
 PROFILE_ANALYSIS = AgentModelProfile(
     default=ModelConfig(
         model=_MODEL_CHAT, temperature=0.0, max_tokens=512,
-        api_key=_MM_KEY, base_url=_MM_BASE,
+        api_key=_LLM_KEY, base_url=_LLM_BASE,
     ),
 )
 
 PROFILE_REVIEW = AgentModelProfile(
     default=ModelConfig(
         model=_MODEL_CHAT, temperature=0.0, max_tokens=1024,
-        api_key=_MM_KEY, base_url=_MM_BASE,
+        api_key=_LLM_KEY, base_url=_LLM_BASE,
     ),
 )
 
@@ -561,18 +562,18 @@ class OpenAILLM:
         api_key: str = "",
         base_url: str = "",
     ):
-        self.base_url = (base_url or os.getenv("MINIMAX_BASE_URL", "https://api.minimax.cn/v1")).rstrip("/")
-        raw_key = api_key or os.getenv("MINIMAX_API_KEY", "")
+        self.base_url = (base_url or os.getenv("DEEPSEEK_BASE_URL", "") or os.getenv("MINIMAX_BASE_URL", "https://api.minimax.cn/v1")).rstrip("/")
+        raw_key = api_key or os.getenv("DEEPSEEK_API_KEY", "") or os.getenv("MINIMAX_API_KEY", "")
         self._all_keys = [k.strip() for k in raw_key.split(",") if k.strip()]
         self.api_key = _pick_key(raw_key)
-        self.model = model or os.getenv("MINIMAX_MODEL_CHAT", "MiniMax-M3")
+        self.model = model or os.getenv("DEEPSEEK_MODEL_CHAT", "") or os.getenv("MINIMAX_MODEL_CHAT", "MiniMax-M3")
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.use_mock = use_mock
 
         if not use_mock and not self.api_key:
             raise ValueError(
-                "MINIMAX_API_KEY must be set in .env when use_mock=False"
+                "DEEPSEEK_API_KEY (或 MINIMAX_API_KEY) must be set in .env when use_mock=False"
             )
 
     async def chat(

@@ -118,6 +118,19 @@ export const parseSSEStream = async (
           
           // 按业务逻辑处理不同type
           switch (data.type) {
+            case 'content': {
+              // 后端统一事件：正文在 data.data.response / data.data.content / data.data（字符串）
+              const payload = data.data
+              if (typeof payload === 'string' && payload) {
+                onData(payload, data.mode || 'chat')
+              } else if (payload && typeof payload === 'object') {
+                const text = payload.response ?? payload.content
+                if (typeof text === 'string' && text) {
+                  onData(text, data.mode || 'chat')
+                }
+              }
+              break
+            }
             case 'token':
               // 逐字追加文本
               if (data.content) {
