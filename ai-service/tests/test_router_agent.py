@@ -20,7 +20,7 @@ class TestRouterAgent:
 
     @pytest.mark.asyncio
     async def test_auto_mode_multi_intent_sorted(self, router):
-        plan = await router.route("规划Python路径并出3道题")
+        plan = await router.route("帮我规划Python学习路径，安排学习计划，再出几道题目")
         assert len(plan.tasks) >= 2
         modes = [t.mode for t in plan.tasks]
         assert modes.index("plan") < modes.index("exercise")

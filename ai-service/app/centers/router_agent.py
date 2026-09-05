@@ -46,6 +46,22 @@ class RouterAgent:
         student_profile = student_profile or {}
         context = context or {}
 
+        if not message.strip():
+            # 空输入给追问，不编造意图
+            task = CenterTask(
+                mode="inquiry",
+                intent="inquiry",
+                input=message,
+                params={"question": "你想了解什么？"},
+                context={**context, "student_profile": student_profile},
+                confidence=0.0,
+            )
+            return ExecutionPlan(
+                tasks=[task],
+                is_clear=False,
+                intent_meta={"raw_message": message, "strategy": "empty_inquiry"},
+            )
+
         if mode != "auto":
             return self._manual_mode_plan(message, mode, student_profile, context)
 

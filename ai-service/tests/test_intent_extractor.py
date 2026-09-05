@@ -31,20 +31,29 @@ from app.services.intent_extractor import (
 # ═══════════════════════════════════════════════════════════════
 
 class TestScoreIntent:
+    """评分曲线：命中数基数 0.9/0.75/0.5，再乘 IntentDef.confidence。
+    置信度乘数是后续加入的特性（压低 tutor_question 单命中），用 confidence=1.0
+    单测基数曲线本身，另用一条用例钉住乘数行为。"""
+
     def test_three_keyword_hits_scores_0_9(self):
         d = IntentDef(intent="exercise_gen", params_model=ExerciseParams,
-                       prompt="", keywords=["出题", "题目", "练习"])
+                       prompt="", keywords=["出题", "题目", "练习"], confidence=1.0)
         assert _score_intent("给我出题做几个题目练习一下", d) == 0.9
 
     def test_two_keyword_hits_scores_0_75(self):
         d = IntentDef(intent="exercise_gen", params_model=ExerciseParams,
-                       prompt="", keywords=["出题", "题目", "练习"])
+                       prompt="", keywords=["出题", "题目", "练习"], confidence=1.0)
         assert _score_intent("给我出题做几个题目", d) == 0.75
 
     def test_one_keyword_hit_scores_0_5(self):
         d = IntentDef(intent="exercise_gen", params_model=ExerciseParams,
-                       prompt="", keywords=["出题", "题目", "练习"])
+                       prompt="", keywords=["出题", "题目", "练习"], confidence=1.0)
         assert _score_intent("给我出题看看吧", d) == 0.5
+
+    def test_confidence_multiplier_scales_score(self):
+        d = IntentDef(intent="exercise_gen", params_model=ExerciseParams,
+                       prompt="", keywords=["出题", "题目", "练习"], confidence=0.85)
+        assert _score_intent("给我出题做几个题目练习一下", d) == pytest.approx(0.765)
 
     def test_no_keyword_hit_scores_0(self):
         d = IntentDef(intent="exercise_gen", params_model=ExerciseParams,
@@ -60,7 +69,7 @@ class TestScoreIntent:
     def test_exclusive_keyword_not_present_scores_normally(self):
         d = IntentDef(intent="resource_gen", params_model=ResourceParams,
                        prompt="", keywords=["资源", "资料"],
-                       exclusive_keywords=["出题"])
+                       exclusive_keywords=["出题"], confidence=1.0)
         assert _score_intent("给我学习资源", d) == 0.5
 
     def test_empty_keywords_returns_0(self):

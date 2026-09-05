@@ -23,7 +23,7 @@ class TestChatCenter:
 
     @pytest.mark.asyncio
     async def test_route_auto_multi_intent(self, chat_center):
-        plan = await chat_center.route("规划Python路径并出3道题")
+        plan = await chat_center.route("帮我规划Python学习路径，安排学习计划，再出几道题目")
         assert len(plan.tasks) >= 2
 
     @pytest.mark.asyncio

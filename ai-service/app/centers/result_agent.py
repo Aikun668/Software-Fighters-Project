@@ -54,10 +54,9 @@ class ResultAgent:
         schedule_agent: ScheduleAgent | None = None,
         adjustment_agent: AdjustmentAgent | None = None,
     ):
-        self.auto_center = auto_center or AutoCenter(
-            decompose_agent=decompose_agent,
-            layered_explain_agent=layered_explain_agent,
-        )
+        # AutoCenter 的各 Agent 由其内部惰性默认构造；
+        # decompose/layered_explain 仅 PlanCenter/AutoCenter 显式注入时使用
+        self.auto_center = auto_center or AutoCenter()
         self.plan_center = plan_center or PlanCenter(
             goal_agent=goal_agent,
             decompose_agent=decompose_agent,

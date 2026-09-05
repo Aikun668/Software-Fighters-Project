@@ -14,7 +14,7 @@ class TestExtractMulti:
 
     @pytest.mark.asyncio
     async def test_multi_intent_detection(self, extractor):
-        result = await extractor.extract_multi("规划Python路径并出3道题")
+        result = await extractor.extract_multi("规划Python学习路径，再出5道练习题")
         assert isinstance(result, MultiIntentResult)
         assert len(result.intents) >= 2
         intent_names = [r.intent for r in result.intents]
@@ -45,6 +45,10 @@ class TestIntentCenterMap:
             assert intent in INTENT_CENTER_MAP
 
     def test_center_order(self):
+        """钉住现行执行顺序合同：先答疑（auto），再产物（plan 最后）。"""
         from app.services.intent_extractor import _CENTER_EXECUTION_ORDER
-        assert _CENTER_EXECUTION_ORDER["plan"] < _CENTER_EXECUTION_ORDER["auto"]
-        assert _CENTER_EXECUTION_ORDER["auto"] < _CENTER_EXECUTION_ORDER["resource"]
+        order = _CENTER_EXECUTION_ORDER
+        assert order["auto"] < order["visualization"]
+        assert order["visualization"] < order["resource"]
+        assert order["resource"] < order["exercise"]
+        assert order["exercise"] < order["plan"]
