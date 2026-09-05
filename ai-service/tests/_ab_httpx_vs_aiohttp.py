@@ -1,13 +1,13 @@
-"""A/B 对照：httpx vs aiohttp 调 deepseek API"""
+"""A/B 对照：httpx vs aiohttp 调 MiniMax Token Plan API"""
 import asyncio, os, json, time
 from dotenv import load_dotenv
 load_dotenv()
 import httpx, aiohttp
 
-URL = os.getenv("DEEPSEEK_BASE_URL", "") + "/chat/completions"
-KEY = os.getenv("DEEPSEEK_API_KEY", "").split(",")[0].strip()
+URL = os.getenv("MINIMAX_BASE_URL", "") + "/chat/completions"
+KEY = os.getenv("MINIMAX_API_KEY", "").split(",")[0].strip()
 PAYLOAD = {
-    "model": "deepseek-v4-pro",
+    "model": os.getenv("MINIMAX_MODEL_CHAT", "MiniMax-M3"),
     "messages": [{"role": "user", "content": '输出 {"ok": true}'}],
     "temperature": 0.0, "max_tokens": 32, "stream": False,
 }

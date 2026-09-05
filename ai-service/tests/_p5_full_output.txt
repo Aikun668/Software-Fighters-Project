@@ -1,0 +1,4 @@
+OpenAI network error (attempt 1, key=sk-eacc56cdf...), retrying: peer closed connection without sending complete message body (incomplete chunked read)
+OpenAI network error (attempt 2, key=sk-1f71db9a7...), retrying: peer closed connection without sending complete message body (incomplete chunked read)
+OpenAI connection failed after 3 attempts: peer closed connection without sending complete message body (incomplete chunked read)
+LLM call failed: OpenAI connection failed: peer closed connection without sending complete message body (incomplete chunked read)

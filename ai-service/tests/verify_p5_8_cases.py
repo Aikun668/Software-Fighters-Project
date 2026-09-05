@@ -5,7 +5,7 @@
 
 设计:
   - P5 全链路: GoalAgent → DecomposeAgent → ScheduleAgent
-  - Judge: deepseek-v4-pro, 流水线并发 4 + judge 串行 (避免资源竞争)
+  - Judge: qwen-max via DashScope, 流水线并发 4 + judge 串行 (避免资源竞争)
   - 加权 >85 PASS
 """
 import asyncio, json, os, re, sys, time, traceback
@@ -28,7 +28,7 @@ from app.utils.prompt_loader import interpolate_variables, build_prompt
 
 _judge_lock = asyncio.Lock()
 _judge_llm = None; _judge_sys = ""; _judge_usr = ""; _judge_api_key = ""
-PIPELINE_CONCURRENCY = 2  # deepseek API 单 key 并发 ≈3-5，压到 2 避免限速
+PIPELINE_CONCURRENCY = 2  # 外部 API 单 key 并发 ≈3-5，压到 2 避免限速
 JUDGE_MODEL = "qwen-max"
 JUDGE_API_KEY = os.getenv("DASHSCOPE_API_KEY_MAX", "")
 JUDGE_BASE_URL = os.getenv("DASHSCOPE_BASE_URL", "")
@@ -180,8 +180,8 @@ async def _run_pipeline(case: dict) -> tuple[str, list[str], dict]:
         from app.agents.decompose_agent import DecomposeAgent
         from app.agents.schedule_agent import ScheduleAgent
 
-        has_api = bool(os.getenv("OPENAI_API_KEY") or os.getenv("DASHSCOPE_API_KEY")
-                       or os.getenv("DASHSCOPE_API_KEY_FLASH") or os.getenv("DEEPSEEK_API_KEY"))
+        has_api = bool(os.getenv("MINIMAX_API_KEY") or os.getenv("OPENAI_API_KEY")
+                       or os.getenv("DASHSCOPE_API_KEY") or os.getenv("DASHSCOPE_API_KEY_FLASH"))
 
         ga = GoalAgent(use_mock_llm=not has_api)
         gs_raw = await ga.run({"input": case["input"], "context": "", "student_profile": {}})

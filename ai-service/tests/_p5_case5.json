@@ -1,0 +1,373 @@
+{
+  "id": 5,
+  "input": "两周内学会用sklearn做分类和回归，要能独立完成一个简单的预测项目。有Python基础但没做过ML，每天1.5小时。",
+  "raw_data": {
+    "goal": {
+      "input": "两周内学会用sklearn做分类和回归，要能独立完成一个简单的预测项目。有Python基础但没做过ML，每天1.5小时。",
+      "context": "",
+      "student_profile": {},
+      "goal_title": "掌握sklearn分类与回归建模",
+      "target_topic": "使用scikit-learn进行监督学习（分类与回归）",
+      "target_level": "apply",
+      "deadline": "",
+      "motivation": "希望独立完成一个预测项目，将理论应用于实践。",
+      "constraints": [
+        "每天学习时间1.5小时",
+        "有Python基础但无机器学习经验"
+      ],
+      "response": "好的，在两周内每天投入1.5小时，从零开始掌握sklearn的分类与回归并完成实战项目，这个目标很有挑战但完全可行！我会为你规划适合的路径。"
+    },
+    "decomp": {
+      "topic": "使用scikit-learn进行监督学习（分类与回归）",
+      "context": "两周内学会用sklearn做分类和回归，要能独立完成一个简单的预测项目。有Python基础但没做过ML，每天1.5小时。",
+      "student_profile": {},
+      "macro_topics": [
+        {
+          "name": "监督学习核心概念",
+          "bloom_level": "understand",
+          "description": "理解监督学习的基本框架：特征与标签、训练与测试、过拟合与欠拟合"
+        },
+        {
+          "name": "数据准备与预处理",
+          "bloom_level": "apply",
+          "description": "使用scikit-learn进行数据加载、清洗、特征缩放和编码等预处理操作"
+        },
+        {
+          "name": "回归模型构建",
+          "bloom_level": "apply",
+          "description": "掌握常用回归算法（线性回归、决策树回归等）的sklearn实现与调参"
+        },
+        {
+          "name": "分类模型构建",
+          "bloom_level": "apply",
+          "description": "掌握常用分类算法（逻辑回归、K近邻、决策树等）及多分类策略"
+        },
+        {
+          "name": "模型评估与选择",
+          "bloom_level": "evaluate",
+          "description": "使用交叉验证、网格搜索和评估指标对模型进行性能比较与调优"
+        }
+      ],
+      "micro_skills": [
+        {
+          "name": "区分分类与回归问题",
+          "bloom_level": "analyze",
+          "parent": "监督学习核心概念",
+          "description": "根据目标变量类型与业务需求，判断应选择分类还是回归方法"
+        },
+        {
+          "name": "使用train_test_split划分数据集",
+          "bloom_level": "apply",
+          "parent": "数据准备与预处理",
+          "description": "将数据划分为训练集和测试集，保持分布一致并设置随机种子"
+        },
+        {
+          "name": "对数值特征进行标准化/归一化",
+          "bloom_level": "apply",
+          "parent": "数据准备与预处理",
+          "description": "使用StandardScaler或MinMaxScaler缩放特征，避免量纲影响模型"
+        },
+        {
+          "name": "编码分类变量",
+          "bloom_level": "apply",
+          "parent": "数据准备与预处理",
+          "description": "使用OneHotEncoder或LabelEncoder将文本类别转为数值"
+        },
+        {
+          "name": "用线性回归预测连续值",
+          "bloom_level": "apply",
+          "parent": "回归模型构建",
+          "description": "调用LinearRegression并解释系数与截距，适用于简单线性关系"
+        },
+        {
+          "name": "用决策树回归与随机森林回归处理非线性关系",
+          "bloom_level": "apply",
+          "parent": "回归模型构建",
+          "description": "使用DecisionTreeRegressor和RandomForestRegressor捕获复杂模式"
+        },
+        {
+          "name": "用逻辑回归实现二分类",
+          "bloom_level": "apply",
+          "parent": "分类模型构建",
+          "description": "使用LogisticRegression并理解概率输出与阈值设定"
+        },
+        {
+          "name": "用K近邻完成简单分类",
+          "bloom_level": "apply",
+          "parent": "分类模型构建",
+          "description": "调整n_neighbors参数，观察对决策边界的影响"
+        },
+        {
+          "name": "计算并解释分类评估指标",
+          "bloom_level": "evaluate",
+          "parent": "模型评估与选择",
+          "description": "计算准确率、精确率、召回率、F1分数，并针对不平衡数据选择恰当指标"
+        },
+        {
+          "name": "使用交叉验证评估模型稳定性",
+          "bloom_level": "evaluate",
+          "parent": "模型评估与选择",
+          "description": "通过cross_val_score进行k折交叉验证，比较不同模型的泛化能力"
+        },
+        {
+          "name": "利用GridSearchCV进行超参数调优",
+          "bloom_level": "create",
+          "parent": "模型评估与选择",
+          "description": "定义参数网格，自动搜索最优组合，构建最终预测模型"
+        }
+      ],
+      "prerequisites": [
+        {
+          "name": "Python基础与Pandas数据处理",
+          "bloom_level": "apply",
+          "relation": "required",
+          "description": "能读取CSV、进行DataFrame切片、groupby和缺失值处理"
+        },
+        {
+          "name": "NumPy数组运算",
+          "bloom_level": "apply",
+          "relation": "required",
+          "description": "理解ndarray的形状、广播机制与基本线性代数运算"
+        },
+        {
+          "name": "基础统计量概念",
+          "bloom_level": "understand",
+          "relation": "recommended",
+          "description": "熟悉均值、标准差、分位数、相关系数，用于数据探索与特征理解"
+        }
+      ],
+      "summary": "我们将监督学习之旅拆分为5个宏观主题，从理解核心概念开始，逐步掌握数据预处理、回归与分类模型的构建，最后聚焦于模型评估与调优。你已经有Python基础，现在每天1.5小时，两周内可以沿着这个图谱，每个微观技能配一个小练习，一步步搭建起自己的预测项目。",
+      "response": "我们将监督学习之旅拆分为5个宏观主题，从理解核心概念开始，逐步掌握数据预处理、回归与分类模型的构建，最后聚焦于模型评估与调优。你已经有Python基础，现在每天1.5小时，两周内可以沿着这个图谱，每个微观技能配一个小练习，一步步搭建起自己的预测项目。"
+    },
+    "sched": {
+      "goal": {
+        "goal_title": "掌握sklearn分类与回归建模",
+        "target_topic": "使用scikit-learn进行监督学习（分类与回归）",
+        "target_level": "apply"
+      },
+      "decomposition": {
+        "macro_topics": [
+          {
+            "name": "监督学习核心概念",
+            "bloom_level": "understand",
+            "description": "理解监督学习的基本框架：特征与标签、训练与测试、过拟合与欠拟合"
+          },
+          {
+            "name": "数据准备与预处理",
+            "bloom_level": "apply",
+            "description": "使用scikit-learn进行数据加载、清洗、特征缩放和编码等预处理操作"
+          },
+          {
+            "name": "回归模型构建",
+            "bloom_level": "apply",
+            "description": "掌握常用回归算法（线性回归、决策树回归等）的sklearn实现与调参"
+          },
+          {
+            "name": "分类模型构建",
+            "bloom_level": "apply",
+            "description": "掌握常用分类算法（逻辑回归、K近邻、决策树等）及多分类策略"
+          },
+          {
+            "name": "模型评估与选择",
+            "bloom_level": "evaluate",
+            "description": "使用交叉验证、网格搜索和评估指标对模型进行性能比较与调优"
+          }
+        ],
+        "micro_skills": [
+          {
+            "name": "区分分类与回归问题",
+            "bloom_level": "analyze",
+            "parent": "监督学习核心概念",
+            "description": "根据目标变量类型与业务需求，判断应选择分类还是回归方法"
+          },
+          {
+            "name": "使用train_test_split划分数据集",
+            "bloom_level": "apply",
+            "parent": "数据准备与预处理",
+            "description": "将数据划分为训练集和测试集，保持分布一致并设置随机种子"
+          },
+          {
+            "name": "对数值特征进行标准化/归一化",
+            "bloom_level": "apply",
+            "parent": "数据准备与预处理",
+            "description": "使用StandardScaler或MinMaxScaler缩放特征，避免量纲影响模型"
+          },
+          {
+            "name": "编码分类变量",
+            "bloom_level": "apply",
+            "parent": "数据准备与预处理",
+            "description": "使用OneHotEncoder或LabelEncoder将文本类别转为数值"
+          },
+          {
+            "name": "用线性回归预测连续值",
+            "bloom_level": "apply",
+            "parent": "回归模型构建",
+            "description": "调用LinearRegression并解释系数与截距，适用于简单线性关系"
+          },
+          {
+            "name": "用决策树回归与随机森林回归处理非线性关系",
+            "bloom_level": "apply",
+            "parent": "回归模型构建",
+            "description": "使用DecisionTreeRegressor和RandomForestRegressor捕获复杂模式"
+          },
+          {
+            "name": "用逻辑回归实现二分类",
+            "bloom_level": "apply",
+            "parent": "分类模型构建",
+            "description": "使用LogisticRegression并理解概率输出与阈值设定"
+          },
+          {
+            "name": "用K近邻完成简单分类",
+            "bloom_level": "apply",
+            "parent": "分类模型构建",
+            "description": "调整n_neighbors参数，观察对决策边界的影响"
+          },
+          {
+            "name": "计算并解释分类评估指标",
+            "bloom_level": "evaluate",
+            "parent": "模型评估与选择",
+            "description": "计算准确率、精确率、召回率、F1分数，并针对不平衡数据选择恰当指标"
+          },
+          {
+            "name": "使用交叉验证评估模型稳定性",
+            "bloom_level": "evaluate",
+            "parent": "模型评估与选择",
+            "description": "通过cross_val_score进行k折交叉验证，比较不同模型的泛化能力"
+          },
+          {
+            "name": "利用GridSearchCV进行超参数调优",
+            "bloom_level": "create",
+            "parent": "模型评估与选择",
+            "description": "定义参数网格，自动搜索最优组合，构建最终预测模型"
+          }
+        ],
+        "prerequisites": [
+          {
+            "name": "Python基础与Pandas数据处理",
+            "bloom_level": "apply",
+            "relation": "required",
+            "description": "能读取CSV、进行DataFrame切片、groupby和缺失值处理"
+          },
+          {
+            "name": "NumPy数组运算",
+            "bloom_level": "apply",
+            "relation": "required",
+            "description": "理解ndarray的形状、广播机制与基本线性代数运算"
+          },
+          {
+            "name": "基础统计量概念",
+            "bloom_level": "understand",
+            "relation": "recommended",
+            "description": "熟悉均值、标准差、分位数、相关系数，用于数据探索与特征理解"
+          }
+        ],
+        "summary": "我们将监督学习之旅拆分为5个宏观主题，从理解核心概念开始，逐步掌握数据预处理、回归与分类模型的构建，最后聚焦于模型评估与调优。你已经有Python基础，现在每天1.5小时，两周内可以沿着这个图谱，每个微观技能配一个小练习，一步步搭建起自己的预测项目。"
+      },
+      "student_profile": {},
+      "existing_plan": {},
+      "plan_title": "sklearn 分类与回归建模学习计划",
+      "estimated_days": 7,
+      "daily_capacity": 3,
+      "steps": [
+        {
+          "day": 1,
+          "topic": "监督学习核心概念与数据划分",
+          "type": "learn",
+          "description": "理解监督学习中分类与回归问题的区别，学习训练集/测试集划分方法 train_test_split 的使用",
+          "bloom_level": "understand"
+        },
+        {
+          "day": 1,
+          "topic": "数值特征标准化与归一化",
+          "type": "learn",
+          "description": "学习 StandardScaler 与 MinMaxScaler 的作用，掌握对数值特征进行标准化的流程",
+          "bloom_level": "apply"
+        },
+        {
+          "day": 2,
+          "topic": "分类变量编码",
+          "type": "learn",
+          "description": "学习 OrdinalEncoder 和 OneHotEncoder 的使用场景与方法，理解独热编码对模型的影响",
+          "bloom_level": "apply"
+        },
+        {
+          "day": 2,
+          "topic": "线性回归与多项式回归",
+          "type": "learn",
+          "description": "使用 LinearRegression 构建连续值预测模型，理解线性回归的基本假设与参数解释",
+          "bloom_level": "apply"
+        },
+        {
+          "day": 2,
+          "topic": "决策树回归与随机森林回归",
+          "type": "learn",
+          "description": "使用 DecisionTreeRegressor 和 RandomForestRegressor 处理非线性关系，对比决策树与集成方法的表现",
+          "bloom_level": "apply"
+        },
+        {
+          "day": 3,
+          "topic": "回归模型综合练习",
+          "type": "exercise",
+          "description": "基于真实数据集（如波士顿房价或加州房价）完成从预处理到回归建模的完整流程，对比线性回归、决策树和随机森林的效果",
+          "bloom_level": "apply"
+        },
+        {
+          "day": 4,
+          "topic": "逻辑回归二分类",
+          "type": "learn",
+          "description": "学习 LogisticRegression 用于二分类问题的原理，掌握概率输出与阈值调整",
+          "bloom_level": "apply"
+        },
+        {
+          "day": 4,
+          "topic": "K近邻分类",
+          "type": "learn",
+          "description": "使用 KNeighborsClassifier 完成简单分类任务，理解 K 值的影响与距离度量的选择",
+          "bloom_level": "apply"
+        },
+        {
+          "day": 5,
+          "topic": "分类模型综合练习",
+          "type": "exercise",
+          "description": "在分类数据集（如鸢尾花或乳腺癌数据集）上分别使用逻辑回归和K近邻建模，观察不同预处理与参数下的性能变化",
+          "bloom_level": "apply"
+        },
+        {
+          "day": 6,
+          "topic": "分类评估指标",
+          "type": "learn",
+          "description": "学习并计算准确率、精确率、召回率、F1分数、混淆矩阵、ROC曲线与AUC值，理解指标适用场景",
+          "bloom_level": "apply"
+        },
+        {
+          "day": 6,
+          "topic": "交叉验证与模型选择",
+          "type": "learn",
+          "description": "学习 KFold、cross_val_score、GridSearchCV 的使用，掌握模型稳定性评估与超参数调优的基本方法",
+          "bloom_level": "apply"
+        },
+        {
+          "day": 7,
+          "topic": "综合项目：从数据到模型评估",
+          "type": "exercise",
+          "description": "选择一个完整的二分类或回归数据集，独立完成数据预处理、多模型训练、调参与评估报告，总结分类与回归建模异同",
+          "bloom_level": "apply"
+        },
+        {
+          "day": 7,
+          "topic": "回顾与知识梳理",
+          "type": "review",
+          "description": "回顾整个学习计划涉及的核心概念、常用API与典型代码流程，整理个人学习笔记与常见错误清单",
+          "bloom_level": "understand"
+        }
+      ],
+      "milestones": [
+        "完成回归模型的构建与对比（第3天）",
+        "完成分类模型的构建与对比（第5天）",
+        "掌握模型评估与交叉验证（第6天）",
+        "独立完成综合项目（第7天）"
+      ],
+      "response": "本计划共7天，从核心概念开始，逐步覆盖数据预处理、回归、分类、评估与调参，最后通过综合项目巩固所学。请每天按照顺序完成任务，练习时多动手修改参数观察效果。"
+    }
+  }
+}

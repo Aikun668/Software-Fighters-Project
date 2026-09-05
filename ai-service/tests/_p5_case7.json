@@ -1,0 +1,331 @@
+{
+  "id": 7,
+  "input": "每天只有1小时学AI，帮我安排一周的学习计划。目前零基础，想看看AI是什么。",
+  "raw_data": {
+    "goal": {
+      "input": "每天只有1小时学AI，帮我安排一周的学习计划。目前零基础，想看看AI是什么。",
+      "context": "",
+      "student_profile": {},
+      "goal_title": "初识人工智能：一周入门概览",
+      "target_topic": "人工智能基本概念与整体图景",
+      "target_level": "understand",
+      "deadline": "",
+      "motivation": "从零开始了解人工智能是什么",
+      "constraints": [
+        "每天仅1小时学习时间",
+        "零基础"
+      ],
+      "response": "好的，我将为你规划一周的AI入门路线，每天只需1小时，带你轻松走进人工智能的世界，建立整体认知框架。"
+    },
+    "decomp": {
+      "topic": "人工智能基本概念与整体图景",
+      "context": "每天只有1小时学AI，帮我安排一周的学习计划。目前零基础，想看看AI是什么。",
+      "student_profile": {},
+      "macro_topics": [
+        {
+          "name": "人工智能的定义与历史",
+          "bloom_level": "understand",
+          "description": "理解人工智能的核心概念与发展脉络，建立整体认知框架"
+        },
+        {
+          "name": "人工智能的主要学派与方法",
+          "bloom_level": "understand",
+          "description": "区分符号主义、连接主义、行为主义等不同思想流派及其基本方法"
+        },
+        {
+          "name": "人工智能的核心应用领域",
+          "bloom_level": "understand",
+          "description": "了解计算机视觉、自然语言处理、机器人等主要应用方向及代表性任务"
+        },
+        {
+          "name": "人工智能中的基本技术要素",
+          "bloom_level": "understand",
+          "description": "认识数据、算法、算力三大支柱以及机器学习的基本类型"
+        },
+        {
+          "name": "人工智能的伦理与社会影响",
+          "bloom_level": "understand",
+          "description": "初步了解AI带来的伦理挑战、偏见、隐私及未来就业等议题"
+        }
+      ],
+      "micro_skills": [
+        {
+          "name": "定义智能与图灵测试",
+          "bloom_level": "understand",
+          "parent": "人工智能的定义与历史",
+          "description": "能说明什么是人工智能，并阐述图灵测试的基本思想与局限性"
+        },
+        {
+          "name": "区分弱AI、强AI与超AI",
+          "bloom_level": "understand",
+          "parent": "人工智能的定义与历史",
+          "description": "能够区分不同层级的人工智能概念及其当前发展状态"
+        },
+        {
+          "name": "解释符号主义与连接主义的核心区别",
+          "bloom_level": "understand",
+          "parent": "人工智能的主要学派与方法",
+          "description": "能用自己的话解释基于逻辑推理与基于神经网络的两条路径的差异"
+        },
+        {
+          "name": "列举典型监督学习与无监督学习任务",
+          "bloom_level": "remember",
+          "parent": "人工智能中的基本技术要素",
+          "description": "能说出分类、回归、聚类等常见任务并给出生活实例"
+        },
+        {
+          "name": "识别AI在视觉、语言、决策中的典型应用",
+          "bloom_level": "understand",
+          "parent": "人工智能的核心应用领域",
+          "description": "能识别图像识别、机器翻译、推荐系统等应用背后的AI技术"
+        },
+        {
+          "name": "概述数据、算法、算力的协同关系",
+          "bloom_level": "understand",
+          "parent": "人工智能中的基本技术要素",
+          "description": "能简单解释三者如何共同推动AI的发展并举例说明"
+        },
+        {
+          "name": "探讨算法偏见与隐私问题",
+          "bloom_level": "analyze",
+          "parent": "人工智能的伦理与社会影响",
+          "description": "能分析一个实际AI系统可能引发的偏见或隐私风险"
+        }
+      ],
+      "prerequisites": [
+        {
+          "name": "基础数学概念（概率与统计直觉）",
+          "bloom_level": "remember",
+          "relation": "recommended",
+          "description": "对概率、平均值、分布等有生活化理解，不必会计算"
+        },
+        {
+          "name": "基础编程概念（变量、条件、循环）",
+          "bloom_level": "remember",
+          "relation": "recommended",
+          "description": "了解编程的基本要素，能看懂简单伪代码即可"
+        },
+        {
+          "name": "计算机科学基本术语（算法、数据）",
+          "bloom_level": "remember",
+          "relation": "required",
+          "description": "知道算法是解决问题的步骤，数据是信息的载体"
+        }
+      ],
+      "summary": "这位同学想从零开始了解人工智能的全貌，我们先把内容拆成了五个宏观主题，从什么是AI、有哪些思想流派，到它用在哪里、靠什么技术实现，以及会带来哪些社会影响。每个主题下都安排了具体的理解目标，并标出了你只需要具备一点点数学和编程常识就可以开始。这样你每天一小时，就能围绕不同主题建立起对AI的整体认识啦！",
+      "response": "这位同学想从零开始了解人工智能的全貌，我们先把内容拆成了五个宏观主题，从什么是AI、有哪些思想流派，到它用在哪里、靠什么技术实现，以及会带来哪些社会影响。每个主题下都安排了具体的理解目标，并标出了你只需要具备一点点数学和编程常识就可以开始。这样你每天一小时，就能围绕不同主题建立起对AI的整体认识啦！"
+    },
+    "sched": {
+      "goal": {
+        "goal_title": "初识人工智能：一周入门概览",
+        "target_topic": "人工智能基本概念与整体图景",
+        "target_level": "understand"
+      },
+      "decomposition": {
+        "macro_topics": [
+          {
+            "name": "人工智能的定义与历史",
+            "bloom_level": "understand",
+            "description": "理解人工智能的核心概念与发展脉络，建立整体认知框架"
+          },
+          {
+            "name": "人工智能的主要学派与方法",
+            "bloom_level": "understand",
+            "description": "区分符号主义、连接主义、行为主义等不同思想流派及其基本方法"
+          },
+          {
+            "name": "人工智能的核心应用领域",
+            "bloom_level": "understand",
+            "description": "了解计算机视觉、自然语言处理、机器人等主要应用方向及代表性任务"
+          },
+          {
+            "name": "人工智能中的基本技术要素",
+            "bloom_level": "understand",
+            "description": "认识数据、算法、算力三大支柱以及机器学习的基本类型"
+          },
+          {
+            "name": "人工智能的伦理与社会影响",
+            "bloom_level": "understand",
+            "description": "初步了解AI带来的伦理挑战、偏见、隐私及未来就业等议题"
+          }
+        ],
+        "micro_skills": [
+          {
+            "name": "定义智能与图灵测试",
+            "bloom_level": "understand",
+            "parent": "人工智能的定义与历史",
+            "description": "能说明什么是人工智能，并阐述图灵测试的基本思想与局限性"
+          },
+          {
+            "name": "区分弱AI、强AI与超AI",
+            "bloom_level": "understand",
+            "parent": "人工智能的定义与历史",
+            "description": "能够区分不同层级的人工智能概念及其当前发展状态"
+          },
+          {
+            "name": "解释符号主义与连接主义的核心区别",
+            "bloom_level": "understand",
+            "parent": "人工智能的主要学派与方法",
+            "description": "能用自己的话解释基于逻辑推理与基于神经网络的两条路径的差异"
+          },
+          {
+            "name": "列举典型监督学习与无监督学习任务",
+            "bloom_level": "remember",
+            "parent": "人工智能中的基本技术要素",
+            "description": "能说出分类、回归、聚类等常见任务并给出生活实例"
+          },
+          {
+            "name": "识别AI在视觉、语言、决策中的典型应用",
+            "bloom_level": "understand",
+            "parent": "人工智能的核心应用领域",
+            "description": "能识别图像识别、机器翻译、推荐系统等应用背后的AI技术"
+          },
+          {
+            "name": "概述数据、算法、算力的协同关系",
+            "bloom_level": "understand",
+            "parent": "人工智能中的基本技术要素",
+            "description": "能简单解释三者如何共同推动AI的发展并举例说明"
+          },
+          {
+            "name": "探讨算法偏见与隐私问题",
+            "bloom_level": "analyze",
+            "parent": "人工智能的伦理与社会影响",
+            "description": "能分析一个实际AI系统可能引发的偏见或隐私风险"
+          }
+        ],
+        "prerequisites": [
+          {
+            "name": "基础数学概念（概率与统计直觉）",
+            "bloom_level": "remember",
+            "relation": "recommended",
+            "description": "对概率、平均值、分布等有生活化理解，不必会计算"
+          },
+          {
+            "name": "基础编程概念（变量、条件、循环）",
+            "bloom_level": "remember",
+            "relation": "recommended",
+            "description": "了解编程的基本要素，能看懂简单伪代码即可"
+          },
+          {
+            "name": "计算机科学基本术语（算法、数据）",
+            "bloom_level": "remember",
+            "relation": "required",
+            "description": "知道算法是解决问题的步骤，数据是信息的载体"
+          }
+        ],
+        "summary": "这位同学想从零开始了解人工智能的全貌，我们先把内容拆成了五个宏观主题，从什么是AI、有哪些思想流派，到它用在哪里、靠什么技术实现，以及会带来哪些社会影响。每个主题下都安排了具体的理解目标，并标出了你只需要具备一点点数学和编程常识就可以开始。这样你每天一小时，就能围绕不同主题建立起对AI的整体认识啦！"
+      },
+      "student_profile": {},
+      "existing_plan": {},
+      "plan_title": "初识人工智能：一周入门概览",
+      "estimated_days": 7,
+      "daily_capacity": 3,
+      "steps": [
+        {
+          "day": 1,
+          "topic": "前置知识回顾",
+          "type": "review",
+          "description": "复习基础数学概念：概率与统计直觉（平均值、分布、相关性）；回顾编程概念：变量、条件、循环；重温计算机科学术语：算法、数据结构与数据。",
+          "bloom_level": "remember"
+        },
+        {
+          "day": 1,
+          "topic": "人工智能的定义与历史",
+          "type": "learn",
+          "description": "学习人工智能的定义，理解图灵测试的思想，了解AI从达特茅斯会议至今的发展简史与代表性里程碑。",
+          "bloom_level": "understand"
+        },
+        {
+          "day": 2,
+          "topic": "弱AI、强AI与超AI",
+          "type": "learn",
+          "description": "区分弱人工智能、强人工智能和超人工智能的特征，讨论当前AI所处阶段及未来可能性。",
+          "bloom_level": "understand"
+        },
+        {
+          "day": 2,
+          "topic": "人工智能主要学派",
+          "type": "learn",
+          "description": "介绍符号主义与连接主义的核心思想、历史背景与典型方法，解释两者在知识表示和学习机制上的根本区别。",
+          "bloom_level": "understand"
+        },
+        {
+          "day": 3,
+          "topic": "监督学习与无监督学习",
+          "type": "learn",
+          "description": "列举典型的监督学习（分类、回归）和无监督学习（聚类、降维）任务，理解输入输出形式与目标差异。",
+          "bloom_level": "understand"
+        },
+        {
+          "day": 3,
+          "topic": "AI核心应用领域（视觉、语言、决策）",
+          "type": "learn",
+          "description": "识别计算机视觉、自然语言处理和决策系统（如推荐、游戏、自动驾驶）中的典型AI应用，建立应用图景。",
+          "bloom_level": "understand"
+        },
+        {
+          "day": 4,
+          "topic": "数据、算法、算力的协同",
+          "type": "learn",
+          "description": "概述现代AI三要素：大规模数据、机器学习算法和高性能计算（GPU/TPU等）的相互作用，理解为何三者缺一不可。",
+          "bloom_level": "understand"
+        },
+        {
+          "day": 4,
+          "topic": "AI伦理与社会影响：算法偏见",
+          "type": "learn",
+          "description": "探讨算法偏见的来源（数据偏见、模型偏见）及其社会影响，分析典型案例（如人脸识别、量刑预测）。",
+          "bloom_level": "understand"
+        },
+        {
+          "day": 5,
+          "topic": "AI伦理与社会影响：隐私与责任",
+          "type": "learn",
+          "description": "讨论人工智能中的隐私保护问题（数据采集、监控）与责任归属（事故归责、可解释性），建立伦理敏感性。",
+          "bloom_level": "understand"
+        },
+        {
+          "day": 5,
+          "topic": "整体图景梳理",
+          "type": "review",
+          "description": "综合回顾一周所学，绘制AI概念地图，连接定义、学派、技术、应用与伦理，形成全局认识。",
+          "bloom_level": "understand"
+        },
+        {
+          "day": 6,
+          "topic": "概念辨析练习",
+          "type": "exercise",
+          "description": "完成一系列概念辨析题：强AI与弱AI的区别、符号主义与连接主义的案例匹配、监督与无监督任务的识别等。",
+          "bloom_level": "apply"
+        },
+        {
+          "day": 6,
+          "topic": "伦理案例讨论",
+          "type": "exercise",
+          "description": "阅读一个关于算法偏见或隐私侵犯的真实案例，撰写简短评论，分析问题根源并提出可能的缓解措施。",
+          "bloom_level": "analyze"
+        },
+        {
+          "day": 7,
+          "topic": "学习成果评估",
+          "type": "exercise",
+          "description": "完成一次覆盖全部主题的在线测验（选择题+简答题），检验对人工智能基本概念与整体图景的理解程度。",
+          "bloom_level": "evaluate"
+        },
+        {
+          "day": 7,
+          "topic": "反思与展望",
+          "type": "review",
+          "description": "回顾学习过程中的难点与收获，思考个人对人工智能发展的态度，阅读一篇AI未来趋势的通俗文章并做笔记。",
+          "bloom_level": "reflect"
+        }
+      ],
+      "milestones": [
+        "第3天结束：能够准确区分弱AI、强AI、超AI，并阐述符号主义与连接主义的核心区别。",
+        "第5天结束：能够列举至少三个AI应用领域及其典型任务，并用数据-算法-算力框架解释AI系统的运行基础。",
+        "第7天结束：能够在案例中识别至少一种伦理风险，并给出合理的分析，综合展示对AI整体图景的理解。"
+      ],
+      "response": "这是一份面向零基础学习者的7天入门计划，每天安排1-2个核心学习任务，配合适量回顾与练习，帮助你建立对人工智能的完整初步认识，从历史源流到伦理前沿，轻松迈入AI世界。"
+    }
+  }
+}

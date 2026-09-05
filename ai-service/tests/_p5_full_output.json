@@ -1,0 +1,4102 @@
+[
+  {
+    "id": 1,
+    "diff": 3,
+    "desc": "面试备战：强基础+明确时间+多领域",
+    "input": "三个月准备大厂ML面试，已有两年Python经验，数学基础不错（考研数学135），每天能投入4小时。希望覆盖：机器学习基础算法、深度学习、以及一些ML系统设计的知识。",
+    "score": 91.0,
+    "judge_details": {
+      "judge_ok": true,
+      "pipeline_ms": 95421.29870003555,
+      "A": 18,
+      "D": 19,
+      "H": 17,
+      "S": 18,
+      "F": 19,
+      "total": 91,
+      "brief": "目标精准，知识点覆盖全面，排期合理，适配学生情况",
+      "ms": 5677.3
+    },
+    "errors": [],
+    "raw_data": {
+      "goal": {
+        "input": "三个月准备大厂ML面试，已有两年Python经验，数学基础不错（考研数学135），每天能投入4小时。希望覆盖：机器学习基础算法、深度学习、以及一些ML系统设计的知识。",
+        "context": "",
+        "student_profile": {},
+        "goal_title": "三个月大厂ML面试准备",
+        "target_topic": "机器学习基础算法、深度学习、ML系统设计",
+        "target_level": "apply",
+        "deadline": "",
+        "motivation": "成功通过大厂机器学习岗位面试",
+        "constraints": [
+          "每天学习时间4小时",
+          "已有两年Python经验",
+          "数学基础良好（考研数学135）"
+        ],
+        "response": "已经了解你的目标：在三个月内系统准备大厂ML面试，覆盖基础算法、深度学习和系统设计。根据你扎实的Python和数学基础，我们可以侧重面试导向的应用和实战设计，一起高效规划学习路径！"
+      },
+      "decomp": {
+        "topic": "机器学习基础算法、深度学习、ML系统设计",
+        "context": "三个月准备大厂ML面试，已有两年Python经验，数学基础不错（考研数学135），每天能投入4小时。希望覆盖：机器学习基础算法、深度学习、以及一些ML系统设计的知识。",
+        "student_profile": {},
+        "macro_topics": [
+          {
+            "name": "监督学习核心算法",
+            "bloom_level": "analyze",
+            "description": "掌握常见监督学习模型的原理、推导与适用场景，并能分析偏差-方差权衡"
+          },
+          {
+            "name": "无监督学习与特征工程",
+            "bloom_level": "apply",
+            "description": "理解降维、聚类等无监督方法，并能在工程中合理设计特征"
+          },
+          {
+            "name": "深度学习基础架构",
+            "bloom_level": "apply",
+            "description": "熟悉CNN/RNN/MLP等基础网络及其训练组件，能独立构建并调优模型"
+          },
+          {
+            "name": "深度学习前沿模型",
+            "bloom_level": "understand",
+            "description": "了解Transformer、预训练模型、生成模型等主流架构的理念与变革"
+          },
+          {
+            "name": "ML系统设计与实践",
+            "bloom_level": "evaluate",
+            "description": "能够设计端到端的机器学习系统，处理生产环境中的工程与运维问题"
+          }
+        ],
+        "micro_skills": [
+          {
+            "name": "线性模型与正则化",
+            "bloom_level": "analyze",
+            "parent": "监督学习核心算法",
+            "description": "推导线性/逻辑回归的损失函数，解释L1/L2正则的几何意义和稀疏性"
+          },
+          {
+            "name": "树模型与集成学习",
+            "bloom_level": "evaluate",
+            "parent": "监督学习核心算法",
+            "description": "对比决策树、随机森林、XGBoost/LightGBM的差异并针对场景选型"
+          },
+          {
+            "name": "支持向量机与核方法",
+            "bloom_level": "analyze",
+            "parent": "监督学习核心算法",
+            "description": "理解最大间隔、对偶问题与核技巧，分析在高维空间的应用"
+          },
+          {
+            "name": "模型评估与选择",
+            "bloom_level": "evaluate",
+            "parent": "监督学习核心算法",
+            "description": "熟练运用交叉验证、AUC、混淆矩阵等指标，做出模型取舍决策"
+          },
+          {
+            "name": "降维与聚类",
+            "bloom_level": "apply",
+            "parent": "无监督学习与特征工程",
+            "description": "运用PCA/t-SNE/K-means等方法进行数据探索与高维可视化"
+          },
+          {
+            "name": "特征构造与选择",
+            "bloom_level": "create",
+            "parent": "无监督学习与特征工程",
+            "description": "基于领域知识设计数值、文本、交叉特征，并用相关性/重要性筛选"
+          },
+          {
+            "name": "深度神经网络组件",
+            "bloom_level": "apply",
+            "parent": "深度学习基础架构",
+            "description": "掌握反向传播、激活函数、损失函数、Dropout/BatchNorm的原理与使用"
+          },
+          {
+            "name": "卷积神经网络与经典架构",
+            "bloom_level": "analyze",
+            "parent": "深度学习基础架构",
+            "description": "分析LeNet/AlexNet/ResNet等架构的设计进化，会针对任务修改网络"
+          },
+          {
+            "name": "循环神经网络与序列建模",
+            "bloom_level": "apply",
+            "parent": "深度学习基础架构",
+            "description": "理解RNN/LSTM/GRU的时序建模能力及其梯度问题，能应用到文本/序列数据"
+          },
+          {
+            "name": "强化学习基础",
+            "bloom_level": "understand",
+            "parent": "深度学习基础架构",
+            "description": "了解MDP、Q-learning、策略梯度等基本概念，衔接后续前沿话题"
+          },
+          {
+            "name": "Transformer与自注意力机制",
+            "bloom_level": "analyze",
+            "parent": "深度学习前沿模型",
+            "description": "拆解Transformer的编码器-解码器结构，理解自注意力计算与位置编码"
+          },
+          {
+            "name": "预训练语言模型与微调",
+            "bloom_level": "apply",
+            "parent": "深度学习前沿模型",
+            "description": "掌握BERT/GPT的预训练目标及下游微调策略，能解读常见变体"
+          },
+          {
+            "name": "生成模型前沿",
+            "bloom_level": "understand",
+            "parent": "深度学习前沿模型",
+            "description": "对比GAN、VAE、扩散模型的核心思想，了解图像/文本生成的应用边界"
+          },
+          {
+            "name": "ML系统架构与设计模式",
+            "bloom_level": "create",
+            "parent": "ML系统设计与实践",
+            "description": "能设计在线/离线推理、特征存储、实验追踪等系统组件并权衡延迟与成本"
+          },
+          {
+            "name": "模型部署与持续集成",
+            "bloom_level": "evaluate",
+            "parent": "ML系统设计与实践",
+            "description": "评估模型压缩、容器化、模型注册、A/B测试等手段在生产环境的效果"
+          }
+        ],
+        "prerequisites": [
+          {
+            "name": "概率论与数理统计",
+            "bloom_level": "understand",
+            "relation": "recommended",
+            "description": "条件概率、贝叶斯定理、高斯分布、极大似然估计等ML高频数学基础"
+          },
+          {
+            "name": "线性代数与矩阵计算",
+            "bloom_level": "apply",
+            "relation": "recommended",
+            "description": "特征值分解、SVD、矩阵求导等在模型推导和优化中的直接应用"
+          },
+          {
+            "name": "Python数据处理生态",
+            "bloom_level": "apply",
+            "relation": "required",
+            "description": "熟练使用NumPy、Pandas、Scikit-Learn进行数据清洗与建模实验"
+          },
+          {
+            "name": "优化理论与信息论",
+            "bloom_level": "understand",
+            "relation": "recommended",
+            "description": "梯度下降变体、凸优化基础以及交叉熵、KL散度等概念"
+          }
+        ],
+        "summary": "你已有扎实的数学和Python基础，可按以下路径高效准备：先以监督/无监督经典算法为主线，深挖原理与评估；再快速搭建深度学习基础架构，攻克CNN/RNN并过渡到Transformer家族；同时并行学习ML系统设计，从特征管道到模型部署构建完整闭环。这样能在三个月内覆盖面试高频考点并建立系统观。",
+        "response": "你已有扎实的数学和Python基础，可按以下路径高效准备：先以监督/无监督经典算法为主线，深挖原理与评估；再快速搭建深度学习基础架构，攻克CNN/RNN并过渡到Transformer家族；同时并行学习ML系统设计，从特征管道到模型部署构建完整闭环。这样能在三个月内覆盖面试高频考点并建立系统观。"
+      },
+      "sched": {
+        "goal": {
+          "goal_title": "三个月大厂ML面试准备",
+          "target_topic": "机器学习基础算法、深度学习、ML系统设计",
+          "target_level": "apply",
+          "deadline": "",
+          "motivation": "成功通过大厂机器学习岗位面试",
+          "constraints": [
+            "每天学习时间4小时",
+            "已有两年Python经验",
+            "数学基础良好（考研数学135）"
+          ]
+        },
+        "decomposition": {
+          "macro_topics": [
+            {
+              "name": "监督学习核心算法",
+              "bloom_level": "analyze",
+              "description": "掌握常见监督学习模型的原理、推导与适用场景，并能分析偏差-方差权衡"
+            },
+            {
+              "name": "无监督学习与特征工程",
+              "bloom_level": "apply",
+              "description": "理解降维、聚类等无监督方法，并能在工程中合理设计特征"
+            },
+            {
+              "name": "深度学习基础架构",
+              "bloom_level": "apply",
+              "description": "熟悉CNN/RNN/MLP等基础网络及其训练组件，能独立构建并调优模型"
+            },
+            {
+              "name": "深度学习前沿模型",
+              "bloom_level": "understand",
+              "description": "了解Transformer、预训练模型、生成模型等主流架构的理念与变革"
+            },
+            {
+              "name": "ML系统设计与实践",
+              "bloom_level": "evaluate",
+              "description": "能够设计端到端的机器学习系统，处理生产环境中的工程与运维问题"
+            }
+          ],
+          "micro_skills": [
+            {
+              "name": "线性模型与正则化",
+              "bloom_level": "analyze",
+              "parent": "监督学习核心算法",
+              "description": "推导线性/逻辑回归的损失函数，解释L1/L2正则的几何意义和稀疏性"
+            },
+            {
+              "name": "树模型与集成学习",
+              "bloom_level": "evaluate",
+              "parent": "监督学习核心算法",
+              "description": "对比决策树、随机森林、XGBoost/LightGBM的差异并针对场景选型"
+            },
+            {
+              "name": "支持向量机与核方法",
+              "bloom_level": "analyze",
+              "parent": "监督学习核心算法",
+              "description": "理解最大间隔、对偶问题与核技巧，分析在高维空间的应用"
+            },
+            {
+              "name": "模型评估与选择",
+              "bloom_level": "evaluate",
+              "parent": "监督学习核心算法",
+              "description": "熟练运用交叉验证、AUC、混淆矩阵等指标，做出模型取舍决策"
+            },
+            {
+              "name": "降维与聚类",
+              "bloom_level": "apply",
+              "parent": "无监督学习与特征工程",
+              "description": "运用PCA/t-SNE/K-means等方法进行数据探索与高维可视化"
+            },
+            {
+              "name": "特征构造与选择",
+              "bloom_level": "create",
+              "parent": "无监督学习与特征工程",
+              "description": "基于领域知识设计数值、文本、交叉特征，并用相关性/重要性筛选"
+            },
+            {
+              "name": "深度神经网络组件",
+              "bloom_level": "apply",
+              "parent": "深度学习基础架构",
+              "description": "掌握反向传播、激活函数、损失函数、Dropout/BatchNorm的原理与使用"
+            },
+            {
+              "name": "卷积神经网络与经典架构",
+              "bloom_level": "analyze",
+              "parent": "深度学习基础架构",
+              "description": "分析LeNet/AlexNet/ResNet等架构的设计进化，会针对任务修改网络"
+            },
+            {
+              "name": "循环神经网络与序列建模",
+              "bloom_level": "apply",
+              "parent": "深度学习基础架构",
+              "description": "理解RNN/LSTM/GRU的时序建模能力及其梯度问题，能应用到文本/序列数据"
+            },
+            {
+              "name": "强化学习基础",
+              "bloom_level": "understand",
+              "parent": "深度学习基础架构",
+              "description": "了解MDP、Q-learning、策略梯度等基本概念，衔接后续前沿话题"
+            },
+            {
+              "name": "Transformer与自注意力机制",
+              "bloom_level": "analyze",
+              "parent": "深度学习前沿模型",
+              "description": "拆解Transformer的编码器-解码器结构，理解自注意力计算与位置编码"
+            },
+            {
+              "name": "预训练语言模型与微调",
+              "bloom_level": "apply",
+              "parent": "深度学习前沿模型",
+              "description": "掌握BERT/GPT的预训练目标及下游微调策略，能解读常见变体"
+            },
+            {
+              "name": "生成模型前沿",
+              "bloom_level": "understand",
+              "parent": "深度学习前沿模型",
+              "description": "对比GAN、VAE、扩散模型的核心思想，了解图像/文本生成的应用边界"
+            },
+            {
+              "name": "ML系统架构与设计模式",
+              "bloom_level": "create",
+              "parent": "ML系统设计与实践",
+              "description": "能设计在线/离线推理、特征存储、实验追踪等系统组件并权衡延迟与成本"
+            },
+            {
+              "name": "模型部署与持续集成",
+              "bloom_level": "evaluate",
+              "parent": "ML系统设计与实践",
+              "description": "评估模型压缩、容器化、模型注册、A/B测试等手段在生产环境的效果"
+            }
+          ],
+          "prerequisites": [
+            {
+              "name": "概率论与数理统计",
+              "bloom_level": "understand",
+              "relation": "recommended",
+              "description": "条件概率、贝叶斯定理、高斯分布、极大似然估计等ML高频数学基础"
+            },
+            {
+              "name": "线性代数与矩阵计算",
+              "bloom_level": "apply",
+              "relation": "recommended",
+              "description": "特征值分解、SVD、矩阵求导等在模型推导和优化中的直接应用"
+            },
+            {
+              "name": "Python数据处理生态",
+              "bloom_level": "apply",
+              "relation": "required",
+              "description": "熟练使用NumPy、Pandas、Scikit-Learn进行数据清洗与建模实验"
+            },
+            {
+              "name": "优化理论与信息论",
+              "bloom_level": "understand",
+              "relation": "recommended",
+              "description": "梯度下降变体、凸优化基础以及交叉熵、KL散度等概念"
+            }
+          ],
+          "summary": "你已有扎实的数学和Python基础，可按以下路径高效准备：先以监督/无监督经典算法为主线，深挖原理与评估；再快速搭建深度学习基础架构，攻克CNN/RNN并过渡到Transformer家族；同时并行学习ML系统设计，从特征管道到模型部署构建完整闭环。这样能在三个月内覆盖面试高频考点并建立系统观。"
+        },
+        "student_profile": {},
+        "existing_plan": {},
+        "plan_title": "三个月大厂ML面试准备学习计划",
+        "estimated_days": 90,
+        "daily_capacity": 3,
+        "steps": [
+          {
+            "day": 1,
+            "topic": "概率论与数理统计基础回顾",
+            "type": "review",
+            "description": "回顾概率分布、贝叶斯定理、期望与方差、抽样分布等核心概念，为后续模型理解打基础",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 2,
+            "topic": "线性代数与矩阵计算回顾",
+            "type": "review",
+            "description": "复习矩阵乘法、特征值分解、奇异值分解、梯度与导数在矩阵中的表达，连接ML中的优化问题",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 3,
+            "topic": "优化理论与信息论基础",
+            "type": "review",
+            "description": "复习梯度下降、随机梯度下降、拉格朗日乘子法、熵与交叉熵，利用Python快速实践",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 4,
+            "topic": "线性模型与正则化",
+            "type": "learn",
+            "description": "学习线性回归与逻辑回归的原理，理解L1/L2正则化、弹性网及其在实际面试中的常见问题",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 5,
+            "topic": "线性模型与正则化练习",
+            "type": "exercise",
+            "description": "通过案例实现正则化线性分类与回归，观察过拟合与正则化强度的关系并进行参数调优",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 6,
+            "topic": "模型评估与选择(上)",
+            "type": "learn",
+            "description": "学习偏差-方差分解、交叉验证、混淆矩阵、ROC/AUC、准确率/召回率权衡和F1-score",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 7,
+            "topic": "模型评估与选择(下)",
+            "type": "exercise",
+            "description": "使用scikit-learn构建完整评估流程，比较不同模型在模拟面试数据集上的评估指标表现",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 8,
+            "topic": "树模型与集成学习(上)",
+            "type": "learn",
+            "description": "理解决策树的划分标准、剪枝策略，以及Bagging与随机森林的方差降低原理",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 9,
+            "topic": "树模型与集成学习(下)",
+            "type": "learn",
+            "description": "学习Boosting方法(AdaBoost、GBDT)及其残差拟合思想，扩展到XGBoost/LightGBM核心优化技术",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 10,
+            "topic": "树模型与集成学习练习",
+            "type": "exercise",
+            "description": "实现随机森林与GBDT对比实验，分析特征重要性、处理类别型与缺失值，撰写面试讲述稿",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 11,
+            "topic": "支持向量机与核方法",
+            "type": "learn",
+            "description": "从最大间隔出发理解硬/软间隔SVM，了解核技巧与常见核函数，梳理对偶问题思路",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 12,
+            "topic": "监督学习核心算法总复习与面试演练",
+            "type": "review",
+            "description": "对比LR、SVM、决策树、随机森林与GBDT的适用场景与优缺点，进行组内模拟问答",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 13,
+            "topic": "降维与聚类(上)",
+            "type": "learn",
+            "description": "学习PCA的方差最大化视角与SVD实现，讨论t-SNE的邻居嵌入思想和可视化特点",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 14,
+            "topic": "降维与聚类(下)",
+            "type": "learn",
+            "description": "掌握K-Means、DBSCAN与层次聚类，理解它们的距离度量和参数影响，比较不同聚类算法",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 15,
+            "topic": "特征构造与选择",
+            "type": "learn",
+            "description": "学习数值/类别/时间序列特征构造方法，结合过滤式、包裹式与嵌入式特征选择策略构建鲁棒特征库",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 16,
+            "topic": "无监督学习与特征工程练习",
+            "type": "exercise",
+            "description": "在真实开放数据集上完整走通降维、聚类、特征构造与选择的pipeline，进行可视化分析和面试表达训练",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 17,
+            "topic": "阶段复习一：传统ML笔试高频题",
+            "type": "review",
+            "description": "集中刷题与讲解，覆盖SVM对偶推导、XGBoost分裂增益公式、正则化细节等高频考点",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 18,
+            "topic": "深度神经网络组件基础",
+            "type": "learn",
+            "description": "从感知机引入激活函数、反向传播、链式法则、梯度消失问题，实现一个小型全连接网络",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 19,
+            "topic": "深度神经网络训练技巧",
+            "type": "learn",
+            "description": "学习参数初始化、批量归一化、Dropout、学习率衰减与优化器(Adam/RMSprop)的原理和实践",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 20,
+            "topic": "CNN与经典架构(上)",
+            "type": "learn",
+            "description": "理解卷积层、池化层、感受野与平移等变性，分析LeNet、AlexNet和VGG的设计思路",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 21,
+            "topic": "CNN与经典架构(下)",
+            "type": "learn",
+            "description": "学习Inception的多尺度通路、ResNet的跳跃连接和MobileNet的深度可分离卷积，对比参数量与计算量",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 22,
+            "topic": "CNN面试练习与图像建模案例",
+            "type": "exercise",
+            "description": "基于PyTorch复现一个ResNet并完成图像分类任务，准备‘CNN优势’类面试问题模拟作答",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 23,
+            "topic": "循环神经网络与序列建模(上)",
+            "type": "learn",
+            "description": "学习RNN的时序展开与BPTT，理解LSTM门控机制和GRU的简化设计，解决长序列依赖问题",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 24,
+            "topic": "循环神经网络与序列建模(下)",
+            "type": "learn",
+            "description": "扩展到Seq2Seq架构与Attention机制的动机，为Transformer学习铺垫基础",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 25,
+            "topic": "Transformer与前沿模型",
+            "type": "learn",
+            "description": "详解自注意力机制、多头注意力和位置编码，结合BERT/GPT案例理解预训练-微调范式与prompt工程",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 26,
+            "topic": "深度学习前沿模型练习",
+            "type": "exercise",
+            "description": "使用Hugging Face加载BERT进行文本分类微调，撰写推理过程与面试解释稿",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 27,
+            "topic": "强化学习基础",
+            "type": "learn",
+            "description": "掌握MDP、价值函数、Q-Learning和策略梯度基本思路，理解探索与利用的平衡",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 28,
+            "topic": "深度学习总复习与面试笔试结合",
+            "type": "review",
+            "description": "回顾CNN/RNN/Transformer核心差异，刷面试真题中的反向传播计算与参数量估计类题目",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 29,
+            "topic": "ML系统设计导论与实践框架",
+            "type": "learn",
+            "description": "学习端到端ML项目流程：问题定义、数据管线设计、模型选择、评估、部署与监控的基本框架",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 30,
+            "topic": "ML系统设计案例剖析：信息流与特征存储",
+            "type": "learn",
+            "description": "分析推荐系统/广告系统中的在线推断与离线训练分离模式，讨论特征存储、特征回填和实时性要求",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 31,
+            "topic": "ML系统设计案例剖析：模型迭代与实验平台",
+            "type": "learn",
+            "description": "学习A/B测试原理、实验分流、模型版本管理与效果回归分析，结合面试公司业务场景设计方案",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 32,
+            "topic": "ML系统设计综合练习",
+            "type": "exercise",
+            "description": "完成2-3道大厂ML系统设计真题（如设计视频推荐系统、搜索排序系统），撰写完整设计文档并进行模拟面试",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 33,
+            "topic": "模拟面试冲刺与全链路回顾",
+            "type": "review",
+            "description": "模拟三轮技术面：传统ML基础白板推导、深度学习前沿问答、系统设计展示，识别薄弱点并补充复习",
+            "bloom_level": "apply"
+          }
+        ],
+        "milestones": [
+          "第12天：掌握监督学习核心算法并能应用于白板面试场景",
+          "第17天：完成传统ML笔试高频题训练，可以独立推导SVM等核心公式",
+          "第26天：掌握CNN/RNN/Transformer原理并能完成微调实践",
+          "第32天：具备独立设计端到端ML系统的能力",
+          "第33天：能自信应对全链路ML面试，包括理论、实践与系统设计"
+        ],
+        "response": "这个计划为你安排了从数学基础回顾到面试模拟的完整路径，每天保持2-3个任务，建议白天利用整块时间学习新知识，晚上写代码或模拟面试。如果某天内容较多，可以适当延长练习时间，确保每一步都能扎实理解并能口头讲清楚。"
+      }
+    }
+  },
+  {
+    "id": 2,
+    "diff": 3,
+    "desc": "交叉学科模糊目标：量化+ML双线",
+    "input": "想用AI做量化交易策略。目前情况：Python熟练但金融和ML都是半吊子——上过一门金融入门课、用sklearn做过简单分类。不知道从哪里系统学。",
+    "score": 83.0,
+    "judge_details": {
+      "judge_ok": true,
+      "pipeline_ms": 88828.58610001858,
+      "A": 18,
+      "D": 17,
+      "H": 16,
+      "S": 15,
+      "F": 17,
+      "total": 83,
+      "brief": "目标明确，知识点覆盖全面，排期合理但部分细节需优化",
+      "ms": 4341.4
+    },
+    "errors": [],
+    "raw_data": {
+      "goal": {
+        "input": "想用AI做量化交易策略。目前情况：Python熟练但金融和ML都是半吊子——上过一门金融入门课、用sklearn做过简单分类。不知道从哪里系统学。",
+        "context": "",
+        "student_profile": {},
+        "goal_title": "系统学习AI驱动的量化交易策略",
+        "target_topic": "机器学习在量化交易中的应用",
+        "target_level": "apply",
+        "deadline": "",
+        "motivation": "希望能够利用AI构建实用的量化交易策略",
+        "constraints": [
+          "Python熟练",
+          "金融基础薄弱，仅上过一门入门课",
+          "机器学习基础薄弱，仅用sklearn做过简单分类"
+        ],
+        "response": "你的Python底子很不错，金融和ML虽还薄弱但已有接触。我们可以从金融时间序列特征工程和策略回测框架开始，一步步把AI落地到交易场景中。"
+      },
+      "decomp": {
+        "topic": "机器学习在量化交易中的应用",
+        "context": "想用AI做量化交易策略。目前情况：Python熟练但金融和ML都是半吊子——上过一门金融入门课、用sklearn做过简单分类。不知道从哪里系统学。",
+        "student_profile": {},
+        "macro_topics": [
+          {
+            "name": "Quantitative Trading Fundamentals",
+            "bloom_level": "understand",
+            "description": "Understand the structure, players, and data types in electronic financial markets."
+          },
+          {
+            "name": "Financial Time Series Analysis",
+            "bloom_level": "apply",
+            "description": "Analyze asset price series, detect stylized facts, and prepare stationary series for modeling."
+          },
+          {
+            "name": "Feature Engineering for Financial Data",
+            "bloom_level": "apply",
+            "description": "Transform raw market data into predictive signals while respecting lookahead constraints."
+          },
+          {
+            "name": "Machine Learning for Strategy Modeling",
+            "bloom_level": "apply",
+            "description": "Select and train ML models suitable for return prediction and regime detection."
+          },
+          {
+            "name": "Backtesting and Validation",
+            "bloom_level": "analyze",
+            "description": "Design rigorous backtests that avoid common pitfalls such as overfitting and survivorship bias."
+          },
+          {
+            "name": "Risk and Execution Management",
+            "bloom_level": "analyze",
+            "description": "Integrate transaction costs, slippage, and risk controls into strategy evaluation."
+          }
+        ],
+        "micro_skills": [
+          {
+            "name": "Market microstructure and order book dynamics",
+            "bloom_level": "understand",
+            "parent": "Quantitative Trading Fundamentals",
+            "description": "Explain how limit order books work and how trades are executed in electronic markets."
+          },
+          {
+            "name": "Stationarity and return transformations",
+            "bloom_level": "apply",
+            "parent": "Financial Time Series Analysis",
+            "description": "Apply log-return computation, differencing, and unit root tests to make price series stationary."
+          },
+          {
+            "name": "Building technical and alternative features",
+            "bloom_level": "apply",
+            "parent": "Feature Engineering for Financial Data",
+            "description": "Create lagged momentum, volatility, and volume features with proper time indexing to avoid look-ahead."
+          },
+          {
+            "name": "Dealing with non-IID and regime changes",
+            "bloom_level": "analyze",
+            "parent": "Feature Engineering for Financial Data",
+            "description": "Diagnose distribution shifts and design features robust to changing market regimes."
+          },
+          {
+            "name": "Supervised learning for next-period direction or return",
+            "bloom_level": "apply",
+            "parent": "Machine Learning for Strategy Modeling",
+            "description": "Train classifiers/regressors with walk-forward cross-validation, and perform hyperparameter tuning."
+          },
+          {
+            "name": "Avoiding overfitting in financial ML",
+            "bloom_level": "analyze",
+            "parent": "Machine Learning for Strategy Modeling",
+            "description": "Apply purging, embargo, and deflated Sharpe ratio techniques to obtain statistically sound performance estimates."
+          },
+          {
+            "name": "Vectorized backtesting and performance metrics",
+            "bloom_level": "apply",
+            "parent": "Backtesting and Validation",
+            "description": "Implement a loop-free event-driven simulation in Python and compute Sharpe, max drawdown, and Calmar ratios."
+          },
+          {
+            "name": "Survivorship bias and data-snooping tests",
+            "bloom_level": "analyze",
+            "parent": "Backtesting and Validation",
+            "description": "Design out-of-sample periods and use Monte Carlo permutation tests to assess false discovery risk."
+          },
+          {
+            "name": "Transaction cost modeling",
+            "bloom_level": "apply",
+            "parent": "Risk and Execution Management",
+            "description": "Incorporate commission, bid-ask spread, and market impact into net performance calculations."
+          },
+          {
+            "name": "Position sizing and risk budgeting",
+            "bloom_level": "evaluate",
+            "parent": "Risk and Execution Management",
+            "description": "Compare volatility targeting, Kelly criterion, and VaR-based position limits under regime uncertainty."
+          }
+        ],
+        "prerequisites": [
+          {
+            "name": "Basic probability and statistics (distributions, correlation, hypothesis testing)",
+            "bloom_level": "remember",
+            "relation": "required",
+            "description": "Fundamental statistical concepts needed to understand financial returns, risk, and model evaluation."
+          },
+          {
+            "name": "Fundamentals of financial instruments (stocks, ETFs, futures, FX)",
+            "bloom_level": "remember",
+            "relation": "recommended",
+            "description": "Basic knowledge of what is traded and typical market conventions (though your intro finance course partially covers this)."
+          },
+          {
+            "name": "Python with numpy, pandas, matplotlib, scikit-learn",
+            "bloom_level": "apply",
+            "relation": "required",
+            "description": "You already have this; we will rely heavily on pandas for time series and sklearn pipelines."
+          }
+        ],
+        "summary": "Your journey starts by solidifying financial market mechanics and time series stationarity, then moves to building robust features and training ML models with strict anti-overfitting protocols. Finally you'll learn to backtest rigorously and manage real-world friction like transaction costs and risk limits.",
+        "response": "Your journey starts by solidifying financial market mechanics and time series stationarity, then moves to building robust features and training ML models with strict anti-overfitting protocols. Finally you'll learn to backtest rigorously and manage real-world friction like transaction costs and risk limits."
+      },
+      "sched": {
+        "goal": {
+          "goal_title": "系统学习AI驱动的量化交易策略",
+          "target_topic": "机器学习在量化交易中的应用",
+          "target_level": "apply",
+          "deadline": "",
+          "motivation": "希望能够利用AI构建实用的量化交易策略",
+          "constraints": [
+            "Python熟练",
+            "金融基础薄弱，仅上过一门入门课",
+            "机器学习基础薄弱，仅用sklearn做过简单分类"
+          ]
+        },
+        "decomposition": {
+          "macro_topics": [
+            {
+              "name": "Quantitative Trading Fundamentals",
+              "bloom_level": "understand",
+              "description": "Understand the structure, players, and data types in electronic financial markets."
+            },
+            {
+              "name": "Financial Time Series Analysis",
+              "bloom_level": "apply",
+              "description": "Analyze asset price series, detect stylized facts, and prepare stationary series for modeling."
+            },
+            {
+              "name": "Feature Engineering for Financial Data",
+              "bloom_level": "apply",
+              "description": "Transform raw market data into predictive signals while respecting lookahead constraints."
+            },
+            {
+              "name": "Machine Learning for Strategy Modeling",
+              "bloom_level": "apply",
+              "description": "Select and train ML models suitable for return prediction and regime detection."
+            },
+            {
+              "name": "Backtesting and Validation",
+              "bloom_level": "analyze",
+              "description": "Design rigorous backtests that avoid common pitfalls such as overfitting and survivorship bias."
+            },
+            {
+              "name": "Risk and Execution Management",
+              "bloom_level": "analyze",
+              "description": "Integrate transaction costs, slippage, and risk controls into strategy evaluation."
+            }
+          ],
+          "micro_skills": [
+            {
+              "name": "Market microstructure and order book dynamics",
+              "bloom_level": "understand",
+              "parent": "Quantitative Trading Fundamentals",
+              "description": "Explain how limit order books work and how trades are executed in electronic markets."
+            },
+            {
+              "name": "Stationarity and return transformations",
+              "bloom_level": "apply",
+              "parent": "Financial Time Series Analysis",
+              "description": "Apply log-return computation, differencing, and unit root tests to make price series stationary."
+            },
+            {
+              "name": "Building technical and alternative features",
+              "bloom_level": "apply",
+              "parent": "Feature Engineering for Financial Data",
+              "description": "Create lagged momentum, volatility, and volume features with proper time indexing to avoid look-ahead."
+            },
+            {
+              "name": "Dealing with non-IID and regime changes",
+              "bloom_level": "analyze",
+              "parent": "Feature Engineering for Financial Data",
+              "description": "Diagnose distribution shifts and design features robust to changing market regimes."
+            },
+            {
+              "name": "Supervised learning for next-period direction or return",
+              "bloom_level": "apply",
+              "parent": "Machine Learning for Strategy Modeling",
+              "description": "Train classifiers/regressors with walk-forward cross-validation, and perform hyperparameter tuning."
+            },
+            {
+              "name": "Avoiding overfitting in financial ML",
+              "bloom_level": "analyze",
+              "parent": "Machine Learning for Strategy Modeling",
+              "description": "Apply purging, embargo, and deflated Sharpe ratio techniques to obtain statistically sound performance estimates."
+            },
+            {
+              "name": "Vectorized backtesting and performance metrics",
+              "bloom_level": "apply",
+              "parent": "Backtesting and Validation",
+              "description": "Implement a loop-free event-driven simulation in Python and compute Sharpe, max drawdown, and Calmar ratios."
+            },
+            {
+              "name": "Survivorship bias and data-snooping tests",
+              "bloom_level": "analyze",
+              "parent": "Backtesting and Validation",
+              "description": "Design out-of-sample periods and use Monte Carlo permutation tests to assess false discovery risk."
+            },
+            {
+              "name": "Transaction cost modeling",
+              "bloom_level": "apply",
+              "parent": "Risk and Execution Management",
+              "description": "Incorporate commission, bid-ask spread, and market impact into net performance calculations."
+            },
+            {
+              "name": "Position sizing and risk budgeting",
+              "bloom_level": "evaluate",
+              "parent": "Risk and Execution Management",
+              "description": "Compare volatility targeting, Kelly criterion, and VaR-based position limits under regime uncertainty."
+            }
+          ],
+          "prerequisites": [
+            {
+              "name": "Basic probability and statistics (distributions, correlation, hypothesis testing)",
+              "bloom_level": "remember",
+              "relation": "required",
+              "description": "Fundamental statistical concepts needed to understand financial returns, risk, and model evaluation."
+            },
+            {
+              "name": "Fundamentals of financial instruments (stocks, ETFs, futures, FX)",
+              "bloom_level": "remember",
+              "relation": "recommended",
+              "description": "Basic knowledge of what is traded and typical market conventions (though your intro finance course partially covers this)."
+            },
+            {
+              "name": "Python with numpy, pandas, matplotlib, scikit-learn",
+              "bloom_level": "apply",
+              "relation": "required",
+              "description": "You already have this; we will rely heavily on pandas for time series and sklearn pipelines."
+            }
+          ],
+          "summary": "Your journey starts by solidifying financial market mechanics and time series stationarity, then moves to building robust features and training ML models with strict anti-overfitting protocols. Finally you'll learn to backtest rigorously and manage real-world friction like transaction costs and risk limits."
+        },
+        "student_profile": {},
+        "existing_plan": {},
+        "plan_title": "AI驱动的量化交易策略系统学习计划",
+        "estimated_days": 21,
+        "daily_capacity": 3,
+        "steps": [
+          {
+            "day": 1,
+            "topic": "前置知识回顾：概率统计基础",
+            "type": "review",
+            "description": "复习分布、相关性、假设检验等核心概念，结合金融场景理解统计意义",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 1,
+            "topic": "前置知识回顾：金融工具基础",
+            "type": "review",
+            "description": "梳理股票、ETF、期货、外汇等金融产品的基本交易规则与数据特征",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 1,
+            "topic": "环境搭建与数据准备",
+            "type": "exercise",
+            "description": "配置Python环境，使用pandas、numpy、matplotlib加载并可视化示例金融数据",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 2,
+            "topic": "市场微观结构与订单簿动态",
+            "type": "learn",
+            "description": "学习市场微观结构、订单簿、买卖价差、流动性等对价格形成的影响",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 2,
+            "topic": "量化交易基础概念",
+            "type": "learn",
+            "description": "理解Alpha、Beta、夏普比率、最大回撤等核心绩效指标，认识量化策略开发流程",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 2,
+            "topic": "金融时间序列的特性",
+            "type": "learn",
+            "description": "学习时间序列的非平稳性、自相关、异方差，掌握平稳性检验方法",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 3,
+            "topic": "收益率变换与平稳化",
+            "type": "learn",
+            "description": "学习对数收益率、差分、分数阶差分等平稳化技术，并进行代码实现",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 3,
+            "topic": "时间序列分解与趋势提取",
+            "type": "exercise",
+            "description": "利用移动平均、HP滤波等方法分解趋势、季节性与残差，分析金融序列",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 3,
+            "topic": "金融数据清洗与对齐",
+            "type": "exercise",
+            "description": "处理期货主力连续合约拼接、复权、缺失值、时间对齐等常见问题",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 4,
+            "topic": "技术指标特征构建",
+            "type": "learn",
+            "description": "学习基于价格和成交量的技术指标（RSI, MACD, 布林带等）及Python实现",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 4,
+            "topic": "另类数据与基本面特征",
+            "type": "learn",
+            "description": "理解情绪、新闻、资金流等另类数据，如何转化为量化特征",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 4,
+            "topic": "特征重要性初探",
+            "type": "exercise",
+            "description": "使用互信息、相关系数矩阵对构建的特征进行初步筛选",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 5,
+            "topic": "非独立同分布与概念漂移",
+            "type": "learn",
+            "description": "认识金融数据非IID、存在体制转换的特点，介绍马尔可夫体制转换模型",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 5,
+            "topic": "样本内与样本外划分",
+            "type": "learn",
+            "description": "学习时间序列交叉验证（Purged Walk-Forward），避免未来信息泄露",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 5,
+            "topic": "特征组合与筛选实战",
+            "type": "exercise",
+            "description": "基于真实或模拟数据，构建特征矩阵，应用递归特征消除等选择有效特征",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 6,
+            "topic": "监督学习用于方向/收益预测",
+            "type": "learn",
+            "description": "学习分类模型（逻辑回归、SVM）用于预测下一期涨跌，回归模型预测收益率",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 6,
+            "topic": "集成学习与稳健建模",
+            "type": "learn",
+            "description": "介绍随机森林、梯度提升树（XGBoost/LightGBM）在金融建模中的优势与调参",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 6,
+            "topic": "初级策略构建练习",
+            "type": "exercise",
+            "description": "利用单个模型生成交易信号，编写简单策略规则，计算粗略盈亏曲线",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 7,
+            "topic": "金融机器学习中的过拟合",
+            "type": "learn",
+            "description": "理解数据窥探、幸存者偏差，学习如何通过拒绝抽样、组合交叉验证减轻过拟合",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 7,
+            "topic": "正则化与早期停止",
+            "type": "learn",
+            "description": "练习L1/L2正则化、Dropout、早停等技术在金融ML模型中的应用",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 7,
+            "topic": "模型稳定性检验",
+            "type": "exercise",
+            "description": "对之前训练的模型进行样本内外稳定性测试，分析特征重要性随时间变化",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 8,
+            "topic": "向量化回测框架基础",
+            "type": "learn",
+            "description": "理解向量化回测与事件驱动回测的区别，设计简单的矩阵运算回测引擎",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 8,
+            "topic": "回测性能指标计算",
+            "type": "learn",
+            "description": "实现夏普比率、最大回撤、胜率、盈亏比、卡尔马比率等指标的自动化计算",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 8,
+            "topic": "回测实践",
+            "type": "exercise",
+            "description": "将之前的策略进行向量化回测，输出完整绩效报告，分析净值曲线",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 9,
+            "topic": "常见回测陷阱",
+            "type": "learn",
+            "description": "学习存活偏差、前视偏差、信号滞后、手续费忽视等问题及修正方法",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 9,
+            "topic": "交易成本建模",
+            "type": "learn",
+            "description": "学习佣金、滑点、冲击成本、资金占用成本的简化模型与实现",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 9,
+            "topic": "改进回测引擎",
+            "type": "exercise",
+            "description": "在回测框架中加入滑点和手续费模块，重新评估策略表现",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 10,
+            "topic": "数据窥探检验",
+            "type": "learn",
+            "description": "学习基于Bootstrap的White’s Reality Check、稳健FDR控制等方法",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 10,
+            "topic": "过拟合检测实战",
+            "type": "exercise",
+            "description": "对练习中使用的多个策略进行P-hacking检测，理解结果可靠性",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 10,
+            "topic": "策略泛化能力评估",
+            "type": "exercise",
+            "description": "使用滚动窗口优化、多资产验证方式评估策略的稳健性",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 11,
+            "topic": "资金管理基础",
+            "type": "learn",
+            "description": "学习凯利公式、风险平价、固定比例资金管理等方法，理解其对长期增长的影响",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 11,
+            "topic": "头寸规模确定",
+            "type": "learn",
+            "description": "将资金管理模型与交易信号结合，实现动态头寸调整代码",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 11,
+            "topic": "风险预算与止损",
+            "type": "exercise",
+            "description": "设计基于波动率或ATR的动态止损和风险分配方案，集成到回测中",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 12,
+            "topic": "执行优化简介",
+            "type": "learn",
+            "description": "学习执行缺口、TWAP/VWAP算法基础，理解订单执行对策略收益的影响",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 12,
+            "topic": "多策略组合与对冲",
+            "type": "learn",
+            "description": "学习如何将多个策略组合，降低组合波动，构建对冲组合",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 12,
+            "topic": "综合风险报告生成",
+            "type": "exercise",
+            "description": "编写脚本输出仓位、杠杆、敞口、回撤瀑布图等完备的风控报告",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 13,
+            "topic": "完整策略开发流程串讲",
+            "type": "review",
+            "description": "从特征定义、模型训练、信号生成、回测评估、风险管理全链路串讲",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 13,
+            "topic": "实战项目1：基于技术指标的日内方向预测",
+            "type": "exercise",
+            "description": "独立完成一个完整项目，应用所学所有模块，输出绩效报告和改进建议",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 13,
+            "topic": "实战项目1：代码实现与调试",
+            "type": "exercise",
+            "description": "编写并调试项目代码，记录遇到的坑与解决方案",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 14,
+            "topic": "实战项目2：多因子选股与动量反转策略",
+            "type": "exercise",
+            "description": "基于基本面和技术因子构建选股模型，完成回测与风险调整",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 14,
+            "topic": "实战项目2：回测结果分析",
+            "type": "exercise",
+            "description": "分析策略在不同市场环境下的表现，讨论改进方向",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 14,
+            "topic": "策略记录与文档撰写",
+            "type": "exercise",
+            "description": "学习用专业方式记录策略假设、参数、绩效，形成可复现的研究文档",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 15,
+            "topic": "机器学习模型调优专题",
+            "type": "learn",
+            "description": "系统学习贝叶斯优化、超参数优化框架（Optuna等）在金融数据上的使用",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 15,
+            "topic": "自动化机器学习（AutoML）",
+            "type": "learn",
+            "description": "了解AutoML工具，思考其与手工建模的优劣，并尝试应用",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 15,
+            "topic": "模型解释性",
+            "type": "exercise",
+            "description": "应用SHAP、LIME解释模型输出，确保策略逻辑可理解",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 16,
+            "topic": "高频数据与实时策略",
+            "type": "learn",
+            "description": "了解tick级数据特点，实时流处理框架（如Kafka）的基本概念",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 16,
+            "topic": "事件驱动策略基础",
+            "type": "learn",
+            "description": "学习业绩公告、经济数据发布等事件驱动型策略的建模思路",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 16,
+            "topic": "另类数据特征工程实战",
+            "type": "exercise",
+            "description": "处理新闻情绪数据或社交媒体热度，建立另类因子并验证效果",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 17,
+            "topic": "组合优化理论",
+            "type": "learn",
+            "description": "学习均值-方差优化、Black-Litterman模型、风险预算组合构建",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 17,
+            "topic": "组合优化代码实现",
+            "type": "exercise",
+            "description": "使用cvxopt或PyPortfolioOpt实现带约束的组合优化，生成有效前沿",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 17,
+            "topic": "动态再平衡策略",
+            "type": "exercise",
+            "description": "设计定期再平衡的组合策略，考虑交易成本与税务影响",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 18,
+            "topic": "强化学习在交易中的应用",
+            "type": "learn",
+            "description": "了解Q-learning、Policy Gradient等RL方法在单资产交易中的建模思路",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 18,
+            "topic": "强化学习环境搭建",
+            "type": "exercise",
+            "description": "使用OpenAI Gym风格搭建自定义交易环境，测试简单RL智能体",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 18,
+            "topic": "深度学习时序模型",
+            "type": "learn",
+            "description": "学习LSTM、Transformer在金融时序预测中的应用与注意事项",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 19,
+            "topic": "深度学习预测练习",
+            "type": "exercise",
+            "description": "用LSTM预测收益率，并与传统ML模型对比，讨论过拟合问题",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 19,
+            "topic": "对抗生成式过拟合防范",
+            "type": "learn",
+            "description": "了解如何通过生成对抗网络合成市场数据来检验策略稳健性",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 19,
+            "topic": "对抗样本检验",
+            "type": "exercise",
+            "description": "给过往策略添加微扰，观察信号稳定性和回撤变化",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 20,
+            "topic": "策略生命周期管理",
+            "type": "learn",
+            "description": "学习策略上线、监控、退役的标准流程，了解策略衰减的检测方法",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 20,
+            "topic": "综合回测系统搭建",
+            "type": "exercise",
+            "description": "将所学回测、风控、绩效模块整合成一个可复用的回测框架",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 20,
+            "topic": "系统化测试与代码鲁棒性",
+            "type": "exercise",
+            "description": "编写单元测试，确保框架正确处理各种数据、信号和极端行情",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 21,
+            "topic": "课程总复习与知识体系梳理",
+            "type": "review",
+            "description": "回顾整个学习路径，强化各模块之间的关联，形成系统化知识网络",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 21,
+            "topic": "个人策略答辩与复盘",
+            "type": "exercise",
+            "description": "准备一份完整策略研究报告，进行模拟答辩，反思不足",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 21,
+            "topic": "进阶学习路径规划",
+            "type": "exercise",
+            "description": "列出未来可深入的方向（衍生品定价、高频统计套利等），制定后续学习目标",
+            "bloom_level": "apply"
+          }
+        ],
+        "milestones": [
+          "第5天：完成特征工程体系构建，能够独立从原始行情构建结构化特征矩阵",
+          "第10天：掌握避免金融ML过拟合的核心方法，并能对简单策略进行数据窥探检验",
+          "第15天：独立完成两个端到端的机器学习量化策略项目，包含完整回测与风险分析",
+          "第21天：形成可复用的回测与风险管理系统，能够系统化评估和改进策略"
+        ],
+        "response": "这是一份为期21天的系统学习计划，从基础回顾到完整实战，逐步覆盖机器学习在量化交易中的各个环节。每天安排3个任务，先学理论后动手实践，最终通过综合项目帮助你将知识应用到实际策略开发中。"
+      }
+    }
+  },
+  {
+    "id": 3,
+    "diff": 2,
+    "desc": "转方向：CV→NLP+时间明确",
+    "input": "下个月想入门NLP，之前做过图像分类（用ResNet微调过）。数学还行，每周能投入15小时左右。",
+    "score": 90.0,
+    "judge_details": {
+      "judge_ok": true,
+      "pipeline_ms": 64893.170599942096,
+      "A": 18,
+      "D": 19,
+      "H": 17,
+      "S": 18,
+      "F": 18,
+      "total": 90,
+      "brief": "目标明确，知识点拆解全面，排期合理，适配学生情况，整体一致。",
+      "ms": 4842.1
+    },
+    "errors": [],
+    "raw_data": {
+      "goal": {
+        "input": "下个月想入门NLP，之前做过图像分类（用ResNet微调过）。数学还行，每周能投入15小时左右。",
+        "context": "",
+        "student_profile": {},
+        "goal_title": "入门自然语言处理",
+        "target_topic": "自然语言处理基础",
+        "target_level": "understand",
+        "deadline": "",
+        "motivation": "已有图像分类经验，希望将深度学习能力拓展到自然语言处理领域。",
+        "constraints": [
+          "每周可投入约15小时",
+          "数学基础较好",
+          "有ResNet微调等图像分类实战经验"
+        ],
+        "response": "你想在下个月内入门NLP，每周能投入15小时，之前有图像分类和不错的数学基础，这个目标很清晰，我们一起来规划吧。"
+      },
+      "decomp": {
+        "topic": "自然语言处理基础",
+        "context": "下个月想入门NLP，之前做过图像分类（用ResNet微调过）。数学还行，每周能投入15小时左右。",
+        "student_profile": {},
+        "macro_topics": [
+          {
+            "name": "自然语言处理基本概念",
+            "bloom_level": "understand",
+            "description": "理解NLP的定义、主要任务和应用场景，建立起对领域的整体认知"
+          },
+          {
+            "name": "文本预处理与表示方法",
+            "bloom_level": "apply",
+            "description": "掌握文本清洗、分词、向量化等基础操作，能够将原始文本转换为机器学习可用格式"
+          },
+          {
+            "name": "词向量与分布式表示",
+            "bloom_level": "analyze",
+            "description": "理解词嵌入原理，比较Word2Vec、GloVe等模型，并能分析其语义捕获能力"
+          },
+          {
+            "name": "循环神经网络与序列建模",
+            "bloom_level": "apply",
+            "description": "运用RNN、LSTM/GRU等模型解决文本分类、序列标注等任务，理解其与图像CNN的异同"
+          },
+          {
+            "name": "注意力机制与Transformer架构",
+            "bloom_level": "analyze",
+            "description": "深入理解自注意力机制和Transformer，为后续预训练语言模型打下基础"
+          }
+        ],
+        "micro_skills": [
+          {
+            "name": "文本预处理流程设计",
+            "bloom_level": "apply",
+            "parent": "文本预处理与表示方法",
+            "description": "能够针对不同语言和任务设计分词、去停用词、词干提取等步骤"
+          },
+          {
+            "name": "TF-IDF与词袋模型实现",
+            "bloom_level": "apply",
+            "parent": "文本预处理与表示方法",
+            "description": "使用sklearn等库构建词袋/TF-IDF特征，用于文本分类基线"
+          },
+          {
+            "name": "Word2Vec训练与评估",
+            "bloom_level": "apply",
+            "parent": "词向量与分布式表示",
+            "description": "用Gensim训练Word2Vec模型，并通过相似度、类比任务评估语义质量"
+          },
+          {
+            "name": "RNN/LSTM实现文本分类",
+            "bloom_level": "apply",
+            "parent": "循环神经网络与序列建模",
+            "description": "基于PyTorch/TensorFlow搭建LSTM进行情感分析，理解长距离依赖问题"
+          },
+          {
+            "name": "序列到序列模型与注意力",
+            "bloom_level": "apply",
+            "parent": "注意力机制与Transformer架构",
+            "description": "实现带注意力机制的seq2seq用于简单机器翻译，直观感受注意力作用"
+          },
+          {
+            "name": "Transformer编码器原理剖析",
+            "bloom_level": "analyze",
+            "parent": "注意力机制与Transformer架构",
+            "description": "逐层解析多头注意力、位置编码、残差连接等组件，与CNN/RNN对比"
+          },
+          {
+            "name": "NLP任务类型区分",
+            "bloom_level": "understand",
+            "parent": "自然语言处理基本概念",
+            "description": "区分分类、序列标注、生成、抽取等任务范式并举例"
+          },
+          {
+            "name": "预训练语言模型微调基础",
+            "bloom_level": "apply",
+            "parent": "自然语言处理基本概念",
+            "description": "借鉴ResNet微调经验，使用Hugging Face加载BERT并对下游任务进行微调"
+          }
+        ],
+        "prerequisites": [
+          {
+            "name": "线性代数基础",
+            "bloom_level": "remember",
+            "relation": "required",
+            "description": "矩阵乘法、向量空间、特征值等，用于理解词向量和注意力计算"
+          },
+          {
+            "name": "概率论与统计",
+            "bloom_level": "remember",
+            "relation": "required",
+            "description": "条件概率、最大似然估计，对语言模型和序列生成至关重要"
+          },
+          {
+            "name": "Python与深度学习框架经验",
+            "bloom_level": "apply",
+            "relation": "required",
+            "description": "需熟练使用Python，并具备PyTorch/TensorFlow基础，因有图像分类经验假设已满足"
+          },
+          {
+            "name": "神经网络基本训练流程",
+            "bloom_level": "apply",
+            "relation": "recommended",
+            "description": "掌握前向传播、反向传播、损失函数、优化器，微调ResNet的经验可直接迁移"
+          }
+        ],
+        "summary": "考虑到你具备图像分类的实践经验和不错的数学基础，NLP入门可以类比你熟悉的工作流：从数据预处理（类似图像归一化、增强）到模型搭建（从简单全连接/CNN到Transformer），再到微调预训练模型（如同在ImageNet预训练ResNet上微调）。建议按上述路径学习，优先动手实现文本分类和简单的seq2seq，快速建立手感，再深入Transformer内部机制。",
+        "response": "考虑到你具备图像分类的实践经验和不错的数学基础，NLP入门可以类比你熟悉的工作流：从数据预处理（类似图像归一化、增强）到模型搭建（从简单全连接/CNN到Transformer），再到微调预训练模型（如同在ImageNet预训练ResNet上微调）。建议按上述路径学习，优先动手实现文本分类和简单的seq2seq，快速建立手感，再深入Transformer内部机制。"
+      },
+      "sched": {
+        "goal": {
+          "goal_title": "入门自然语言处理",
+          "target_topic": "自然语言处理基础",
+          "target_level": "understand",
+          "deadline": "",
+          "motivation": "已有图像分类经验，希望将深度学习能力拓展到自然语言处理领域。",
+          "constraints": [
+            "每周可投入约15小时",
+            "数学基础较好",
+            "有ResNet微调等图像分类实战经验"
+          ]
+        },
+        "decomposition": {
+          "macro_topics": [
+            {
+              "name": "自然语言处理基本概念",
+              "bloom_level": "understand",
+              "description": "理解NLP的定义、主要任务和应用场景，建立起对领域的整体认知"
+            },
+            {
+              "name": "文本预处理与表示方法",
+              "bloom_level": "apply",
+              "description": "掌握文本清洗、分词、向量化等基础操作，能够将原始文本转换为机器学习可用格式"
+            },
+            {
+              "name": "词向量与分布式表示",
+              "bloom_level": "analyze",
+              "description": "理解词嵌入原理，比较Word2Vec、GloVe等模型，并能分析其语义捕获能力"
+            },
+            {
+              "name": "循环神经网络与序列建模",
+              "bloom_level": "apply",
+              "description": "运用RNN、LSTM/GRU等模型解决文本分类、序列标注等任务，理解其与图像CNN的异同"
+            },
+            {
+              "name": "注意力机制与Transformer架构",
+              "bloom_level": "analyze",
+              "description": "深入理解自注意力机制和Transformer，为后续预训练语言模型打下基础"
+            }
+          ],
+          "micro_skills": [
+            {
+              "name": "文本预处理流程设计",
+              "bloom_level": "apply",
+              "parent": "文本预处理与表示方法",
+              "description": "能够针对不同语言和任务设计分词、去停用词、词干提取等步骤"
+            },
+            {
+              "name": "TF-IDF与词袋模型实现",
+              "bloom_level": "apply",
+              "parent": "文本预处理与表示方法",
+              "description": "使用sklearn等库构建词袋/TF-IDF特征，用于文本分类基线"
+            },
+            {
+              "name": "Word2Vec训练与评估",
+              "bloom_level": "apply",
+              "parent": "词向量与分布式表示",
+              "description": "用Gensim训练Word2Vec模型，并通过相似度、类比任务评估语义质量"
+            },
+            {
+              "name": "RNN/LSTM实现文本分类",
+              "bloom_level": "apply",
+              "parent": "循环神经网络与序列建模",
+              "description": "基于PyTorch/TensorFlow搭建LSTM进行情感分析，理解长距离依赖问题"
+            },
+            {
+              "name": "序列到序列模型与注意力",
+              "bloom_level": "apply",
+              "parent": "注意力机制与Transformer架构",
+              "description": "实现带注意力机制的seq2seq用于简单机器翻译，直观感受注意力作用"
+            },
+            {
+              "name": "Transformer编码器原理剖析",
+              "bloom_level": "analyze",
+              "parent": "注意力机制与Transformer架构",
+              "description": "逐层解析多头注意力、位置编码、残差连接等组件，与CNN/RNN对比"
+            },
+            {
+              "name": "NLP任务类型区分",
+              "bloom_level": "understand",
+              "parent": "自然语言处理基本概念",
+              "description": "区分分类、序列标注、生成、抽取等任务范式并举例"
+            },
+            {
+              "name": "预训练语言模型微调基础",
+              "bloom_level": "apply",
+              "parent": "自然语言处理基本概念",
+              "description": "借鉴ResNet微调经验，使用Hugging Face加载BERT并对下游任务进行微调"
+            }
+          ],
+          "prerequisites": [
+            {
+              "name": "线性代数基础",
+              "bloom_level": "remember",
+              "relation": "required",
+              "description": "矩阵乘法、向量空间、特征值等，用于理解词向量和注意力计算"
+            },
+            {
+              "name": "概率论与统计",
+              "bloom_level": "remember",
+              "relation": "required",
+              "description": "条件概率、最大似然估计，对语言模型和序列生成至关重要"
+            },
+            {
+              "name": "Python与深度学习框架经验",
+              "bloom_level": "apply",
+              "relation": "required",
+              "description": "需熟练使用Python，并具备PyTorch/TensorFlow基础，因有图像分类经验假设已满足"
+            },
+            {
+              "name": "神经网络基本训练流程",
+              "bloom_level": "apply",
+              "relation": "recommended",
+              "description": "掌握前向传播、反向传播、损失函数、优化器，微调ResNet的经验可直接迁移"
+            }
+          ],
+          "summary": "考虑到你具备图像分类的实践经验和不错的数学基础，NLP入门可以类比你熟悉的工作流：从数据预处理（类似图像归一化、增强）到模型搭建（从简单全连接/CNN到Transformer），再到微调预训练模型（如同在ImageNet预训练ResNet上微调）。建议按上述路径学习，优先动手实现文本分类和简单的seq2seq，快速建立手感，再深入Transformer内部机制。"
+        },
+        "student_profile": {},
+        "existing_plan": {},
+        "plan_title": "自然语言处理入门学习计划",
+        "estimated_days": 7,
+        "daily_capacity": 3,
+        "steps": [
+          {
+            "day": 1,
+            "topic": "线性代数与概率统计回顾",
+            "type": "review",
+            "description": "复习线性代数核心概念（向量、矩阵运算、特征值），概率论基础（概率分布、贝叶斯定理）",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 1,
+            "topic": "Python与深度学习框架基础",
+            "type": "review",
+            "description": "回顾Python数据处理库（NumPy/Pandas）及PyTorch/TensorFlow基本操作与自动微分",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 2,
+            "topic": "自然语言处理基本概念",
+            "type": "learn",
+            "description": "学习NLP的定义、发展历史、典型任务（分类、序列标注、生成、问答等）和应用场景",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 2,
+            "topic": "文本预处理流程设计",
+            "type": "learn",
+            "description": "掌握分词、去停用词、词干提取、词形还原等预处理步骤，以及正则表达式与Unicode处理",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 2,
+            "topic": "TF-IDF与词袋模型",
+            "type": "learn",
+            "description": "理解词袋表示、TF-IDF的数学原理，通过scikit-learn实现文本向量化",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 3,
+            "topic": "词向量与分布式表示",
+            "type": "learn",
+            "description": "学习word2vec原理（CBOW/Skip-gram）、GloVe等，理解分布式语义假设",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 3,
+            "topic": "Word2Vec训练与评估",
+            "type": "exercise",
+            "description": "使用gensim或PyTorch训练skip-gram模型，并通过词相似任务评估词向量质量",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 3,
+            "topic": "循环神经网络原理",
+            "type": "learn",
+            "description": "学习RNN、LSTM、GRU的结构、梯度问题及其在序列数据中的应用",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 4,
+            "topic": "RNN/LSTM实现文本分类",
+            "type": "exercise",
+            "description": "使用PyTorch搭建LSTM模型对IMDB影评进行情感二分类，理解序列填充与打包",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 4,
+            "topic": "序列到序列模型与注意力机制",
+            "type": "learn",
+            "description": "学习seq2seq架构、注意力机制的动机与计算流程（点积、加性注意力）",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 5,
+            "topic": "注意力机制深入与实现",
+            "type": "exercise",
+            "description": "从零实现Luong注意力模块，结合编码器-解码器框架完成简单机器翻译任务",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 5,
+            "topic": "Transformer架构",
+            "type": "learn",
+            "description": "学习Transformer整体架构、自注意力、多头注意力、位置编码、前馈网络和层归一化",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 5,
+            "topic": "Transformer编码器原理剖析",
+            "type": "exercise",
+            "description": "阅读并调试Transformer编码器源码，可视化注意力权重，理解并行化处理",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 6,
+            "topic": "预训练语言模型微调基础",
+            "type": "learn",
+            "description": "了解BERT、GPT等预训练模型的结构与Pretrain-Finetune范式，学习下游任务适配",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 6,
+            "topic": "预训练模型微调实践",
+            "type": "exercise",
+            "description": "使用HuggingFace Transformers库加载BERT，在SST-2数据集上完成微调与评估",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 7,
+            "topic": "NLP任务类型区分与总结回顾",
+            "type": "review",
+            "description": "系统梳理文本分类、序列标注、生成、抽取等任务对应的模型与评价指标",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 7,
+            "topic": "综合练习与知识图谱构建",
+            "type": "exercise",
+            "description": "选择一个小型NLP项目（如新闻分类或命名实体识别），端到端实现并撰写学习笔记",
+            "bloom_level": "understand"
+          }
+        ],
+        "milestones": [
+          "掌握文本预处理与词向量表示方法",
+          "理解循环神经网络与序列建模核心思想",
+          "实现注意力机制并理解Transformer架构",
+          "完成预训练语言模型微调实践，建立NLP任务全局观"
+        ],
+        "response": "这份计划从数学基础与框架回顾开始，逐步带你走进文本预处理、词向量、序列模型和Transformer，最后通过微调实践将所学串联起来。每天安排2–3个任务，建议投入约3小时，重点在于理解关键思想并动手实践。"
+      }
+    }
+  },
+  {
+    "id": 4,
+    "diff": 2,
+    "desc": "学术目标：GNN零基础+论文导向",
+    "input": "毕业论文要写图神经网络方面的，但我GNN零基础。三个月时间，每天大概3小时，希望能从入门到能复现论文。",
+    "score": 91.0,
+    "judge_details": {
+      "judge_ok": true,
+      "pipeline_ms": 94865.12120009866,
+      "A": 18,
+      "D": 19,
+      "H": 17,
+      "S": 18,
+      "F": 19,
+      "total": 91,
+      "brief": "目标明确，拆解详尽，排期合理，适配度高，整体一致",
+      "ms": 6361.7
+    },
+    "errors": [],
+    "raw_data": {
+      "goal": {
+        "input": "毕业论文要写图神经网络方面的，但我GNN零基础。三个月时间，每天大概3小时，希望能从入门到能复现论文。",
+        "context": "",
+        "student_profile": {},
+        "goal_title": "图神经网络从入门到论文复现",
+        "target_topic": "图神经网络 (Graph Neural Networks)",
+        "target_level": "apply",
+        "deadline": "",
+        "motivation": "完成毕业论文，需要掌握图神经网络并能复现相关论文",
+        "constraints": [
+          "时间限制：三个月，每天3小时",
+          "已有基础：零基础"
+        ],
+        "response": "了解了，你希望在三个月内从零基础开始学习图神经网络，最终达到能够复现论文的水平，以支持毕业论文的撰写。这个目标很有挑战性，但通过合理规划是可以实现的。我们接下来会针对你的时间和基础制定学习路径。"
+      },
+      "decomp": {
+        "topic": "图神经网络 (Graph Neural Networks)",
+        "context": "毕业论文要写图神经网络方面的，但我GNN零基础。三个月时间，每天大概3小时，希望能从入门到能复现论文。",
+        "student_profile": {},
+        "macro_topics": [
+          {
+            "name": "图论基础与图数据表示",
+            "bloom_level": "understand",
+            "description": "掌握图的基本定义、邻接矩阵、度矩阵、拉普拉斯矩阵及图数据在计算机中的表示方法"
+          },
+          {
+            "name": "消息传递与图神经网络基本框架",
+            "bloom_level": "understand",
+            "description": "理解邻居聚合、消息函数、更新函数、读出函数等核心机制，构建图神经网络的前向计算直觉"
+          },
+          {
+            "name": "经典图神经网络模型",
+            "bloom_level": "analyze",
+            "description": "深入分析GCN、GraphSAGE、GAT等代表性模型的原理、推导与设计动机，能够比较各模型的异同"
+          },
+          {
+            "name": "图神经网络的训练与评估",
+            "bloom_level": "apply",
+            "description": "掌握节点分类、图分类任务的训练流程，常用损失函数与评价指标，学会处理过平滑等训练问题"
+          },
+          {
+            "name": "扩展主题与前沿发展",
+            "bloom_level": "understand",
+            "description": "了解异构图、动态图、图Transformer、图生成等高级主题的基本思想和应用场景，拓宽研究视野"
+          },
+          {
+            "name": "论文复现与实践",
+            "bloom_level": "create",
+            "description": "能够独立阅读顶会论文，使用PyTorch Geometric等框架复现经典GNN模型并在基准数据集上评估"
+          }
+        ],
+        "micro_skills": [
+          {
+            "name": "图的基本概念与矩阵表示",
+            "bloom_level": "understand",
+            "parent": "图论基础与图数据表示",
+            "description": "区分有向图/无向图、有权图/无权图，熟练写出邻接矩阵、度矩阵、拉普拉斯矩阵及其归一化形式"
+          },
+          {
+            "name": "图数据的预处理与批量化",
+            "bloom_level": "apply",
+            "parent": "图论基础与图数据表示",
+            "description": "使用PyG/DGL等库加载Cora、PubMed等标准图数据，理解节点特征、边索引、数据拆分等实际操作"
+          },
+          {
+            "name": "消息传递范式的数学表达",
+            "bloom_level": "understand",
+            "parent": "消息传递与图神经网络基本框架",
+            "description": "将邻居聚合过程写成消息函数、聚合函数、更新函数的形式，理解其与Weisfeiler-Lehman同构测试的关联"
+          },
+          {
+            "name": "图卷积网络（GCN）的谱域与空域推导",
+            "bloom_level": "analyze",
+            "parent": "经典图神经网络模型",
+            "description": "从图傅里叶变换理解谱域GCN，再过渡到空域一阶近似，能推导二层GCN的前向传播公式"
+          },
+          {
+            "name": "归纳式学习与GraphSAGE采样策略",
+            "bloom_level": "apply",
+            "parent": "经典图神经网络模型",
+            "description": "掌握GraphSAGE的邻居采样、聚合器设计（均值、LSTM、池化），理解其如何实现归纳式节点嵌入"
+          },
+          {
+            "name": "图注意力网络（GAT）的注意力计算",
+            "bloom_level": "analyze",
+            "parent": "经典图神经网络模型",
+            "description": "推导GAT中的注意力系数计算与多头注意力机制，分析其与GCN和GraphSAGE的差异"
+          },
+          {
+            "name": "节点分类与图分类任务的训练实现",
+            "bloom_level": "apply",
+            "parent": "图神经网络的训练与评估",
+            "description": "编写完整的训练循环，实现早停、学习率衰减，比较micro-F1、macro-F1等指标，并能诊断过平滑现象"
+          },
+          {
+            "name": "GNN模型的代码实现与调参",
+            "bloom_level": "apply",
+            "parent": "图神经网络的训练与评估",
+            "description": "基于PyTorch Geometric从零搭建GCN/GAT/GraphSAGE，调整隐藏层维度、层数、dropout等关键超参数"
+          },
+          {
+            "name": "异构图与关系图神经网络",
+            "bloom_level": "understand",
+            "parent": "扩展主题与前沿发展",
+            "description": "区分同构/异构图，了解RGCN、HAN等模型如何处理多种节点与边类型"
+          },
+          {
+            "name": "论文阅读与实验重现计划",
+            "bloom_level": "create",
+            "parent": "论文复现与实践",
+            "description": "选择一篇经典GNN论文，制定复现路线：阅读论文→下载基准数据→搭建模型→对比原文结果→撰写分析报告"
+          }
+        ],
+        "prerequisites": [
+          {
+            "name": "线性代数与矩阵运算",
+            "bloom_level": "remember",
+            "relation": "required",
+            "description": "矩阵乘法、特征值分解、矩阵的谱半径、对称矩阵的性质，是理解GCN谱域推导和拉普拉斯矩阵的基础"
+          },
+          {
+            "name": "概率论与信息论基础",
+            "bloom_level": "remember",
+            "relation": "recommended",
+            "description": "交叉熵损失、KL散度、注意力机制中的softmax等概念需要基本的概率与信息论知识"
+          },
+          {
+            "name": "机器学习与深度神经网络基础",
+            "bloom_level": "understand",
+            "relation": "required",
+            "description": "掌握梯度下降、反向传播、过拟合、正则化等概念，能区分监督/半监督/无监督学习"
+          },
+          {
+            "name": "PyTorch基本使用",
+            "bloom_level": "apply",
+            "relation": "required",
+            "description": "能够使用PyTorch定义模型、优化器、数据加载，熟悉张量操作和自动求导，为使用PyG/DGL铺路"
+          }
+        ],
+        "summary": "亲爱的同学，你的学习路径可以这样规划：先用两周补强图论与线性代数基础，然后快速进入消息传递框架的直观理解；接下来三四周深入剖析GCN、GraphSAGE、GAT等经典模型，边学边用PyTorch Geometric实现它们；之后结合节点分类和图分类任务反复训练调优，同时关注过平滑等问题；最后留一个月专门阅读和复现你感兴趣的目标论文。整个过程每天3小时，完全能在三个月内从零基础达到复现顶会GNN论文的水平。",
+        "response": "亲爱的同学，你的学习路径可以这样规划：先用两周补强图论与线性代数基础，然后快速进入消息传递框架的直观理解；接下来三四周深入剖析GCN、GraphSAGE、GAT等经典模型，边学边用PyTorch Geometric实现它们；之后结合节点分类和图分类任务反复训练调优，同时关注过平滑等问题；最后留一个月专门阅读和复现你感兴趣的目标论文。整个过程每天3小时，完全能在三个月内从零基础达到复现顶会GNN论文的水平。"
+      },
+      "sched": {
+        "goal": {
+          "goal_title": "图神经网络从入门到论文复现",
+          "target_topic": "图神经网络 (Graph Neural Networks)",
+          "target_level": "apply",
+          "deadline": "",
+          "motivation": "完成毕业论文，需要掌握图神经网络并能复现相关论文",
+          "constraints": [
+            "时间限制：三个月，每天3小时",
+            "已有基础：零基础"
+          ]
+        },
+        "decomposition": {
+          "macro_topics": [
+            {
+              "name": "图论基础与图数据表示",
+              "bloom_level": "understand",
+              "description": "掌握图的基本定义、邻接矩阵、度矩阵、拉普拉斯矩阵及图数据在计算机中的表示方法"
+            },
+            {
+              "name": "消息传递与图神经网络基本框架",
+              "bloom_level": "understand",
+              "description": "理解邻居聚合、消息函数、更新函数、读出函数等核心机制，构建图神经网络的前向计算直觉"
+            },
+            {
+              "name": "经典图神经网络模型",
+              "bloom_level": "analyze",
+              "description": "深入分析GCN、GraphSAGE、GAT等代表性模型的原理、推导与设计动机，能够比较各模型的异同"
+            },
+            {
+              "name": "图神经网络的训练与评估",
+              "bloom_level": "apply",
+              "description": "掌握节点分类、图分类任务的训练流程，常用损失函数与评价指标，学会处理过平滑等训练问题"
+            },
+            {
+              "name": "扩展主题与前沿发展",
+              "bloom_level": "understand",
+              "description": "了解异构图、动态图、图Transformer、图生成等高级主题的基本思想和应用场景，拓宽研究视野"
+            },
+            {
+              "name": "论文复现与实践",
+              "bloom_level": "create",
+              "description": "能够独立阅读顶会论文，使用PyTorch Geometric等框架复现经典GNN模型并在基准数据集上评估"
+            }
+          ],
+          "micro_skills": [
+            {
+              "name": "图的基本概念与矩阵表示",
+              "bloom_level": "understand",
+              "parent": "图论基础与图数据表示",
+              "description": "区分有向图/无向图、有权图/无权图，熟练写出邻接矩阵、度矩阵、拉普拉斯矩阵及其归一化形式"
+            },
+            {
+              "name": "图数据的预处理与批量化",
+              "bloom_level": "apply",
+              "parent": "图论基础与图数据表示",
+              "description": "使用PyG/DGL等库加载Cora、PubMed等标准图数据，理解节点特征、边索引、数据拆分等实际操作"
+            },
+            {
+              "name": "消息传递范式的数学表达",
+              "bloom_level": "understand",
+              "parent": "消息传递与图神经网络基本框架",
+              "description": "将邻居聚合过程写成消息函数、聚合函数、更新函数的形式，理解其与Weisfeiler-Lehman同构测试的关联"
+            },
+            {
+              "name": "图卷积网络（GCN）的谱域与空域推导",
+              "bloom_level": "analyze",
+              "parent": "经典图神经网络模型",
+              "description": "从图傅里叶变换理解谱域GCN，再过渡到空域一阶近似，能推导二层GCN的前向传播公式"
+            },
+            {
+              "name": "归纳式学习与GraphSAGE采样策略",
+              "bloom_level": "apply",
+              "parent": "经典图神经网络模型",
+              "description": "掌握GraphSAGE的邻居采样、聚合器设计（均值、LSTM、池化），理解其如何实现归纳式节点嵌入"
+            },
+            {
+              "name": "图注意力网络（GAT）的注意力计算",
+              "bloom_level": "analyze",
+              "parent": "经典图神经网络模型",
+              "description": "推导GAT中的注意力系数计算与多头注意力机制，分析其与GCN和GraphSAGE的差异"
+            },
+            {
+              "name": "节点分类与图分类任务的训练实现",
+              "bloom_level": "apply",
+              "parent": "图神经网络的训练与评估",
+              "description": "编写完整的训练循环，实现早停、学习率衰减，比较micro-F1、macro-F1等指标，并能诊断过平滑现象"
+            },
+            {
+              "name": "GNN模型的代码实现与调参",
+              "bloom_level": "apply",
+              "parent": "图神经网络的训练与评估",
+              "description": "基于PyTorch Geometric从零搭建GCN/GAT/GraphSAGE，调整隐藏层维度、层数、dropout等关键超参数"
+            },
+            {
+              "name": "异构图与关系图神经网络",
+              "bloom_level": "understand",
+              "parent": "扩展主题与前沿发展",
+              "description": "区分同构/异构图，了解RGCN、HAN等模型如何处理多种节点与边类型"
+            },
+            {
+              "name": "论文阅读与实验重现计划",
+              "bloom_level": "create",
+              "parent": "论文复现与实践",
+              "description": "选择一篇经典GNN论文，制定复现路线：阅读论文→下载基准数据→搭建模型→对比原文结果→撰写分析报告"
+            }
+          ],
+          "prerequisites": [
+            {
+              "name": "线性代数与矩阵运算",
+              "bloom_level": "remember",
+              "relation": "required",
+              "description": "矩阵乘法、特征值分解、矩阵的谱半径、对称矩阵的性质，是理解GCN谱域推导和拉普拉斯矩阵的基础"
+            },
+            {
+              "name": "概率论与信息论基础",
+              "bloom_level": "remember",
+              "relation": "recommended",
+              "description": "交叉熵损失、KL散度、注意力机制中的softmax等概念需要基本的概率与信息论知识"
+            },
+            {
+              "name": "机器学习与深度神经网络基础",
+              "bloom_level": "understand",
+              "relation": "required",
+              "description": "掌握梯度下降、反向传播、过拟合、正则化等概念，能区分监督/半监督/无监督学习"
+            },
+            {
+              "name": "PyTorch基本使用",
+              "bloom_level": "apply",
+              "relation": "required",
+              "description": "能够使用PyTorch定义模型、优化器、数据加载，熟悉张量操作和自动求导，为使用PyG/DGL铺路"
+            }
+          ],
+          "summary": "亲爱的同学，你的学习路径可以这样规划：先用两周补强图论与线性代数基础，然后快速进入消息传递框架的直观理解；接下来三四周深入剖析GCN、GraphSAGE、GAT等经典模型，边学边用PyTorch Geometric实现它们；之后结合节点分类和图分类任务反复训练调优，同时关注过平滑等问题；最后留一个月专门阅读和复现你感兴趣的目标论文。整个过程每天3小时，完全能在三个月内从零基础达到复现顶会GNN论文的水平。"
+        },
+        "student_profile": {},
+        "existing_plan": {},
+        "plan_title": "图神经网络从入门到论文复现学习计划",
+        "estimated_days": 14,
+        "daily_capacity": 3,
+        "steps": [
+          {
+            "day": 1,
+            "topic": "线性代数与矩阵运算",
+            "type": "review",
+            "description": "快速回顾矩阵乘法、特征分解、谱理论等关键概念，为图矩阵表示打基础",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 1,
+            "topic": "概率论与信息论基础",
+            "type": "review",
+            "description": "复习条件概率、贝叶斯公式、交叉熵等，为损失函数和信息传递理解做准备",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 1,
+            "topic": "机器学习与深度神经网络基础",
+            "type": "review",
+            "description": "回顾前馈网络、反向传播、优化器，确保能理解GNN训练流程",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 2,
+            "topic": "PyTorch基本使用",
+            "type": "review",
+            "description": "练习PyTorch张量操作、自动求导、DataLoader，为后续代码实现做准备",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 2,
+            "topic": "图的基本概念与矩阵表示",
+            "type": "learn",
+            "description": "学习图的邻接矩阵、度矩阵、拉普拉斯矩阵及其归一化形式，理解图的结构描述",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 3,
+            "topic": "图数据的预处理与批量化",
+            "type": "learn",
+            "description": "掌握常见图数据格式（如DGLGraph/PyG Data），学习批处理图的块对角构造方法",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 3,
+            "topic": "消息传递范式的数学表达",
+            "type": "learn",
+            "description": "深入理解消息传递、聚合、更新三步框架，推导通用的消息传递方程",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 4,
+            "topic": "图卷积网络（GCN）的谱域推导",
+            "type": "learn",
+            "description": "从图傅里叶变换出发，推导谱域图卷积，理解切比雪夫多项式近似与一阶简化",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 4,
+            "topic": "图卷积网络（GCN）的空域推导",
+            "type": "learn",
+            "description": "从邻居聚合的角度解释GCN，对比谱域与空域视角的等价性",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 5,
+            "topic": "实现GCN层",
+            "type": "exercise",
+            "description": "使用PyTorch或PyG手动实现GCN前向传播，验证输出维度",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 5,
+            "topic": "在节点分类任务上应用GCN",
+            "type": "exercise",
+            "description": "在Cora、CiteSeer等引文网络数据集上训练两层GCN，完成节点分类并报告准确率",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 6,
+            "topic": "归纳式学习与GraphSAGE采样策略",
+            "type": "learn",
+            "description": "学习归纳式学习的必要性，掌握GraphSAGE的邻居采样、聚合函数（mean/LSTM/pool）",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 6,
+            "topic": "实现GraphSAGE",
+            "type": "exercise",
+            "description": "基于PyG实现带采样的GraphSAGE，在更大规模图上验证归纳能力",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 7,
+            "topic": "图注意力网络（GAT）的注意力计算",
+            "type": "learn",
+            "description": "推导多头注意力在图上的计算方式，理解注意力系数与归一化",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 7,
+            "topic": "实现GAT层",
+            "type": "exercise",
+            "description": "实现多头注意力GAT层，替换GCN并在PPI等数据集上测试",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 8,
+            "topic": "图分类任务的训练实现",
+            "type": "learn",
+            "description": "学习图级别的读出(readout)操作（平均、求和、Set2Set），构建图分类pipeline",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 8,
+            "topic": "节点分类与图分类的评估指标与实验设计",
+            "type": "learn",
+            "description": "掌握准确率、F1、ROC-AUC等指标，设计合理的训练/验证/测试划分",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 9,
+            "topic": "GNN模型调参与优化",
+            "type": "exercise",
+            "description": "针对过平滑、过拟合问题调整学习率、隐藏维度、层数、Dropout等",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 9,
+            "topic": "横向对比GCN、GraphSAGE、GAT",
+            "type": "exercise",
+            "description": "在统一实验设置下对比三种模型的性能与效率，撰写实验报告",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 10,
+            "topic": "异构图与关系图神经网络",
+            "type": "learn",
+            "description": "学习异构图概念，掌握RGCN、HAN等模型处理多种节点和边类型的方法",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 10,
+            "topic": "处理异构图数据",
+            "type": "exercise",
+            "description": "使用PyG或DGL加载异构图数据集，构建简单的RGCN进行节点分类",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 11,
+            "topic": "经典GNN论文精读（如GCN原文）",
+            "type": "learn",
+            "description": "逐段阅读论文，理解动机、方法、实验设计，记录关键公式和实验细节",
+            "bloom_level": "analyze"
+          },
+          {
+            "day": 11,
+            "topic": "分析论文代码仓库与实验配置",
+            "type": "learn",
+            "description": "查找论文官方/开源代码，理解数据预处理、模型定义、训练脚本的结构",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 12,
+            "topic": "复现论文核心实验",
+            "type": "exercise",
+            "description": "基于作者代码或自己实现，运行实验并尽力复现论文中的表格关键结果",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 12,
+            "topic": "调试与结果记录",
+            "type": "exercise",
+            "description": "对比复现结果与原论文，分析差异并记录，编写简短复现报告",
+            "bloom_level": "evaluate"
+          },
+          {
+            "day": 13,
+            "topic": "图神经网络的扩展应用",
+            "type": "learn",
+            "description": "浏览GNN在推荐系统、药物发现、计算机视觉等领域的应用案例，拓宽视野",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 13,
+            "topic": "前沿发展概述",
+            "type": "learn",
+            "description": "了解图Transformer、等变GNN、自监督学习等方向的最新趋势",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 14,
+            "topic": "整体回顾与知识梳理",
+            "type": "review",
+            "description": "整理学习笔记，绘制知识图谱，反思遇到的问题与解决方案",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 14,
+            "topic": "小型综合项目或总结报告",
+            "type": "exercise",
+            "description": "选择一个有趣的数据集，完整走一遍数据处理、模型选型、训练、分析流程，输出报告",
+            "bloom_level": "create"
+          }
+        ],
+        "milestones": [
+          "完成图论基础与消息传递理论学习，能手动推导GCN前向公式",
+          "在Cora数据集上使用自实现GCN达到≥80%的节点分类准确率",
+          "成功复现一篇经典GNN论文的主要实验，误差在可接受范围内"
+        ],
+        "response": "这个14天学习计划将带你从基础复习开始，逐步掌握图神经网络的核心模型与实践能力，最终完成论文复现。请根据自身节奏灵活调整，祝学习顺利！"
+      }
+    }
+  },
+  {
+    "id": 5,
+    "diff": 2,
+    "desc": "短期实操：具体工具+时间紧",
+    "input": "两周内学会用sklearn做分类和回归，要能独立完成一个简单的预测项目。有Python基础但没做过ML，每天1.5小时。",
+    "score": 91.0,
+    "judge_details": {
+      "judge_ok": true,
+      "pipeline_ms": 97282.7447000891,
+      "A": 18,
+      "D": 19,
+      "H": 17,
+      "S": 18,
+      "F": 19,
+      "total": 91,
+      "brief": "目标准确，拆解全面，排期合理，适配学生需求，一致性高。",
+      "ms": 4741.5
+    },
+    "errors": [],
+    "raw_data": {
+      "goal": {
+        "input": "两周内学会用sklearn做分类和回归，要能独立完成一个简单的预测项目。有Python基础但没做过ML，每天1.5小时。",
+        "context": "",
+        "student_profile": {},
+        "goal_title": "两周内掌握sklearn分类与回归及预测项目实战",
+        "target_topic": "scikit-learn分类与回归算法",
+        "target_level": "apply",
+        "deadline": "",
+        "motivation": "希望快速入门机器学习，能独立完成简单预测项目",
+        "constraints": [
+          "每天学习1.5小时，总时长两周",
+          "有Python基础，无机器学习经验"
+        ],
+        "response": "好的，你的目标是在两周内学会用sklearn进行分类和回归，并能独立完成一个简单预测项目。考虑到你每天有1.5小时且已具备Python基础，我会为你设计一条从理解核心概念到动手实践的高效路径。"
+      },
+      "decomp": {
+        "topic": "scikit-learn分类与回归算法",
+        "context": "两周内学会用sklearn做分类和回归，要能独立完成一个简单的预测项目。有Python基础但没做过ML，每天1.5小时。",
+        "student_profile": {},
+        "macro_topics": [
+          {
+            "name": "scikit-learn基础工作流",
+            "bloom_level": "understand",
+            "description": "掌握sklearn中数据分割、训练与预测的统一接口，理解转换器与估计器角色"
+          },
+          {
+            "name": "数据预处理",
+            "bloom_level": "apply",
+            "description": "学会处理缺失值、特征缩放和分类变量编码，为建模准备干净数据"
+          },
+          {
+            "name": "回归算法",
+            "bloom_level": "apply",
+            "description": "应用线性回归与决策树回归，并理解模型复杂度和过拟合"
+          },
+          {
+            "name": "分类算法",
+            "bloom_level": "apply",
+            "description": "使用逻辑回归、KNN、随机森林等方法解决分类问题，了解概率与特征重要性"
+          },
+          {
+            "name": "模型评估与选择",
+            "bloom_level": "evaluate",
+            "description": "通过交叉验证、混淆矩阵、ROC曲线和回归指标评判模型性能"
+          },
+          {
+            "name": "模型调参",
+            "bloom_level": "apply",
+            "description": "使用网格搜索自动寻找最佳超参数，提升模型泛化能力"
+          },
+          {
+            "name": "预测项目实践",
+            "bloom_level": "create",
+            "description": "整合已学技能，独立完成从数据到预测的完整项目"
+          }
+        ],
+        "micro_skills": [
+          {
+            "name": "数据拆分与fit/predict循环",
+            "bloom_level": "apply",
+            "parent": "scikit-learn基础工作流",
+            "description": "使用train_test_split划分数据，并用估计器的fit和predict方法完成训练与预测"
+          },
+          {
+            "name": "数值数据预处理流水线",
+            "bloom_level": "apply",
+            "parent": "数据预处理",
+            "description": "通过Pipeline组合缺失值填充(SimpleImputer)与标准化(StandardScaler)，避免数据泄露"
+          },
+          {
+            "name": "线性回归建模",
+            "bloom_level": "apply",
+            "parent": "回归算法",
+            "description": "用LinearRegression拟合连续目标，解释系数含义并预测新样本"
+          },
+          {
+            "name": "决策树回归与过拟合分析",
+            "bloom_level": "analyze",
+            "parent": "回归算法",
+            "description": "构建DecisionTreeRegressor，观察不同树深度下训练/测试误差变化，识别过拟合"
+          },
+          {
+            "name": "逻辑回归分类",
+            "bloom_level": "apply",
+            "parent": "分类算法",
+            "description": "使用LogisticRegression进行二分类，理解概率阈值和决策边界"
+          },
+          {
+            "name": "随机森林分类",
+            "bloom_level": "apply",
+            "parent": "分类算法",
+            "description": "应用RandomForestClassifier，通过feature_importances_评估特征贡献，比较集成效果"
+          },
+          {
+            "name": "KNN分类器及其k值影响",
+            "bloom_level": "analyze",
+            "parent": "分类算法",
+            "description": "训练KNeighborsClassifier，分析邻居数量k对偏差-方差权衡的影响"
+          },
+          {
+            "name": "交叉验证评估稳定性",
+            "bloom_level": "evaluate",
+            "parent": "模型评估与选择",
+            "description": "调用cross_val_score进行k折交叉验证，观察性能波动"
+          },
+          {
+            "name": "分类指标与ROC曲线",
+            "bloom_level": "evaluate",
+            "parent": "模型评估与选择",
+            "description": "计算精确率、召回率，绘制ROC曲线并选择合适阈值"
+          },
+          {
+            "name": "回归指标计算",
+            "bloom_level": "evaluate",
+            "parent": "模型评估与选择",
+            "description": "使用mean_squared_error, mean_absolute_error, r2_score评估回归模型"
+          },
+          {
+            "name": "网格搜索自动调参",
+            "bloom_level": "apply",
+            "parent": "模型调参",
+            "description": "通过GridSearchCV在参数网格上搜索，自动选取交叉验证最优模型"
+          },
+          {
+            "name": "端到端预测项目实践",
+            "bloom_level": "create",
+            "parent": "预测项目实践",
+            "description": "完整流程：加载数据、探索、预处理、选择模型、评估、调参，并预测新样本"
+          }
+        ],
+        "prerequisites": [
+          {
+            "name": "Python编程基础",
+            "bloom_level": "remember",
+            "relation": "required",
+            "description": "掌握函数定义、循环、条件判断和常见数据结构的操作"
+          },
+          {
+            "name": "NumPy与Pandas基本操作",
+            "bloom_level": "remember",
+            "relation": "required",
+            "description": "能用pandas读取CSV、查看数据形状与摘要，进行DataFrame切片、分组等基本操作"
+          },
+          {
+            "name": "基本统计量",
+            "bloom_level": "remember",
+            "relation": "required",
+            "description": "理解均值、方差、标准差、相关系数的含义，能利用它们描述数据"
+          },
+          {
+            "name": "监督学习直观概念",
+            "bloom_level": "understand",
+            "relation": "recommended",
+            "description": "知道特征矩阵X、目标向量y的形态，理解训练集与测试集的作用"
+          }
+        ],
+        "summary": "我们将从sklearn的统一接口入手，接着掌握数据预处理步骤，然后分别学习回归（线性回归、决策树回归）和分类（逻辑回归、随机森林、KNN）的核心算法。进一步通过交叉验证、指标计算和网格搜索进行模型评估与优化，最后把所有技能串联成一个完整的预测项目。按流程循序渐进，每天配合动手练习能高效达成目标。",
+        "response": "我们将从sklearn的统一接口入手，接着掌握数据预处理步骤，然后分别学习回归（线性回归、决策树回归）和分类（逻辑回归、随机森林、KNN）的核心算法。进一步通过交叉验证、指标计算和网格搜索进行模型评估与优化，最后把所有技能串联成一个完整的预测项目。按流程循序渐进，每天配合动手练习能高效达成目标。"
+      },
+      "sched": {
+        "goal": {
+          "goal_title": "两周内掌握sklearn分类与回归及预测项目实战",
+          "target_topic": "scikit-learn分类与回归算法",
+          "target_level": "apply",
+          "deadline": "",
+          "motivation": "希望快速入门机器学习，能独立完成简单预测项目",
+          "constraints": [
+            "每天学习1.5小时，总时长两周",
+            "有Python基础，无机器学习经验"
+          ]
+        },
+        "decomposition": {
+          "macro_topics": [
+            {
+              "name": "scikit-learn基础工作流",
+              "bloom_level": "understand",
+              "description": "掌握sklearn中数据分割、训练与预测的统一接口，理解转换器与估计器角色"
+            },
+            {
+              "name": "数据预处理",
+              "bloom_level": "apply",
+              "description": "学会处理缺失值、特征缩放和分类变量编码，为建模准备干净数据"
+            },
+            {
+              "name": "回归算法",
+              "bloom_level": "apply",
+              "description": "应用线性回归与决策树回归，并理解模型复杂度和过拟合"
+            },
+            {
+              "name": "分类算法",
+              "bloom_level": "apply",
+              "description": "使用逻辑回归、KNN、随机森林等方法解决分类问题，了解概率与特征重要性"
+            },
+            {
+              "name": "模型评估与选择",
+              "bloom_level": "evaluate",
+              "description": "通过交叉验证、混淆矩阵、ROC曲线和回归指标评判模型性能"
+            },
+            {
+              "name": "模型调参",
+              "bloom_level": "apply",
+              "description": "使用网格搜索自动寻找最佳超参数，提升模型泛化能力"
+            },
+            {
+              "name": "预测项目实践",
+              "bloom_level": "create",
+              "description": "整合已学技能，独立完成从数据到预测的完整项目"
+            }
+          ],
+          "micro_skills": [
+            {
+              "name": "数据拆分与fit/predict循环",
+              "bloom_level": "apply",
+              "parent": "scikit-learn基础工作流",
+              "description": "使用train_test_split划分数据，并用估计器的fit和predict方法完成训练与预测"
+            },
+            {
+              "name": "数值数据预处理流水线",
+              "bloom_level": "apply",
+              "parent": "数据预处理",
+              "description": "通过Pipeline组合缺失值填充(SimpleImputer)与标准化(StandardScaler)，避免数据泄露"
+            },
+            {
+              "name": "线性回归建模",
+              "bloom_level": "apply",
+              "parent": "回归算法",
+              "description": "用LinearRegression拟合连续目标，解释系数含义并预测新样本"
+            },
+            {
+              "name": "决策树回归与过拟合分析",
+              "bloom_level": "analyze",
+              "parent": "回归算法",
+              "description": "构建DecisionTreeRegressor，观察不同树深度下训练/测试误差变化，识别过拟合"
+            },
+            {
+              "name": "逻辑回归分类",
+              "bloom_level": "apply",
+              "parent": "分类算法",
+              "description": "使用LogisticRegression进行二分类，理解概率阈值和决策边界"
+            },
+            {
+              "name": "随机森林分类",
+              "bloom_level": "apply",
+              "parent": "分类算法",
+              "description": "应用RandomForestClassifier，通过feature_importances_评估特征贡献，比较集成效果"
+            },
+            {
+              "name": "KNN分类器及其k值影响",
+              "bloom_level": "analyze",
+              "parent": "分类算法",
+              "description": "训练KNeighborsClassifier，分析邻居数量k对偏差-方差权衡的影响"
+            },
+            {
+              "name": "交叉验证评估稳定性",
+              "bloom_level": "evaluate",
+              "parent": "模型评估与选择",
+              "description": "调用cross_val_score进行k折交叉验证，观察性能波动"
+            },
+            {
+              "name": "分类指标与ROC曲线",
+              "bloom_level": "evaluate",
+              "parent": "模型评估与选择",
+              "description": "计算精确率、召回率，绘制ROC曲线并选择合适阈值"
+            },
+            {
+              "name": "回归指标计算",
+              "bloom_level": "evaluate",
+              "parent": "模型评估与选择",
+              "description": "使用mean_squared_error, mean_absolute_error, r2_score评估回归模型"
+            },
+            {
+              "name": "网格搜索自动调参",
+              "bloom_level": "apply",
+              "parent": "模型调参",
+              "description": "通过GridSearchCV在参数网格上搜索，自动选取交叉验证最优模型"
+            },
+            {
+              "name": "端到端预测项目实践",
+              "bloom_level": "create",
+              "parent": "预测项目实践",
+              "description": "完整流程：加载数据、探索、预处理、选择模型、评估、调参，并预测新样本"
+            }
+          ],
+          "prerequisites": [
+            {
+              "name": "Python编程基础",
+              "bloom_level": "remember",
+              "relation": "required",
+              "description": "掌握函数定义、循环、条件判断和常见数据结构的操作"
+            },
+            {
+              "name": "NumPy与Pandas基本操作",
+              "bloom_level": "remember",
+              "relation": "required",
+              "description": "能用pandas读取CSV、查看数据形状与摘要，进行DataFrame切片、分组等基本操作"
+            },
+            {
+              "name": "基本统计量",
+              "bloom_level": "remember",
+              "relation": "required",
+              "description": "理解均值、方差、标准差、相关系数的含义，能利用它们描述数据"
+            },
+            {
+              "name": "监督学习直观概念",
+              "bloom_level": "understand",
+              "relation": "recommended",
+              "description": "知道特征矩阵X、目标向量y的形态，理解训练集与测试集的作用"
+            }
+          ],
+          "summary": "我们将从sklearn的统一接口入手，接着掌握数据预处理步骤，然后分别学习回归（线性回归、决策树回归）和分类（逻辑回归、随机森林、KNN）的核心算法。进一步通过交叉验证、指标计算和网格搜索进行模型评估与优化，最后把所有技能串联成一个完整的预测项目。按流程循序渐进，每天配合动手练习能高效达成目标。"
+        },
+        "student_profile": {},
+        "existing_plan": {},
+        "plan_title": "两周掌握sklearn分类与回归实战",
+        "estimated_days": 14,
+        "daily_capacity": 3,
+        "steps": [
+          {
+            "day": 1,
+            "topic": "前置知识回顾",
+            "type": "review",
+            "description": "回顾Python基础、NumPy数组操作、Pandas DataFrame基本使用以及常用统计量（均值、方差、分位数等）",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 1,
+            "topic": "监督学习概念回顾",
+            "type": "review",
+            "description": "梳理监督学习的基本流程：特征、标签、训练集/测试集、损失函数的直观理解",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 2,
+            "topic": "scikit-learn基础工作流",
+            "type": "learn",
+            "description": "学习sklearn的统一API设计：估计器（estimator）、fit/predict循环，使用train_test_split划分数据",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 2,
+            "topic": "第一个sklearn示例",
+            "type": "exercise",
+            "description": "用简单数据集（如波士顿房价或加利福尼亚房价）完成一次完整的fit/predict流程，观察输出",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 3,
+            "topic": "数值数据预处理（一）",
+            "type": "learn",
+            "description": "学习缺失值处理（SimpleImputer）、标准化（StandardScaler）和归一化（MinMaxScaler）的原理与代码",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 3,
+            "topic": "数值数据预处理（二）",
+            "type": "learn",
+            "description": "学习处理数值特征的流水线（Pipeline）构建，理解ColumnTransformer的作用",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 4,
+            "topic": "预处理流水线实践",
+            "type": "exercise",
+            "description": "在包含缺失值和不同量纲的数据集上构建预处理流水线，并与模型结合使用",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 5,
+            "topic": "线性回归建模",
+            "type": "learn",
+            "description": "学习LinearRegression的原理、假设、参数含义，以及如何解读系数和截距",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 5,
+            "topic": "线性回归实践",
+            "type": "exercise",
+            "description": "在回归数据集上训练线性回归模型，计算R²和均方误差（MSE），并可视化拟合结果",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 6,
+            "topic": "决策树回归与过拟合",
+            "type": "learn",
+            "description": "学习DecisionTreeRegressor的工作原理，理解max_depth等参数如何控制模型复杂度，识别过拟合与欠拟合",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 6,
+            "topic": "决策树回归实验",
+            "type": "exercise",
+            "description": "调整决策树深度，观察训练集与测试集性能变化，绘制学习曲线，体会偏差-方差权衡",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 7,
+            "topic": "逻辑回归分类",
+            "type": "learn",
+            "description": "学习LogisticRegression的原理、决策边界、正则化参数C的含义及对模型的影响",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 7,
+            "topic": "逻辑回归实践",
+            "type": "exercise",
+            "description": "在二分类数据集上训练逻辑回归模型，绘制决策边界，观察不同C值下的变化",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 8,
+            "topic": "随机森林分类",
+            "type": "learn",
+            "description": "学习随机森林的集成思想、n_estimators等关键参数，理解特征重要性",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 8,
+            "topic": "随机森林实践",
+            "type": "exercise",
+            "description": "在同一数据集上训练随机森林，对比逻辑回归的性能，绘制特征重要性条形图",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 9,
+            "topic": "KNN分类器与k值影响",
+            "type": "learn",
+            "description": "学习K近邻算法的原理、距离度量、k值对决策边界和泛化能力的影响",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 9,
+            "topic": "KNN实验与分析",
+            "type": "exercise",
+            "description": "使用不同k值训练KNN，通过交叉验证选择最佳k，可视化k值与准确率的关系",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 10,
+            "topic": "交叉验证与评估稳定性",
+            "type": "learn",
+            "description": "学习交叉验证（KFold、StratifiedKFold、cross_val_score）的原理，理解其如何评估模型稳定性",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 10,
+            "topic": "交叉验证实践",
+            "type": "exercise",
+            "description": "在分类和回归数据集上应用交叉验证，计算并比较不同模型的平均性能与标准差",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 11,
+            "topic": "分类指标与ROC曲线",
+            "type": "learn",
+            "description": "学习准确率、精确率、召回率、F1-score，以及ROC曲线和AUC的含义与适用场景",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 11,
+            "topic": "分类指标实践",
+            "type": "exercise",
+            "description": "在多分类任务中输出分类报告，绘制ROC曲线（OvR），计算AUC值",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 12,
+            "topic": "回归指标计算与模型调参",
+            "type": "learn",
+            "description": "学习MAE、MSE、RMSE、R²等回归指标，并了解网格搜索（GridSearchCV）和随机搜索（RandomizedSearchCV）的调参方法",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 12,
+            "topic": "模型调参实践",
+            "type": "exercise",
+            "description": "选择一个模型（如随机森林或SVM），使用GridSearchCV进行超参数调优，观察调参前后性能变化",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 13,
+            "topic": "预测项目实战（一）",
+            "type": "exercise",
+            "description": "选取一个完整数据集（如Titanic或糖尿病预测），完成数据探索、预处理、特征工程、模型训练与选择的完整流程",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 13,
+            "topic": "预测项目实战（二）",
+            "type": "exercise",
+            "description": "对项目模型进行调优，对比多个候选模型，撰写简洁的分析报告，总结关键发现",
+            "bloom_level": "apply"
+          },
+          {
+            "day": 14,
+            "topic": "项目完善与回顾",
+            "type": "review",
+            "description": "完善项目代码，整理笔记，回顾两周内学习的核心概念与技术路线，自我评估掌握程度",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 14,
+            "topic": "扩展与展望",
+            "type": "learn",
+            "description": "了解scikit-learn其他常用模块（如聚类、降维），规划下一步学习路径",
+            "bloom_level": "understand"
+          }
+        ],
+        "milestones": [
+          "第4天完成：掌握sklearn基础工作流和数值数据预处理流水线",
+          "第9天完成：熟练使用线性回归、决策树、逻辑回归、随机森林和KNN进行建模",
+          "第12天完成：能够运用交叉验证、多种评估指标和网格搜索对模型进行评估与调优",
+          "第14天完成：独立完成一个端到端的分类或回归预测项目"
+        ],
+        "response": "你好！这个两周学习计划将带你从数据预处理开始，逐步深入回归和分类算法，并结合评估与调参，最终动手完成一个完整的预测项目。每天1-3个任务，稳扎稳打，相信你一定能掌握sklearn的核心实战能力。"
+      }
+    }
+  },
+  {
+    "id": 6,
+    "diff": 1,
+    "desc": "入门转折：有编程不知方向",
+    "input": "刚学完Python基础（列表、字典、函数、类），下一步该学什么来入门AI？每天大概2小时。",
+    "score": 91.0,
+    "judge_details": {
+      "judge_ok": true,
+      "pipeline_ms": 66618.48170007579,
+      "A": 18,
+      "D": 19,
+      "H": 17,
+      "S": 18,
+      "F": 19,
+      "total": 91,
+      "brief": "目标精准，知识点全面，排期稍紧，整体适配良好",
+      "ms": 3261.1
+    },
+    "errors": [],
+    "raw_data": {
+      "goal": {
+        "input": "刚学完Python基础（列表、字典、函数、类），下一步该学什么来入门AI？每天大概2小时。",
+        "context": "",
+        "student_profile": {},
+        "goal_title": "人工智能基础入门",
+        "target_topic": "人工智能核心概念与基础算法",
+        "target_level": "understand",
+        "deadline": "",
+        "motivation": "希望从Python编程转向人工智能领域的学习",
+        "constraints": [
+          "每天约2小时学习时间"
+        ],
+        "response": "你的Python基础打得很好，下一步我们可以从人工智能的核心概念和经典算法开始，逐步理解机器学习的基本思想。每天2小时的节奏很合适，我会帮你规划清晰的学习路径。"
+      },
+      "decomp": {
+        "topic": "人工智能核心概念与基础算法",
+        "context": "刚学完Python基础（列表、字典、函数、类），下一步该学什么来入门AI？每天大概2小时。",
+        "student_profile": {},
+        "macro_topics": [
+          {
+            "name": "人工智能概览与问题类型",
+            "bloom_level": "understand",
+            "description": "理解AI的定义、发展历史、主要流派以及典型应用场景的分类（分类、回归、聚类、生成等）。"
+          },
+          {
+            "name": "机器学习基础概念",
+            "bloom_level": "understand",
+            "description": "掌握数据集、特征、标签、训练/测试集、过拟合与欠拟合等核心术语及工作流程。"
+          },
+          {
+            "name": "监督学习经典算法",
+            "bloom_level": "apply",
+            "description": "学习并实现K近邻、线性回归、逻辑回归等基础算法，理解原理并能用Python调用。"
+          },
+          {
+            "name": "无监督学习入门",
+            "bloom_level": "apply",
+            "description": "了解K-means聚类和主成分分析（PCA）的基本思想，能够完成简单的降维与聚类实验。"
+          },
+          {
+            "name": "深度学习感知与神经网络初步",
+            "bloom_level": "understand",
+            "description": "认识神经元、激活函数、多层感知机结构，为后续深度学习打基础。"
+          },
+          {
+            "name": "AI项目实践与评估",
+            "bloom_level": "analyze",
+            "description": "学习模型评估指标（准确率、混淆矩阵、F1-score），能复现小型端到端AI项目。"
+          }
+        ],
+        "micro_skills": [
+          {
+            "name": "区分AI、机器学习、深度学习的层级关系",
+            "bloom_level": "understand",
+            "parent": "人工智能概览与问题类型",
+            "description": "能用简单语言说出三者的从属关系并举例。"
+          },
+          {
+            "name": "识别任务类型（分类、回归、聚类）",
+            "bloom_level": "apply",
+            "parent": "人工智能概览与问题类型",
+            "description": "针对给定实际场景判断属于哪种机器学习任务。"
+          },
+          {
+            "name": "构建并划分训练/测试集",
+            "bloom_level": "apply",
+            "parent": "机器学习基础概念",
+            "description": "用scikit-learn的train_test_split完成数据划分并理解其必要性。"
+          },
+          {
+            "name": "解释过拟合与欠拟合现象",
+            "bloom_level": "analyze",
+            "parent": "机器学习基础概念",
+            "description": "能根据学习曲线判断模型状态并给出简单纠正方向。"
+          },
+          {
+            "name": "实现K近邻分类器",
+            "bloom_level": "apply",
+            "parent": "监督学习经典算法",
+            "description": "使用Python手动实现简单版KNN或调用sklearn完成分类任务。"
+          },
+          {
+            "name": "训练并解释线性回归",
+            "bloom_level": "apply",
+            "parent": "监督学习经典算法",
+            "description": "完成房价预测等回归任务，解读系数含义。"
+          },
+          {
+            "name": "逻辑回归与二分类决策边界",
+            "bloom_level": "apply",
+            "parent": "监督学习经典算法",
+            "description": "实现逻辑回归并可视化决策边界，理解sigmoid函数。"
+          },
+          {
+            "name": "K-means聚类实验",
+            "bloom_level": "apply",
+            "parent": "无监督学习入门",
+            "description": "对二维数据执行K-means并观察聚类效果与K值影响。"
+          },
+          {
+            "name": "主成分分析降维可视化",
+            "bloom_level": "apply",
+            "parent": "无监督学习入门",
+            "description": "对高维数据集应用PCA降至2/3维并可视化，理解方差解释率。"
+          },
+          {
+            "name": "构建简单神经网络模型（多层感知机）",
+            "bloom_level": "create",
+            "parent": "深度学习感知与神经网络初步",
+            "description": "使用TensorFlow或PyTorch搭建包含隐藏层的全连接网络。"
+          },
+          {
+            "name": "模型性能评估与指标选择",
+            "bloom_level": "evaluate",
+            "parent": "AI项目实践与评估",
+            "description": "计算准确率、精确率、召回率、F1-score，并根据问题类型选择合适指标。"
+          },
+          {
+            "name": "完成一个端到端分类项目",
+            "bloom_level": "create",
+            "parent": "AI项目实践与评估",
+            "description": "从数据加载、探索、预处理到模型训练、评估的完整流程，撰写简要报告。"
+          }
+        ],
+        "prerequisites": [
+          {
+            "name": "Python面向对象编程（类与对象）",
+            "bloom_level": "remember",
+            "relation": "required",
+            "description": "能够定义类、创建实例、使用方法，以便封装算法或数据处理逻辑。"
+          },
+          {
+            "name": "NumPy基础数组操作",
+            "bloom_level": "apply",
+            "relation": "required",
+            "description": "掌握ndarray创建、切片、形状变换和向量化运算，是数据处理和算法实现的数学基础。"
+          },
+          {
+            "name": "Pandas数据框基本操作",
+            "bloom_level": "apply",
+            "relation": "required",
+            "description": "能读取CSV、进行分组、过滤、填充缺失值等操作，用于数据预处理。"
+          },
+          {
+            "name": "Matplotlib/Seaborn基础绘图",
+            "bloom_level": "apply",
+            "relation": "recommended",
+            "description": "绘制散点图、线图、直方图等，用于数据探索和结果可视化。"
+          },
+          {
+            "name": "线性代数初步（向量、矩阵运算）",
+            "bloom_level": "remember",
+            "relation": "recommended",
+            "description": "理解点积、矩阵乘法和基本几何含义，帮助理解模型参数更新与特征变换。"
+          }
+        ],
+        "summary": "从AI整体框架入手，先理解任务类型和基础概念，再逐步上手经典监督/无监督算法并用Python实现，最后通过小型项目练习评估与集成。每天2小时建议先巩固NumPy/Pandas，再按顺序完成微观技能练习。",
+        "response": "从AI整体框架入手，先理解任务类型和基础概念，再逐步上手经典监督/无监督算法并用Python实现，最后通过小型项目练习评估与集成。每天2小时建议先巩固NumPy/Pandas，再按顺序完成微观技能练习。"
+      },
+      "sched": {
+        "goal": {
+          "goal_title": "人工智能基础入门",
+          "target_topic": "人工智能核心概念与基础算法",
+          "target_level": "understand",
+          "deadline": "",
+          "motivation": "希望从Python编程转向人工智能领域的学习",
+          "constraints": [
+            "每天约2小时学习时间"
+          ]
+        },
+        "decomposition": {
+          "macro_topics": [
+            {
+              "name": "人工智能概览与问题类型",
+              "bloom_level": "understand",
+              "description": "理解AI的定义、发展历史、主要流派以及典型应用场景的分类（分类、回归、聚类、生成等）。"
+            },
+            {
+              "name": "机器学习基础概念",
+              "bloom_level": "understand",
+              "description": "掌握数据集、特征、标签、训练/测试集、过拟合与欠拟合等核心术语及工作流程。"
+            },
+            {
+              "name": "监督学习经典算法",
+              "bloom_level": "apply",
+              "description": "学习并实现K近邻、线性回归、逻辑回归等基础算法，理解原理并能用Python调用。"
+            },
+            {
+              "name": "无监督学习入门",
+              "bloom_level": "apply",
+              "description": "了解K-means聚类和主成分分析（PCA）的基本思想，能够完成简单的降维与聚类实验。"
+            },
+            {
+              "name": "深度学习感知与神经网络初步",
+              "bloom_level": "understand",
+              "description": "认识神经元、激活函数、多层感知机结构，为后续深度学习打基础。"
+            },
+            {
+              "name": "AI项目实践与评估",
+              "bloom_level": "analyze",
+              "description": "学习模型评估指标（准确率、混淆矩阵、F1-score），能复现小型端到端AI项目。"
+            }
+          ],
+          "micro_skills": [
+            {
+              "name": "区分AI、机器学习、深度学习的层级关系",
+              "bloom_level": "understand",
+              "parent": "人工智能概览与问题类型",
+              "description": "能用简单语言说出三者的从属关系并举例。"
+            },
+            {
+              "name": "识别任务类型（分类、回归、聚类）",
+              "bloom_level": "apply",
+              "parent": "人工智能概览与问题类型",
+              "description": "针对给定实际场景判断属于哪种机器学习任务。"
+            },
+            {
+              "name": "构建并划分训练/测试集",
+              "bloom_level": "apply",
+              "parent": "机器学习基础概念",
+              "description": "用scikit-learn的train_test_split完成数据划分并理解其必要性。"
+            },
+            {
+              "name": "解释过拟合与欠拟合现象",
+              "bloom_level": "analyze",
+              "parent": "机器学习基础概念",
+              "description": "能根据学习曲线判断模型状态并给出简单纠正方向。"
+            },
+            {
+              "name": "实现K近邻分类器",
+              "bloom_level": "apply",
+              "parent": "监督学习经典算法",
+              "description": "使用Python手动实现简单版KNN或调用sklearn完成分类任务。"
+            },
+            {
+              "name": "训练并解释线性回归",
+              "bloom_level": "apply",
+              "parent": "监督学习经典算法",
+              "description": "完成房价预测等回归任务，解读系数含义。"
+            },
+            {
+              "name": "逻辑回归与二分类决策边界",
+              "bloom_level": "apply",
+              "parent": "监督学习经典算法",
+              "description": "实现逻辑回归并可视化决策边界，理解sigmoid函数。"
+            },
+            {
+              "name": "K-means聚类实验",
+              "bloom_level": "apply",
+              "parent": "无监督学习入门",
+              "description": "对二维数据执行K-means并观察聚类效果与K值影响。"
+            },
+            {
+              "name": "主成分分析降维可视化",
+              "bloom_level": "apply",
+              "parent": "无监督学习入门",
+              "description": "对高维数据集应用PCA降至2/3维并可视化，理解方差解释率。"
+            },
+            {
+              "name": "构建简单神经网络模型（多层感知机）",
+              "bloom_level": "create",
+              "parent": "深度学习感知与神经网络初步",
+              "description": "使用TensorFlow或PyTorch搭建包含隐藏层的全连接网络。"
+            },
+            {
+              "name": "模型性能评估与指标选择",
+              "bloom_level": "evaluate",
+              "parent": "AI项目实践与评估",
+              "description": "计算准确率、精确率、召回率、F1-score，并根据问题类型选择合适指标。"
+            },
+            {
+              "name": "完成一个端到端分类项目",
+              "bloom_level": "create",
+              "parent": "AI项目实践与评估",
+              "description": "从数据加载、探索、预处理到模型训练、评估的完整流程，撰写简要报告。"
+            }
+          ],
+          "prerequisites": [
+            {
+              "name": "Python面向对象编程（类与对象）",
+              "bloom_level": "remember",
+              "relation": "required",
+              "description": "能够定义类、创建实例、使用方法，以便封装算法或数据处理逻辑。"
+            },
+            {
+              "name": "NumPy基础数组操作",
+              "bloom_level": "apply",
+              "relation": "required",
+              "description": "掌握ndarray创建、切片、形状变换和向量化运算，是数据处理和算法实现的数学基础。"
+            },
+            {
+              "name": "Pandas数据框基本操作",
+              "bloom_level": "apply",
+              "relation": "required",
+              "description": "能读取CSV、进行分组、过滤、填充缺失值等操作，用于数据预处理。"
+            },
+            {
+              "name": "Matplotlib/Seaborn基础绘图",
+              "bloom_level": "apply",
+              "relation": "recommended",
+              "description": "绘制散点图、线图、直方图等，用于数据探索和结果可视化。"
+            },
+            {
+              "name": "线性代数初步（向量、矩阵运算）",
+              "bloom_level": "remember",
+              "relation": "recommended",
+              "description": "理解点积、矩阵乘法和基本几何含义，帮助理解模型参数更新与特征变换。"
+            }
+          ],
+          "summary": "从AI整体框架入手，先理解任务类型和基础概念，再逐步上手经典监督/无监督算法并用Python实现，最后通过小型项目练习评估与集成。每天2小时建议先巩固NumPy/Pandas，再按顺序完成微观技能练习。"
+        },
+        "student_profile": {},
+        "existing_plan": {},
+        "plan_title": "人工智能基础入门 7 天学习计划",
+        "estimated_days": 7,
+        "daily_capacity": 3,
+        "steps": [
+          {
+            "day": 1,
+            "topic": "Python 面向对象编程回顾",
+            "type": "review",
+            "description": "回顾类与对象的定义、继承、方法等核心概念，为后续算法实现打基础",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 1,
+            "topic": "NumPy 数组基础",
+            "type": "learn",
+            "description": "学习创建、索引、变形、广播等数组操作，理解向量化计算的优势",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 1,
+            "topic": "Pandas 数据框基本操作",
+            "type": "learn",
+            "description": "学习数据读取、过滤、分组、合并等操作，掌握结构化数据处理方式",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 2,
+            "topic": "数据可视化基础",
+            "type": "learn",
+            "description": "使用 Matplotlib 和 Seaborn 绘制折线图、散点图、直方图，理解可视化在数据分析中的作用",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 2,
+            "topic": "线性代数初步",
+            "type": "learn",
+            "description": "复习向量、矩阵、点积、矩阵乘法等运算，建立对特征空间的基本直觉",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 2,
+            "topic": "数据操作与可视化练习",
+            "type": "exercise",
+            "description": "使用 Pandas 处理一个真实数据集，并用 Matplotlib 进行探索性可视化，巩固前两日所学",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 3,
+            "topic": "人工智能概览：AI、ML、DL 层级关系",
+            "type": "learn",
+            "description": "讲解人工智能、机器学习、深度学习的包含关系与关键里程碑，建立宏观认知",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 3,
+            "topic": "任务类型：分类、回归、聚类",
+            "type": "learn",
+            "description": "通过实例区分监督学习、无监督学习，识别分类、回归、聚类等典型问题",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 3,
+            "topic": "任务类型辨识练习",
+            "type": "exercise",
+            "description": "给定一系列现实场景，判断应使用分类、回归还是聚类，并说明理由",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 4,
+            "topic": "训练集与测试集划分",
+            "type": "learn",
+            "description": "理解数据拆分的目的，学习留出法与交叉验证的基本思想，使用 scikit-learn 实现划分",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 4,
+            "topic": "过拟合与欠拟合",
+            "type": "learn",
+            "description": "解释模型容量、偏差-方差权衡，能识别训练/验证曲线中的过拟合与欠拟合现象",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 4,
+            "topic": "数据划分与拟合现象实验",
+            "type": "exercise",
+            "description": "对一个回归数据集进行不同复杂度的多项式拟合，观察过拟合与欠拟合的曲线表现",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 5,
+            "topic": "K 近邻分类器 (KNN)",
+            "type": "learn",
+            "description": "学习 KNN 的基本原理、距离度量、k 值影响，并基于 scikit-learn 实现一个 KNN 分类器",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 5,
+            "topic": "线性回归",
+            "type": "learn",
+            "description": "推导最小二乘解，理解损失函数、梯度下降，能训练并解释线性回归模型的系数",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 5,
+            "topic": "逻辑回归与二分类决策边界",
+            "type": "learn",
+            "description": "掌握 sigmoid 函数、交叉熵损失，理解决策边界的几何意义，完成二分类预测",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 6,
+            "topic": "K-means 聚类",
+            "type": "learn",
+            "description": "学习 K-means 的迭代过程、肘部法则，用 scikit-learn 进行聚类实验并可视化结果",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 6,
+            "topic": "主成分分析 (PCA) 降维",
+            "type": "learn",
+            "description": "理解特征值分解、方差解释率，实现 PCA 降维并可视化高维数据在二维平面上的分布",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 6,
+            "topic": "聚类与降维综合练习",
+            "type": "exercise",
+            "description": "对一个未标注数据集先使用 PCA 降维，再进行 K-means 聚类，评估聚类效果并绘制图表",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 7,
+            "topic": "深度学习与多层感知机 (MLP) 初步",
+            "type": "learn",
+            "description": "介绍神经元、激活函数、前向传播与反向传播的基本概念，搭建一个简单 MLP 模型",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 7,
+            "topic": "构建并训练简单神经网络",
+            "type": "exercise",
+            "description": "使用 Keras/PyTorch 构建一个多层感知机，在 MNIST 或简单数据集上训练并观察收敛过程",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 7,
+            "topic": "AI 项目评估与回顾",
+            "type": "review",
+            "description": "梳理完整 AI 项目流程：数据准备、模型选择、训练评估，回顾整周所学并解答疑问",
+            "bloom_level": "understand"
+          }
+        ],
+        "milestones": [
+          "完成前置知识复习与数据操作，能够熟练使用 Python 科学计算栈",
+          "掌握机器学习基础概念与监督学习经典算法，独立实现 KNN、线性/逻辑回归",
+          "实现无监督学习与简单神经网络，理解 PCA 降维和 MLP 训练流程"
+        ],
+        "response": "同学你好，这个计划先从 Python 数据科学工具链入手，逐步过渡到机器学习核心概念，最后动手搭建神经网络。每天 2-3 个任务，平衡学习与练习，希望你在一周内建立起对人工智能的完整初步认知。"
+      }
+    }
+  },
+  {
+    "id": 7,
+    "diff": 1,
+    "desc": "极简微计划：零基础+极短时间",
+    "input": "每天只有1小时学AI，帮我安排一周的学习计划。目前零基础，想看看AI是什么。",
+    "score": 91.0,
+    "judge_details": {
+      "judge_ok": true,
+      "pipeline_ms": 40453.184799989685,
+      "A": 18,
+      "D": 19,
+      "H": 17,
+      "S": 18,
+      "F": 19,
+      "total": 91,
+      "brief": "目标明确，知识点全面，排期合理，高度适配学生需求。",
+      "ms": 3653.5
+    },
+    "errors": [],
+    "raw_data": {
+      "goal": {
+        "input": "每天只有1小时学AI，帮我安排一周的学习计划。目前零基础，想看看AI是什么。",
+        "context": "",
+        "student_profile": {},
+        "goal_title": "人工智能初探",
+        "target_topic": "人工智能基础概念与应用领域",
+        "target_level": "understand",
+        "deadline": "",
+        "motivation": "了解人工智能是什么，建立对AI领域的基本认识。",
+        "constraints": [
+          "每天学习时间不超过1小时",
+          "零基础"
+        ],
+        "response": "了解了，你希望在接下来的一周里，每天用1小时来初步了解人工智能是什么。我会为你规划一个轻松入门的学习路线，从基本概念到有趣的应用，帮助你建立对AI的整体认识。"
+      },
+      "decomp": {
+        "topic": "人工智能基础概念与应用领域",
+        "context": "每天只有1小时学AI，帮我安排一周的学习计划。目前零基础，想看看AI是什么。",
+        "student_profile": {},
+        "macro_topics": [
+          {
+            "name": "人工智能定义与历史",
+            "bloom_level": "understand",
+            "description": "理解AI的基本概念、发展脉络和核心目标"
+          },
+          {
+            "name": "AI核心子领域",
+            "bloom_level": "understand",
+            "description": "了解机器学习、深度学习、计算机视觉、自然语言处理等主要技术分支"
+          },
+          {
+            "name": "AI典型应用场景",
+            "bloom_level": "understand",
+            "description": "认识AI在医疗、金融、自动驾驶、推荐系统等领域的实际应用"
+          },
+          {
+            "name": "数据与算法基础意识",
+            "bloom_level": "understand",
+            "description": "建立对数据、特征、模型训练的基本感性认识"
+          },
+          {
+            "name": "AI伦理与社会影响",
+            "bloom_level": "understand",
+            "description": "思考AI带来的偏见、隐私、就业等社会议题"
+          }
+        ],
+        "micro_skills": [
+          {
+            "name": "区分弱AI、强AI与通用AI",
+            "bloom_level": "understand",
+            "parent": "人工智能定义与历史",
+            "description": "能用自己的话解释AI的不同层次与当前能力边界"
+          },
+          {
+            "name": "简述AI发展简史与标志性事件",
+            "bloom_level": "remember",
+            "parent": "人工智能定义与历史",
+            "description": "能列举图灵测试、深蓝、AlphaGo等里程碑"
+          },
+          {
+            "name": "识别机器学习与传统编程的区别",
+            "bloom_level": "understand",
+            "parent": "AI核心子领域",
+            "description": "能说明数据驱动与规则驱动两种范式的核心差异"
+          },
+          {
+            "name": "列举监督学习、无监督学习、强化学习的基本例子",
+            "bloom_level": "remember",
+            "parent": "AI核心子领域",
+            "description": "能口头举出各自1-2个现实应用"
+          },
+          {
+            "name": "说出至少3个AI落地的真实案例",
+            "bloom_level": "remember",
+            "parent": "AI典型应用场景",
+            "description": "能描述人脸识别、语音助手、内容推荐等场景的基本原理"
+          },
+          {
+            "name": "绘制一个简化的机器学习工作流",
+            "bloom_level": "apply",
+            "parent": "数据与算法基础意识",
+            "description": "能画出从数据采集到模型评估的基本步骤"
+          },
+          {
+            "name": "讨论一个AI伦理困境",
+            "bloom_level": "analyze",
+            "parent": "AI伦理与社会影响",
+            "description": "能分析自动驾驶中碰撞选择的伦理矛盾或推荐系统中的算法偏见现象"
+          }
+        ],
+        "prerequisites": [
+          {
+            "name": "基本计算机操作能力",
+            "bloom_level": "remember",
+            "relation": "required",
+            "description": "熟悉文件管理、浏览器使用、基础办公软件"
+          },
+          {
+            "name": "逻辑思维与基本数学概念",
+            "bloom_level": "remember",
+            "relation": "recommended",
+            "description": "了解函数、方程、概率等初中级数学概念"
+          },
+          {
+            "name": "对科技新闻的基本关注",
+            "bloom_level": "remember",
+            "relation": "recommended",
+            "description": "知道ChatGPT、自动驾驶等近期AI话题"
+          }
+        ],
+        "summary": "你将从认识AI是什么开始，了解它的历史与能力边界，然后快速浏览机器学习、计算机视觉等关键子领域，并通过真实案例感受AI如何改变生活。最后你会试着画出简单的AI工作流，并参与一次伦理讨论。整体难度偏向理解与记忆，每天1小时，一周刚好可以建立起对AI的系统性初识。",
+        "response": "你将从认识AI是什么开始，了解它的历史与能力边界，然后快速浏览机器学习、计算机视觉等关键子领域，并通过真实案例感受AI如何改变生活。最后你会试着画出简单的AI工作流，并参与一次伦理讨论。整体难度偏向理解与记忆，每天1小时，一周刚好可以建立起对AI的系统性初识。"
+      },
+      "sched": {
+        "goal": {
+          "goal_title": "人工智能初探",
+          "target_topic": "人工智能基础概念与应用领域",
+          "target_level": "understand",
+          "deadline": "",
+          "motivation": "了解人工智能是什么，建立对AI领域的基本认识。",
+          "constraints": [
+            "每天学习时间不超过1小时",
+            "零基础"
+          ]
+        },
+        "decomposition": {
+          "macro_topics": [
+            {
+              "name": "人工智能定义与历史",
+              "bloom_level": "understand",
+              "description": "理解AI的基本概念、发展脉络和核心目标"
+            },
+            {
+              "name": "AI核心子领域",
+              "bloom_level": "understand",
+              "description": "了解机器学习、深度学习、计算机视觉、自然语言处理等主要技术分支"
+            },
+            {
+              "name": "AI典型应用场景",
+              "bloom_level": "understand",
+              "description": "认识AI在医疗、金融、自动驾驶、推荐系统等领域的实际应用"
+            },
+            {
+              "name": "数据与算法基础意识",
+              "bloom_level": "understand",
+              "description": "建立对数据、特征、模型训练的基本感性认识"
+            },
+            {
+              "name": "AI伦理与社会影响",
+              "bloom_level": "understand",
+              "description": "思考AI带来的偏见、隐私、就业等社会议题"
+            }
+          ],
+          "micro_skills": [
+            {
+              "name": "区分弱AI、强AI与通用AI",
+              "bloom_level": "understand",
+              "parent": "人工智能定义与历史",
+              "description": "能用自己的话解释AI的不同层次与当前能力边界"
+            },
+            {
+              "name": "简述AI发展简史与标志性事件",
+              "bloom_level": "remember",
+              "parent": "人工智能定义与历史",
+              "description": "能列举图灵测试、深蓝、AlphaGo等里程碑"
+            },
+            {
+              "name": "识别机器学习与传统编程的区别",
+              "bloom_level": "understand",
+              "parent": "AI核心子领域",
+              "description": "能说明数据驱动与规则驱动两种范式的核心差异"
+            },
+            {
+              "name": "列举监督学习、无监督学习、强化学习的基本例子",
+              "bloom_level": "remember",
+              "parent": "AI核心子领域",
+              "description": "能口头举出各自1-2个现实应用"
+            },
+            {
+              "name": "说出至少3个AI落地的真实案例",
+              "bloom_level": "remember",
+              "parent": "AI典型应用场景",
+              "description": "能描述人脸识别、语音助手、内容推荐等场景的基本原理"
+            },
+            {
+              "name": "绘制一个简化的机器学习工作流",
+              "bloom_level": "apply",
+              "parent": "数据与算法基础意识",
+              "description": "能画出从数据采集到模型评估的基本步骤"
+            },
+            {
+              "name": "讨论一个AI伦理困境",
+              "bloom_level": "analyze",
+              "parent": "AI伦理与社会影响",
+              "description": "能分析自动驾驶中碰撞选择的伦理矛盾或推荐系统中的算法偏见现象"
+            }
+          ],
+          "prerequisites": [
+            {
+              "name": "基本计算机操作能力",
+              "bloom_level": "remember",
+              "relation": "required",
+              "description": "熟悉文件管理、浏览器使用、基础办公软件"
+            },
+            {
+              "name": "逻辑思维与基本数学概念",
+              "bloom_level": "remember",
+              "relation": "recommended",
+              "description": "了解函数、方程、概率等初中级数学概念"
+            },
+            {
+              "name": "对科技新闻的基本关注",
+              "bloom_level": "remember",
+              "relation": "recommended",
+              "description": "知道ChatGPT、自动驾驶等近期AI话题"
+            }
+          ],
+          "summary": "你将从认识AI是什么开始，了解它的历史与能力边界，然后快速浏览机器学习、计算机视觉等关键子领域，并通过真实案例感受AI如何改变生活。最后你会试着画出简单的AI工作流，并参与一次伦理讨论。整体难度偏向理解与记忆，每天1小时，一周刚好可以建立起对AI的系统性初识。"
+        },
+        "student_profile": {},
+        "existing_plan": {},
+        "plan_title": "人工智能初探学习计划",
+        "estimated_days": 7,
+        "daily_capacity": 3,
+        "steps": [
+          {
+            "day": 1,
+            "topic": "人工智能定义与历史",
+            "type": "learn",
+            "description": "学习人工智能的定义，区分弱AI、强AI与通用AI，了解AI发展简史与标志性事件。",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 1,
+            "topic": "人工智能定义与历史",
+            "type": "review",
+            "description": "回顾AI的三类划分，用自己的话总结AI发展历程中的关键转折点。",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 2,
+            "topic": "AI核心子领域",
+            "type": "learn",
+            "description": "了解机器学习与传统编程的区别，学习监督学习、无监督学习、强化学习的基本例子。",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 2,
+            "topic": "AI核心子领域",
+            "type": "exercise",
+            "description": "针对每种学习类型举出一个生活中的实际例子，并简单说明其工作原理。",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 3,
+            "topic": "数据与算法基础意识",
+            "type": "learn",
+            "description": "理解数据在AI中的作用，学习机器学习工作流的主要环节：数据收集、预处理、模型训练、评估和部署。",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 3,
+            "topic": "数据与算法基础意识",
+            "type": "exercise",
+            "description": "绘制一个简化的机器学习工作流图，并标注各环节的输入和输出。",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 4,
+            "topic": "AI典型应用场景",
+            "type": "learn",
+            "description": "学习AI在医疗、交通、金融、教育等领域的真实落地案例，说出至少3个具体应用。",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 4,
+            "topic": "AI典型应用场景",
+            "type": "review",
+            "description": "整理案例库，对比不同应用场景中AI技术的异同点。",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 5,
+            "topic": "AI伦理与社会影响",
+            "type": "learn",
+            "description": "探讨AI伦理核心议题，如公平性、隐私、责任归属，并阅读一个经典AI伦理困境案例。",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 5,
+            "topic": "AI伦理与社会影响",
+            "type": "exercise",
+            "description": "选择一个AI伦理困境，撰写简短讨论，分析不同利益相关者的视角。",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 6,
+            "topic": "综合回顾与应用",
+            "type": "review",
+            "description": "回顾本周所有知识点，制作思维导图连接AI定义、子领域、应用与伦理。",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 6,
+            "topic": "综合回顾与应用",
+            "type": "exercise",
+            "description": "完成一份综合小测：区分AI类型、匹配学习算法与场景、简述一个伦理观点。",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 7,
+            "topic": "拓展与反思",
+            "type": "learn",
+            "description": "阅读一篇关于AI前沿趋势的科普文章，了解生成式AI、大模型等新概念。",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 7,
+            "topic": "拓展与反思",
+            "type": "exercise",
+            "description": "撰写200字反思：你对AI的未来持乐观还是谨慎态度？结合本周学习说明理由。",
+            "bloom_level": "understand"
+          }
+        ],
+        "milestones": [
+          "完成AI定义与历史的初步理解",
+          "掌握机器学习的三种基本类型及例子",
+          "画出并解释机器学习工作流",
+          "收集并阐述至少3个AI应用案例",
+          "形成对AI伦理的基本分析能力",
+          "完成综合回顾与自我检测"
+        ],
+        "response": "你好！这是一个为期7天的AI初探计划，每天安排1-3个学习或练习任务，从基本概念走向应用与伦理反思，帮助你扎实达到理解层级。建议每天保持1-2小时投入，随时记录疑问和灵感哦！"
+      }
+    }
+  },
+  {
+    "id": 8,
+    "diff": 1,
+    "desc": "一句话：无任何背景信息",
+    "input": "帮我制定一个机器学习入门学习计划。",
+    "score": 88.0,
+    "judge_details": {
+      "judge_ok": true,
+      "pipeline_ms": 55030.282699968666,
+      "A": 18,
+      "D": 19,
+      "H": 17,
+      "S": 16,
+      "F": 18,
+      "total": 88,
+      "brief": "目标准确，知识点全面，排期合理，适配度稍低",
+      "ms": 5661.0
+    },
+    "errors": [],
+    "raw_data": {
+      "goal": {
+        "input": "帮我制定一个机器学习入门学习计划。",
+        "context": "",
+        "student_profile": {},
+        "goal_title": "机器学习入门学习计划",
+        "target_topic": "机器学习基础",
+        "target_level": "understand",
+        "deadline": "",
+        "motivation": "希望系统了解机器学习的基本概念和方法",
+        "constraints": [],
+        "response": "好的，我将为你梳理机器学习入门的学习目标，从核心概念到常用算法，帮你建立清晰的知识框架。让我们一起迈出第一步吧！"
+      },
+      "decomp": {
+        "topic": "机器学习基础",
+        "context": "帮我制定一个机器学习入门学习计划。",
+        "student_profile": {},
+        "macro_topics": [
+          {
+            "name": "机器学习概述",
+            "bloom_level": "understand",
+            "description": "理解机器学习的定义、基本术语、主要类型（监督学习、无监督学习、强化学习）及其应用场景。"
+          },
+          {
+            "name": "数据预处理与特征工程",
+            "bloom_level": "apply",
+            "description": "掌握数据清洗、标准化、编码、降维和特征选择的方法，并能应用到真实数据上。"
+          },
+          {
+            "name": "监督学习核心算法",
+            "bloom_level": "apply",
+            "description": "掌握线性回归、逻辑回归、决策树、支持向量机、K近邻等基础算法的原理与实现。"
+          },
+          {
+            "name": "模型评估与选择",
+            "bloom_level": "analyze",
+            "description": "能够运用交叉验证、偏差-方差权衡、混淆矩阵、ROC-AUC等工具分析和选择合适的模型。"
+          },
+          {
+            "name": "无监督学习与聚类",
+            "bloom_level": "apply",
+            "description": "掌握k-means、层次聚类、DBSCAN等聚类方法及主成分分析（PCA）等降维技术。"
+          },
+          {
+            "name": "机器学习项目实战流程",
+            "bloom_level": "create",
+            "description": "能够端到端地完成一个机器学习项目，包括问题定义、数据处理、建模、评估到部署思路。"
+          }
+        ],
+        "micro_skills": [
+          {
+            "name": "区分监督、无监督、半监督与强化学习",
+            "bloom_level": "understand",
+            "parent": "机器学习概述",
+            "description": "根据数据标注情况和学习目标准确分类不同的学习范式。"
+          },
+          {
+            "name": "识别过拟合与欠拟合现象",
+            "bloom_level": "analyze",
+            "parent": "机器学习概述",
+            "description": "通过训练误差和验证误差的变化曲线诊断偏差-方差问题。"
+          },
+          {
+            "name": "处理缺失值与异常值",
+            "bloom_level": "apply",
+            "parent": "数据预处理与特征工程",
+            "description": "使用删除、填充（均值/中位数/众数）、插值等方法清洗数据。"
+          },
+          {
+            "name": "特征缩放与编码",
+            "bloom_level": "apply",
+            "parent": "数据预处理与特征工程",
+            "description": "对数值特征进行标准化/归一化，对类别特征进行One-Hot或标签编码。"
+          },
+          {
+            "name": "实现线性回归与逻辑回归",
+            "bloom_level": "apply",
+            "parent": "监督学习核心算法",
+            "description": "理解线性模型的假设，能够用梯度下降或解析解训练模型。"
+          },
+          {
+            "name": "理解决策树分裂准则",
+            "bloom_level": "analyze",
+            "parent": "监督学习核心算法",
+            "description": "比较信息增益、基尼系数等分裂标准，并可视化决策边界。"
+          },
+          {
+            "name": "使用交叉验证调参",
+            "bloom_level": "evaluate",
+            "parent": "模型评估与选择",
+            "description": "运用k折交叉验证结合网格搜索或随机搜索选择最优超参数。"
+          },
+          {
+            "name": "绘制并解读ROC曲线与AUC值",
+            "bloom_level": "analyze",
+            "parent": "模型评估与选择",
+            "description": "评估二分类模型的性能，理解阈值对TPR和FPR的影响。"
+          },
+          {
+            "name": "应用K-Means聚类并选取K值",
+            "bloom_level": "apply",
+            "parent": "无监督学习与聚类",
+            "description": "使用肘部法则和轮廓系数确定簇的个数，并对数据进行聚类。"
+          },
+          {
+            "name": "用PCA可视化高维数据",
+            "bloom_level": "apply",
+            "parent": "无监督学习与聚类",
+            "description": "能解释主成分的方差贡献率，将数据降到2维或3维进行可视化。"
+          },
+          {
+            "name": "构建端到端ML流水线",
+            "bloom_level": "create",
+            "parent": "机器学习项目实战流程",
+            "description": "将数据预处理、特征工程、建模、评估整合为可复用的pipeline。"
+          }
+        ],
+        "prerequisites": [
+          {
+            "name": "Python编程基础（numpy, pandas, matplotlib）",
+            "bloom_level": "remember",
+            "relation": "required",
+            "description": "能够使用numpy进行矩阵运算，使用pandas读取和操作表格数据，使用matplotlib绘制基本图形。"
+          },
+          {
+            "name": "线性代数基础（向量、矩阵、特征值）",
+            "bloom_level": "remember",
+            "relation": "required",
+            "description": "理解向量和矩阵的运算法则，能计算矩阵乘法、求逆、特征值分解等。"
+          },
+          {
+            "name": "概率与统计基础（条件概率、分布、估计）",
+            "bloom_level": "remember",
+            "relation": "required",
+            "description": "理解概率密度函数、条件概率、贝叶斯定理、均值和方差等概念。"
+          },
+          {
+            "name": "微积分初步（导数、梯度）",
+            "bloom_level": "remember",
+            "relation": "recommended",
+            "description": "理解函数求导、偏导数、梯度的含义，能够计算简单函数的导数。"
+          }
+        ],
+        "summary": "这个学习计划从机器学习基本概念出发，逐步深入到数据预处理、经典监督与无监督算法，最后通过模型评估和项目实战巩固所学。建议先确保 Python 和必要的数学基础牢固，再按顺序推进各个主题，每个主题都结合代码练习加深理解。",
+        "response": "这个学习计划从机器学习基本概念出发，逐步深入到数据预处理、经典监督与无监督算法，最后通过模型评估和项目实战巩固所学。建议先确保 Python 和必要的数学基础牢固，再按顺序推进各个主题，每个主题都结合代码练习加深理解。"
+      },
+      "sched": {
+        "goal": {
+          "goal_title": "机器学习入门学习计划",
+          "target_topic": "机器学习基础",
+          "target_level": "understand",
+          "deadline": "",
+          "motivation": "希望系统了解机器学习的基本概念和方法",
+          "constraints": []
+        },
+        "decomposition": {
+          "macro_topics": [
+            {
+              "name": "机器学习概述",
+              "bloom_level": "understand",
+              "description": "理解机器学习的定义、基本术语、主要类型（监督学习、无监督学习、强化学习）及其应用场景。"
+            },
+            {
+              "name": "数据预处理与特征工程",
+              "bloom_level": "apply",
+              "description": "掌握数据清洗、标准化、编码、降维和特征选择的方法，并能应用到真实数据上。"
+            },
+            {
+              "name": "监督学习核心算法",
+              "bloom_level": "apply",
+              "description": "掌握线性回归、逻辑回归、决策树、支持向量机、K近邻等基础算法的原理与实现。"
+            },
+            {
+              "name": "模型评估与选择",
+              "bloom_level": "analyze",
+              "description": "能够运用交叉验证、偏差-方差权衡、混淆矩阵、ROC-AUC等工具分析和选择合适的模型。"
+            },
+            {
+              "name": "无监督学习与聚类",
+              "bloom_level": "apply",
+              "description": "掌握k-means、层次聚类、DBSCAN等聚类方法及主成分分析（PCA）等降维技术。"
+            },
+            {
+              "name": "机器学习项目实战流程",
+              "bloom_level": "create",
+              "description": "能够端到端地完成一个机器学习项目，包括问题定义、数据处理、建模、评估到部署思路。"
+            }
+          ],
+          "micro_skills": [
+            {
+              "name": "区分监督、无监督、半监督与强化学习",
+              "bloom_level": "understand",
+              "parent": "机器学习概述",
+              "description": "根据数据标注情况和学习目标准确分类不同的学习范式。"
+            },
+            {
+              "name": "识别过拟合与欠拟合现象",
+              "bloom_level": "analyze",
+              "parent": "机器学习概述",
+              "description": "通过训练误差和验证误差的变化曲线诊断偏差-方差问题。"
+            },
+            {
+              "name": "处理缺失值与异常值",
+              "bloom_level": "apply",
+              "parent": "数据预处理与特征工程",
+              "description": "使用删除、填充（均值/中位数/众数）、插值等方法清洗数据。"
+            },
+            {
+              "name": "特征缩放与编码",
+              "bloom_level": "apply",
+              "parent": "数据预处理与特征工程",
+              "description": "对数值特征进行标准化/归一化，对类别特征进行One-Hot或标签编码。"
+            },
+            {
+              "name": "实现线性回归与逻辑回归",
+              "bloom_level": "apply",
+              "parent": "监督学习核心算法",
+              "description": "理解线性模型的假设，能够用梯度下降或解析解训练模型。"
+            },
+            {
+              "name": "理解决策树分裂准则",
+              "bloom_level": "analyze",
+              "parent": "监督学习核心算法",
+              "description": "比较信息增益、基尼系数等分裂标准，并可视化决策边界。"
+            },
+            {
+              "name": "使用交叉验证调参",
+              "bloom_level": "evaluate",
+              "parent": "模型评估与选择",
+              "description": "运用k折交叉验证结合网格搜索或随机搜索选择最优超参数。"
+            },
+            {
+              "name": "绘制并解读ROC曲线与AUC值",
+              "bloom_level": "analyze",
+              "parent": "模型评估与选择",
+              "description": "评估二分类模型的性能，理解阈值对TPR和FPR的影响。"
+            },
+            {
+              "name": "应用K-Means聚类并选取K值",
+              "bloom_level": "apply",
+              "parent": "无监督学习与聚类",
+              "description": "使用肘部法则和轮廓系数确定簇的个数，并对数据进行聚类。"
+            },
+            {
+              "name": "用PCA可视化高维数据",
+              "bloom_level": "apply",
+              "parent": "无监督学习与聚类",
+              "description": "能解释主成分的方差贡献率，将数据降到2维或3维进行可视化。"
+            },
+            {
+              "name": "构建端到端ML流水线",
+              "bloom_level": "create",
+              "parent": "机器学习项目实战流程",
+              "description": "将数据预处理、特征工程、建模、评估整合为可复用的pipeline。"
+            }
+          ],
+          "prerequisites": [
+            {
+              "name": "Python编程基础（numpy, pandas, matplotlib）",
+              "bloom_level": "remember",
+              "relation": "required",
+              "description": "能够使用numpy进行矩阵运算，使用pandas读取和操作表格数据，使用matplotlib绘制基本图形。"
+            },
+            {
+              "name": "线性代数基础（向量、矩阵、特征值）",
+              "bloom_level": "remember",
+              "relation": "required",
+              "description": "理解向量和矩阵的运算法则，能计算矩阵乘法、求逆、特征值分解等。"
+            },
+            {
+              "name": "概率与统计基础（条件概率、分布、估计）",
+              "bloom_level": "remember",
+              "relation": "required",
+              "description": "理解概率密度函数、条件概率、贝叶斯定理、均值和方差等概念。"
+            },
+            {
+              "name": "微积分初步（导数、梯度）",
+              "bloom_level": "remember",
+              "relation": "recommended",
+              "description": "理解函数求导、偏导数、梯度的含义，能够计算简单函数的导数。"
+            }
+          ],
+          "summary": "这个学习计划从机器学习基本概念出发，逐步深入到数据预处理、经典监督与无监督算法，最后通过模型评估和项目实战巩固所学。建议先确保 Python 和必要的数学基础牢固，再按顺序推进各个主题，每个主题都结合代码练习加深理解。"
+        },
+        "student_profile": {},
+        "existing_plan": {},
+        "plan_title": "机器学习入门7天学习计划",
+        "estimated_days": 7,
+        "daily_capacity": 3,
+        "steps": [
+          {
+            "day": 1,
+            "topic": "机器学习概述",
+            "type": "learn",
+            "description": "学习机器学习的定义、应用场景，区分监督学习、无监督学习、半监督学习与强化学习",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 1,
+            "topic": "过拟合与欠拟合",
+            "type": "learn",
+            "description": "理解过拟合与欠拟合的概念、产生原因及解决方案",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 1,
+            "topic": "概念辨析练习",
+            "type": "exercise",
+            "description": "完成一组选择题或简答题，正确区分各类学习任务及判断数据场景下的缺陷",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 2,
+            "topic": "数据预处理",
+            "type": "learn",
+            "description": "学习处理缺失值与异常值的方法（删除、插补、转换等）",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 2,
+            "topic": "特征工程基础",
+            "type": "learn",
+            "description": "掌握特征缩放（归一化、标准化）和类别特征编码（独热编码、标签编码）的原理",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 2,
+            "topic": "数据处理练习",
+            "type": "exercise",
+            "description": "使用Python的pandas和scikit-learn对给定的数据集进行缺失值处理和特征缩放编码操作",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 3,
+            "topic": "线性回归与逻辑回归",
+            "type": "learn",
+            "description": "学习线性回归（最小二乘原理）与逻辑回归（sigmoid函数、交叉熵损失）的基本推导与应用场景",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 3,
+            "topic": "决策树分裂准则",
+            "type": "learn",
+            "description": "理解决策树的分裂过程，比较ID3、C4.5和CART算法中的信息增益、增益率与基尼指数",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 3,
+            "topic": "监督学习算法练习",
+            "type": "exercise",
+            "description": "用scikit-learn实现线性回归、逻辑回归和决策树模型，并在小数据集上训练、预测",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 4,
+            "topic": "模型评估与选择",
+            "type": "learn",
+            "description": "学习常用评估指标（准确率、精确率、召回率、F1分数），理解ROC曲线与AUC值的含义",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 4,
+            "topic": "交叉验证调参",
+            "type": "learn",
+            "description": "掌握交叉验证的原理（K折交叉验证）及如何用于模型选择和超参数调优",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 4,
+            "topic": "评估与调参练习",
+            "type": "exercise",
+            "description": "结合前一日的模型，绘制ROC曲线、计算AUC，用GridSearchCV进行交叉验证调参并比较结果",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 5,
+            "topic": "K-Means聚类",
+            "type": "learn",
+            "description": "学习K-Means算法原理，理解如何选取K值（肘部法则、轮廓系数）及其优缺点",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 5,
+            "topic": "PCA降维与可视化",
+            "type": "learn",
+            "description": "理解主成分分析（PCA）的数学思想，学习如何使用PCA对高维数据进行降维和可视化",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 5,
+            "topic": "无监督学习练习",
+            "type": "exercise",
+            "description": "使用scikit-learn对数据集进行K-Means聚类并评估最佳K值，用PCA将特征降至2维并可视化聚类结果",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 6,
+            "topic": "机器学习项目实战流程",
+            "type": "learn",
+            "description": "了解一个完整机器学习项目的步骤：问题定义、数据收集与清洗、探索性分析、建模、评估与部署",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 6,
+            "topic": "综合项目练习",
+            "type": "exercise",
+            "description": "选择一个经典数据集（如泰坦尼克号或房价预测），按照项目流程完成从数据预处理到模型评估的全过程",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 7,
+            "topic": "知识回顾与查漏补缺",
+            "type": "review",
+            "description": "回顾前6天学习的所有关键概念，梳理知识体系，整理疑惑点并通过查找资料或复现代码解决",
+            "bloom_level": "understand"
+          },
+          {
+            "day": 7,
+            "topic": "拓展练习",
+            "type": "exercise",
+            "description": "完成一组涵盖分类、回归、聚类和降维的综合性习题，撰写简短的学习总结与反思",
+            "bloom_level": "understand"
+          }
+        ],
+        "milestones": [
+          "第2天结束：能独立完成数据预处理与特征工程",
+          "第4天结束：能实现并评估常见监督学习算法",
+          "第5天结束：掌握无监督学习基础方法并可视化",
+          "第7天结束：完成一个端到端的机器学习小项目"
+        ],
+        "response": "这个7天计划从概念到实践层层递进，每天2-3个学习或练习任务，帮你扎实掌握机器学习基础与项目流程。按照计划一步步来，你会逐渐构建起完整的入门知识体系。"
+      }
+    }
+  }
+]

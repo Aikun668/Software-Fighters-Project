@@ -411,8 +411,8 @@ class TestModelConfig:
     def test_custom_values(self):
         from app.services.llm_service import ModelConfig
 
-        cfg = ModelConfig(model="deepseek-chat", temperature=0.3, max_tokens=4096)
-        assert cfg.model == "deepseek-chat"
+        cfg = ModelConfig(model="MiniMax-M3", temperature=0.3, max_tokens=4096)
+        assert cfg.model == "MiniMax-M3"
         assert cfg.temperature == 0.3
         assert cfg.max_tokens == 4096
 

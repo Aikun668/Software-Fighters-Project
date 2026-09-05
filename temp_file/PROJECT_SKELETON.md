@@ -274,12 +274,12 @@ pnpm dev
 ### 7.3 AI服务关键环境变量 (`.env`)
 
 ```bash
-# LLM配置（当前使用DeepSeek）
+# LLM配置（当前使用 MiniMax Token Plan）
 LLM_PROVIDER=openai
-OPENAI_BASE_URL=https://api.deepseek.com/v1
-OPENAI_API_KEY=sk-xxxxxxxx
-OPENAI_MODEL=deepseek-v4-pro           # 主模型（推理）
-OPENAI_FALLBACK_MODEL=deepseek-v4-flash # 备用模型（快速响应）
+MINIMAX_BASE_URL=https://api.minimax.cn/v1
+MINIMAX_API_KEY=your_minimax_token_plan_key_here
+MINIMAX_MODEL_CHAT=MiniMax-M3           # 路由 / 初筛 / 判断 / 轻量生成
+MINIMAX_MODEL_REASONER=MiniMax-M3       # 重推理 / 代码 / 图解 / 诊断
 
 # 数据库（必须和后端一致）
 DATABASE_URL=mysql+aiomysql://root:123666@localhost:3306/ai_edu
@@ -309,7 +309,7 @@ USE_MOCK_LLM=false
 
 - [ ] **统一错误处理**：AI服务挂了时返回友好错误（而非500）
 - [ ] **请求日志**：记录谁、什么时候、调用了什么AI接口
-- [ ] **限流保护**：防止单个用户刷爆AI API（DeepSeek有速率限制）
+- [ ] **限流保护**：防止单个用户耗尽 AI API 请求额度（MiniMax Token Plan 有额度限制）
 - [ ] **认证中间件**：确认内网白名单 or JWT验证方案
 
 ### 🟢 P2 - 体验优化
@@ -382,7 +382,7 @@ public SseEmitter tutorChat(@RequestBody ChatRequest request) {
 | 问题 | 影响 | 状态 |
 |------|------|------|
 | 后端只有1个转发接口 | 无法完成画像、资源生成等核心功能 | 🔴 阻塞 |
-| AI服务 `.env` 中 Spark API Key 未配置 | 如果使用星火模型会报错 | 🟡 已切换DeepSeek |
+| AI服务 `.env` 中 Spark API Key 未配置 | 如果使用星火模型会报错 | 🟡 已切换 MiniMax Token Plan |
 | 知识库缺少CNN/Transformer深度内容 | RAG回答不够深入 | 🟡 计划补充 |
 | 缺少负载均衡 | 单机部署，高并发可能OOM | 🟢 比赛阶段可接受 |
 | 无自动化部署脚本 | 每次手动启动3个服务 | 🟢 文档已说明启动顺序 |

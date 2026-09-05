@@ -10,12 +10,12 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from app.agents.project_agent import ProjectAgent
 from app.services.llm_service import AgentModelProfile, ModelConfig
 
-# 用 deepseek-v4-pro（qwen 欠费）
-_DK = os.getenv("DEEPSEEK_API_KEY", "")
-_DB = os.getenv("DEEPSEEK_BASE_URL", "")
+# 使用 MiniMax Token Plan
+_MM_KEY = os.getenv("MINIMAX_API_KEY", "")
+_MM_BASE = os.getenv("MINIMAX_BASE_URL", "")
 PROFILE = AgentModelProfile(
-    default=ModelConfig(model="deepseek-v4-pro", temperature=0.7, max_tokens=8192,
-                        api_key=_DK, base_url=_DB),
+    default=ModelConfig(model="MiniMax-M3", temperature=0.7, max_tokens=8192,
+                        api_key=_MM_KEY, base_url=_MM_BASE),
 )
 
 

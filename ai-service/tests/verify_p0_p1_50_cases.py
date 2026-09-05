@@ -447,8 +447,8 @@ async def _run_one_pipeline(case: dict) -> CaseResult:
     from app.services.intent_extractor import IntentExtractor
     from app.agents.tutor_agent import TutorAgent
 
-    has_api = bool(os.getenv("OPENAI_API_KEY") or os.getenv("DASHSCOPE_API_KEY")
-                   or os.getenv("DASHSCOPE_API_KEY_FLASH") or os.getenv("DEEPSEEK_API_KEY"))
+    has_api = bool(os.getenv("MINIMAX_API_KEY") or os.getenv("OPENAI_API_KEY")
+                   or os.getenv("DASHSCOPE_API_KEY") or os.getenv("DASHSCOPE_API_KEY_FLASH"))
 
     result = CaseResult(
         case_id=case["id"], diff=case["diff"],

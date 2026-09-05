@@ -166,11 +166,12 @@ CREATE TABLE users (
 ### 4.1 环境变量 (`.env`)
 
 ```bash
-# LLM 配置
+# LLM 配置（MiniMax Token Plan，OpenAI 兼容）
 LLM_PROVIDER=openai
-OPENAI_BASE_URL=https://api.deepseek.com/v1
-OPENAI_API_KEY=sk-xxxxxxxx
-OPENAI_MODEL=deepseek-v4-pro
+MINIMAX_BASE_URL=https://api.minimax.cn/v1
+MINIMAX_API_KEY=your_minimax_token_plan_key_here
+MINIMAX_MODEL_CHAT=MiniMax-M3
+MINIMAX_MODEL_REASONER=MiniMax-M3
 
 # 数据库（与后端共用 MySQL）
 DATABASE_URL=mysql+aiomysql://root:123666@localhost:3306/ai_edu
@@ -386,7 +387,7 @@ data: {"type": "<事件类型>", ...}\n\n
 
 - [ ] 统一错误处理：AI 不可用时返回 `502` + 友好提示
 - [ ] 请求日志：记录调用者、时间、端点、耗时
-- [ ] 限流保护：防止单个用户刷爆 DeepSeek API
+- [ ] 限流保护：防止单个用户耗尽 MiniMax Token Plan 请求额度
 - [ ] 认证方案：JWT 验证中间件（或先内网白名单）
 
 ### P2 — 体验优化
@@ -401,7 +402,7 @@ data: {"type": "<事件类型>", ...}\n\n
 
 | 风险 | 影响 | 缓解 |
 |------|------|------|
-| DeepSeek API 速率限制 | 高并发时请求排队 | AI 服务内置 mock 降级，后端加限流 |
+| MiniMax Token Plan 请求额度限制 | 高并发时请求排队 | AI 服务内置 mock 降级，后端加限流 |
 | ChromaDB 内存占用 | 大知识库 OOM | 当前知识库仅 75KB，影响小 |
 | SSE 长连接资源占用 | 大量用户时 Tomcat 线程耗尽 | 使用 WebFlux 异步模型 |
 | MySQL 慢查询 | 画像频繁读写 | 画像 update 已有 last_activity_at 索引 |

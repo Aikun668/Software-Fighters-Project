@@ -48,8 +48,8 @@ def _print_json(title: str, data: dict | list, indent: int = 2):
 
 async def run_one(case: dict):
     """Run full pipeline for one case, print everything."""
-    has_api = bool(os.getenv("OPENAI_API_KEY") or os.getenv("DASHSCOPE_API_KEY")
-                   or os.getenv("DASHSCOPE_API_KEY_FLASH") or os.getenv("DEEPSEEK_API_KEY"))
+    has_api = bool(os.getenv("MINIMAX_API_KEY") or os.getenv("OPENAI_API_KEY")
+                   or os.getenv("DASHSCOPE_API_KEY") or os.getenv("DASHSCOPE_API_KEY_FLASH"))
 
     from app.agents.goal_agent import GoalAgent
     from app.agents.decompose_agent import DecomposeAgent

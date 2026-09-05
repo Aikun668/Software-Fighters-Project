@@ -190,8 +190,8 @@ async def _run_solve(case: dict) -> tuple[str, list[str], dict]:
     try:
         from app.agents.solve_agent import SolveAgent
 
-        has_api = bool(os.getenv("OPENAI_API_KEY") or os.getenv("DASHSCOPE_API_KEY")
-                       or os.getenv("DASHSCOPE_API_KEY_FLASH") or os.getenv("DEEPSEEK_API_KEY"))
+        has_api = bool(os.getenv("MINIMAX_API_KEY") or os.getenv("OPENAI_API_KEY")
+                       or os.getenv("DASHSCOPE_API_KEY") or os.getenv("DASHSCOPE_API_KEY_FLASH"))
 
         agent = SolveAgent(use_mock_llm=not has_api)
         state = await agent.run({

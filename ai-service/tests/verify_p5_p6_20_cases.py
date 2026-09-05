@@ -34,9 +34,9 @@ _plan_llm = None; _plan_sys = ""; _plan_usr = ""
 _solve_llm = None; _solve_sys = ""; _solve_usr = ""
 
 MAX_CONCURRENCY = 4
-JUDGE_MODEL = "deepseek-v4-pro"
-JUDGE_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
-JUDGE_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "")
+JUDGE_MODEL = os.getenv("MINIMAX_MODEL_REASONER", "MiniMax-M3")
+JUDGE_API_KEY = os.getenv("MINIMAX_API_KEY", "")
+JUDGE_BASE_URL = os.getenv("MINIMAX_BASE_URL", "")
 
 
 async def _init_all():

@@ -76,16 +76,13 @@
             ></textarea>
           </div>
           <button
-            :class="['send-button', { 'streaming': isStreaming }]"
-            :disabled="!inputText.trim() && !isStreaming"
-            @click="isStreaming ? abortStreaming() : handleSend()"
+            class="send-button"
+            :disabled="!inputText.trim()"
+            @click="handleSend()"
           >
-            <svg v-if="!isStreaming" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="22" y1="2" x2="11" y2="13"/>
               <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-            </svg>
-            <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="6" y="6" width="12" height="12" rx="2"/>
             </svg>
           </button>
         </div>
@@ -343,124 +340,6 @@ const handleScrollEnd = () => {
   }, 200)
 }
 
-// 智能回复生成器
-const generateResponse = (userInput: string): string => {
-  const input = userInput.toLowerCase()
-  
-  // 学习方法相关
-  if (input.includes('怎么学') || input.includes('如何学') || input.includes('学习方法')) {
-    return `根据你的学习画像，我建议你采用以下学习方法：
-
-**1. 视觉化学习**
-你属于视觉型学习者，建议多看图表、流程图和可视化教程。
-
-**2. 理论与实践结合**
-你的理论基础扎实，建议：
-- 每学完一个概念，立即动手实现
-- 尝试用自己的话复述知识点
-- 制作思维导图整理知识体系
-
-**3. 反思性学习**
-你是反思型学习者，建议：
-- 每次学习后写学习笔记
-- 定期回顾和总结
-- 对比不同方法的优劣
-
-需要我为你制定更详细的学习计划吗？`
-  }
-  
-  // 知识点相关
-  if (input.includes('知识点') || input.includes('学什么') || input.includes('内容')) {
-    return `基于你当前的学习进度和兴趣方向，建议重点学习以下内容：
-
-**基础阶段（当前）**
-- 机器学习基础算法（线性回归、逻辑回归、决策树）
-- Python数据处理（NumPy、Pandas）
-- 模型评估方法
-
-**进阶阶段**
-- 深度学习框架（PyTorch/TensorFlow）
-- 神经网络基础（CNN、RNN、Transformer）
-- 你感兴趣的 **NLP** 和 **深度学习** 方向
-
-**注意事项**
-根据你的易错点记录，需要特别关注：
-- 梯度消失问题的解决方案
-- 过拟合的判断和处理方法
-
-要开始学习某个具体知识点吗？`
-  }
-  
-  // 进度相关
-  if (input.includes('进度') || input.includes('情况') || input.includes('怎么样')) {
-    return `让我为你分析一下当前的学习情况：
-
-**整体进度：${profile.knowledgeBase}%**
-
-**优势领域**
-- 机器学习理论基础
-- 学习目标明确
-- 学习节奏稳定（每日${profile.learningRhythm.dailyHours}小时）
-
-**待提升领域**
-- 实践项目经验较少
-- 部分易错点需要巩固
-
-**建议**
-1. 保持当前的学习频率
-2. 增加动手实践的时间占比
-3. 针对易错点进行专项训练
-
-继续加油！你正在稳步前进。`
-  }
-  
-  // 项目相关
-  if (input.includes('项目') || input.includes('实战') || input.includes('练习')) {
-    return `根据你的学习画像，我推荐以下实战项目：
-
-**入门级项目**
-1. **房价预测** - 线性回归实践
-2. **手写数字识别** - CNN入门
-3. **电影评论情感分析** - NLP基础
-
-**进阶项目**
-1. **图像分类器** - 迁移学习
-2. **聊天机器人** - Seq2Seq模型
-3. **文本生成** - Transformer应用
-
-**项目建议**
-- 从你感兴趣的 **${profile.entries.interest_direction[0].text}** 领域开始
-- 每个项目都要写详细的项目报告
-- 尝试优化模型，记录不同方法的效果对比
-
-需要我详细介绍某个项目的实现思路吗？`
-  }
-  
-  // 默认回复
-  return `我理解你的问题。让我从你的学习画像角度来分析：
-
-**当前状态**
-- 知识基础：${profile.knowledgeBase}%
-- 学习风格：${profile.cognitiveStyle.join('、')}
-- 主要兴趣：${profile.entries.interest_direction.filter(i => i.status === 'active').map(i => i.text).join('、')}
-
-**我的建议**
-1. 发挥你的视觉型学习优势，多用图表和可视化工具
-2. 保持反思习惯，定期总结学习心得
-3. 关注你的易错点：${profile.entries.weak_points[0].text}
-
-你可以问我关于：
-- 学习方法和技巧
-- 具体知识点讲解
-- 实战项目推荐
-- 学习进度分析
-
-想深入了解哪个方面呢？`
-}
-
-// 流式输出控制
-let streamController: { abort: boolean } | null = null
-
 const handleSend = async () => {
   if (!inputText.value.trim() || isStreaming.value) return
 
@@ -471,7 +350,6 @@ const handleSend = async () => {
     timestamp: Date.now()
   }
   messages.value.push(userMsg)
-  const userInput = inputText.value.trim()
   inputText.value = ''
 
   if (textareaRef.value) {
@@ -479,63 +357,6 @@ const handleSend = async () => {
   }
 
   await scrollToBottom()
-
-  isStreaming.value = true
-  streamContent.value = ''
-
-  const assistantMsg: Message = {
-    id: (Date.now() + 1).toString(),
-    role: 'assistant',
-    content: '',
-    timestamp: Date.now(),
-    streaming: true
-  }
-  messages.value.push(assistantMsg)
-
-  await scrollToBottom()
-  
-  streamController = { abort: false }
-  await simulateStream(userInput)
-}
-
-const simulateStream = async (userInput: string) => {
-  const response = generateResponse(userInput)
-  
-  let scrollInterval: ReturnType<typeof setInterval> | null = null
-
-  scrollInterval = setInterval(() => {
-    if (shouldAutoScroll.value) {
-      scrollToBottom()
-    }
-  }, 200)
-
-  for (let i = 0; i < response.length; i++) {
-    if (!isStreaming.value || streamController?.abort) break
-    
-    streamContent.value += response[i]
-    messages.value[messages.value.length - 1].content = streamContent.value
-    
-    await new Promise(resolve => setTimeout(resolve, 20 + Math.random() * 40))
-  }
-
-  if (scrollInterval) {
-    clearInterval(scrollInterval)
-  }
-
-  await scrollToBottom(true)
-
-  isStreaming.value = false
-  streamContent.value = ''
-  messages.value[messages.value.length - 1].streaming = false
-  streamController = null
-  
-  profile.knowledgeBase = Math.min(100, profile.knowledgeBase + 2)
-}
-
-const abortStreaming = () => {
-  if (streamController) {
-    streamController.abort = true
-  }
 }
 
 const refreshProfile = () => {

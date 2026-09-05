@@ -1,0 +1,579 @@
+================================================================================
+Case #1  diff=3  score=91.0  |  面试备战：强基础+明确时间+多领域
+================================================================================
+
+【用户输入】
+  三个月准备大厂ML面试，已有两年Python经验，数学基础不错（考研数学135），每天能投入4小时。希望覆盖：机器学习基础算法、深度学习、以及一些ML系统设计的知识。
+
+【GoalAgent 输出】
+  标题: 三个月大厂ML面试准备
+  主题: 机器学习基础算法、深度学习、ML系统设计
+  层级: apply
+  动机: 成功通过大厂机器学习岗位面试
+  约束: ['每天学习时间4小时', '已有两年Python经验', '数学基础良好（考研数学135）']
+  response: 已经了解你的目标：在三个月内系统准备大厂ML面试，覆盖基础算法、深度学习和系统设计。根据你扎实的Python和数学基础，我们可以侧重面试导向的应用和实战设计，一起高效规划学习路径！
+
+【DecomposeAgent 输出】
+  宏观主题(5): ['监督学习核心算法', '无监督学习与特征工程', '深度学习基础架构', '深度学习前沿模型', 'ML系统设计与实践']
+  微观技能(15):
+    - 线性模型与正则化 [analyze] parent=监督学习核心算法  |  推导线性/逻辑回归的损失函数，解释L1/L2正则的几何意义和稀疏性
+    - 树模型与集成学习 [evaluate] parent=监督学习核心算法  |  对比决策树、随机森林、XGBoost/LightGBM的差异并针对场景选型
+    - 支持向量机与核方法 [analyze] parent=监督学习核心算法  |  理解最大间隔、对偶问题与核技巧，分析在高维空间的应用
+    - 模型评估与选择 [evaluate] parent=监督学习核心算法  |  熟练运用交叉验证、AUC、混淆矩阵等指标，做出模型取舍决策
+    - 降维与聚类 [apply] parent=无监督学习与特征工程  |  运用PCA/t-SNE/K-means等方法进行数据探索与高维可视化
+    - 特征构造与选择 [create] parent=无监督学习与特征工程  |  基于领域知识设计数值、文本、交叉特征，并用相关性/重要性筛选
+    - 深度神经网络组件 [apply] parent=深度学习基础架构  |  掌握反向传播、激活函数、损失函数、Dropout/BatchNorm的原理与使用
+    - 卷积神经网络与经典架构 [analyze] parent=深度学习基础架构  |  分析LeNet/AlexNet/ResNet等架构的设计进化，会针对任务修改网络
+    - 循环神经网络与序列建模 [apply] parent=深度学习基础架构  |  理解RNN/LSTM/GRU的时序建模能力及其梯度问题，能应用到文本/序列数据
+    - 强化学习基础 [understand] parent=深度学习基础架构  |  了解MDP、Q-learning、策略梯度等基本概念，衔接后续前沿话题
+    - Transformer与自注意力机制 [analyze] parent=深度学习前沿模型  |  拆解Transformer的编码器-解码器结构，理解自注意力计算与位置编码
+    - 预训练语言模型与微调 [apply] parent=深度学习前沿模型  |  掌握BERT/GPT的预训练目标及下游微调策略，能解读常见变体
+    - 生成模型前沿 [understand] parent=深度学习前沿模型  |  对比GAN、VAE、扩散模型的核心思想，了解图像/文本生成的应用边界
+    - ML系统架构与设计模式 [create] parent=ML系统设计与实践  |  能设计在线/离线推理、特征存储、实验追踪等系统组件并权衡延迟与成本
+    - 模型部署与持续集成 [evaluate] parent=ML系统设计与实践  |  评估模型压缩、容器化、模型注册、A/B测试等手段在生产环境的效果
+  前置知识(4):
+    - 概率论与数理统计 [recommended]  |  条件概率、贝叶斯定理、高斯分布、极大似然估计等ML高频数学基础
+    - 线性代数与矩阵计算 [recommended]  |  特征值分解、SVD、矩阵求导等在模型推导和优化中的直接应用
+    - Python数据处理生态 [required]  |  熟练使用NumPy、Pandas、Scikit-Learn进行数据清洗与建模实验
+    - 优化理论与信息论 [recommended]  |  梯度下降变体、凸优化基础以及交叉熵、KL散度等概念
+  summary: 你已有扎实的数学和Python基础，可按以下路径高效准备：先以监督/无监督经典算法为主线，深挖原理与评估；再快速搭建深度学习基础架构，攻克CNN/RNN并过渡到Transformer家族；同时并行学习ML系统设计，从特征管道到模型部署构建完整闭环。这样能在三个月内覆盖面试高频考点并建立系统观。
+
+【ScheduleAgent 输出】
+  标题: 三个月大厂ML面试准备学习计划
+  总天数: 90 | 每日容量: 3 任务
+  步骤数: 33
+  Day1: [review|understand] 概率论与数理统计基础回顾 — 回顾概率分布、贝叶斯定理、期望与方差、抽样分布等核心概念，为后续模型理解打基础
+  Day2: [review|understand] 线性代数与矩阵计算回顾 — 复习矩阵乘法、特征值分解、奇异值分解、梯度与导数在矩阵中的表达，连接ML中的优化问题
+  Day3: [review|understand] 优化理论与信息论基础 — 复习梯度下降、随机梯度下降、拉格朗日乘子法、熵与交叉熵，利用Python快速实践
+  Day4: [learn|apply] 线性模型与正则化 — 学习线性回归与逻辑回归的原理，理解L1/L2正则化、弹性网及其在实际面试中的常见问题
+  Day5: [exercise|apply] 线性模型与正则化练习 — 通过案例实现正则化线性分类与回归，观察过拟合与正则化强度的关系并进行参数调优
+  Day6: [learn|apply] 模型评估与选择(上) — 学习偏差-方差分解、交叉验证、混淆矩阵、ROC/AUC、准确率/召回率权衡和F1-score
+  Day7: [exercise|apply] 模型评估与选择(下) — 使用scikit-learn构建完整评估流程，比较不同模型在模拟面试数据集上的评估指标表现
+  Day8: [learn|apply] 树模型与集成学习(上) — 理解决策树的划分标准、剪枝策略，以及Bagging与随机森林的方差降低原理
+  Day9: [learn|apply] 树模型与集成学习(下) — 学习Boosting方法(AdaBoost、GBDT)及其残差拟合思想，扩展到XGBoost/LightGBM核心优化技术
+  Day10: [exercise|apply] 树模型与集成学习练习 — 实现随机森林与GBDT对比实验，分析特征重要性、处理类别型与缺失值，撰写面试讲述稿
+  Day11: [learn|understand] 支持向量机与核方法 — 从最大间隔出发理解硬/软间隔SVM，了解核技巧与常见核函数，梳理对偶问题思路
+  Day12: [review|apply] 监督学习核心算法总复习与面试演练 — 对比LR、SVM、决策树、随机森林与GBDT的适用场景与优缺点，进行组内模拟问答
+  Day13: [learn|understand] 降维与聚类(上) — 学习PCA的方差最大化视角与SVD实现，讨论t-SNE的邻居嵌入思想和可视化特点
+  Day14: [learn|apply] 降维与聚类(下) — 掌握K-Means、DBSCAN与层次聚类，理解它们的距离度量和参数影响，比较不同聚类算法
+  Day15: [learn|apply] 特征构造与选择 — 学习数值/类别/时间序列特征构造方法，结合过滤式、包裹式与嵌入式特征选择策略构建鲁棒特征库
+  Day16: [exercise|apply] 无监督学习与特征工程练习 — 在真实开放数据集上完整走通降维、聚类、特征构造与选择的pipeline，进行可视化分析和面试表达训练
+  Day17: [review|apply] 阶段复习一：传统ML笔试高频题 — 集中刷题与讲解，覆盖SVM对偶推导、XGBoost分裂增益公式、正则化细节等高频考点
+  Day18: [learn|apply] 深度神经网络组件基础 — 从感知机引入激活函数、反向传播、链式法则、梯度消失问题，实现一个小型全连接网络
+  Day19: [learn|apply] 深度神经网络训练技巧 — 学习参数初始化、批量归一化、Dropout、学习率衰减与优化器(Adam/RMSprop)的原理和实践
+  Day20: [learn|understand] CNN与经典架构(上) — 理解卷积层、池化层、感受野与平移等变性，分析LeNet、AlexNet和VGG的设计思路
+  Day21: [learn|apply] CNN与经典架构(下) — 学习Inception的多尺度通路、ResNet的跳跃连接和MobileNet的深度可分离卷积，对比参数量与计算量
+  Day22: [exercise|apply] CNN面试练习与图像建模案例 — 基于PyTorch复现一个ResNet并完成图像分类任务，准备‘CNN优势’类面试问题模拟作答
+  Day23: [learn|understand] 循环神经网络与序列建模(上) — 学习RNN的时序展开与BPTT，理解LSTM门控机制和GRU的简化设计，解决长序列依赖问题
+  Day24: [learn|understand] 循环神经网络与序列建模(下) — 扩展到Seq2Seq架构与Attention机制的动机，为Transformer学习铺垫基础
+  Day25: [learn|apply] Transformer与前沿模型 — 详解自注意力机制、多头注意力和位置编码，结合BERT/GPT案例理解预训练-微调范式与prompt工程
+  Day26: [exercise|apply] 深度学习前沿模型练习 — 使用Hugging Face加载BERT进行文本分类微调，撰写推理过程与面试解释稿
+  Day27: [learn|understand] 强化学习基础 — 掌握MDP、价值函数、Q-Learning和策略梯度基本思路，理解探索与利用的平衡
+  Day28: [review|apply] 深度学习总复习与面试笔试结合 — 回顾CNN/RNN/Transformer核心差异，刷面试真题中的反向传播计算与参数量估计类题目
+  Day29: [learn|apply] ML系统设计导论与实践框架 — 学习端到端ML项目流程：问题定义、数据管线设计、模型选择、评估、部署与监控的基本框架
+  Day30: [learn|apply] ML系统设计案例剖析：信息流与特征存储 — 分析推荐系统/广告系统中的在线推断与离线训练分离模式，讨论特征存储、特征回填和实时性要求
+  Day31: [learn|apply] ML系统设计案例剖析：模型迭代与实验平台 — 学习A/B测试原理、实验分流、模型版本管理与效果回归分析，结合面试公司业务场景设计方案
+  Day32: [exercise|apply] ML系统设计综合练习 — 完成2-3道大厂ML系统设计真题（如设计视频推荐系统、搜索排序系统），撰写完整设计文档并进行模拟面试
+  Day33: [review|apply] 模拟面试冲刺与全链路回顾 — 模拟三轮技术面：传统ML基础白板推导、深度学习前沿问答、系统设计展示，识别薄弱点并补充复习
+  里程碑: ['第12天：掌握监督学习核心算法并能应用于白板面试场景', '第17天：完成传统ML笔试高频题训练，可以独立推导SVM等核心公式', '第26天：掌握CNN/RNN/Transformer原理并能完成微调实践', '第32天：具备独立设计端到端ML系统的能力', '第33天：能自信应对全链路ML面试，包括理论、实践与系统设计']
+
+【Judge 评分】 A=18 D=19 H=17 S=18 F=19 total=91.0
+  brief: 目标精准，知识点覆盖全面，排期合理，适配学生情况
+
+================================================================================
+Case #2  diff=3  score=83.0  |  交叉学科模糊目标：量化+ML双线
+================================================================================
+
+【用户输入】
+  想用AI做量化交易策略。目前情况：Python熟练但金融和ML都是半吊子——上过一门金融入门课、用sklearn做过简单分类。不知道从哪里系统学。
+
+【GoalAgent 输出】
+  标题: 系统学习AI驱动的量化交易策略
+  主题: 机器学习在量化交易中的应用
+  层级: apply
+  动机: 希望能够利用AI构建实用的量化交易策略
+  约束: ['Python熟练', '金融基础薄弱，仅上过一门入门课', '机器学习基础薄弱，仅用sklearn做过简单分类']
+  response: 你的Python底子很不错，金融和ML虽还薄弱但已有接触。我们可以从金融时间序列特征工程和策略回测框架开始，一步步把AI落地到交易场景中。
+
+【DecomposeAgent 输出】
+  宏观主题(6): ['Quantitative Trading Fundamentals', 'Financial Time Series Analysis', 'Feature Engineering for Financial Data', 'Machine Learning for Strategy Modeling', 'Backtesting and Validation', 'Risk and Execution Management']
+  微观技能(10):
+    - Market microstructure and order book dynamics [understand] parent=Quantitative Trading Fundamentals  |  Explain how limit order books work and how trades are executed in electronic markets.
+    - Stationarity and return transformations [apply] parent=Financial Time Series Analysis  |  Apply log-return computation, differencing, and unit root tests to make price series stationary.
+    - Building technical and alternative features [apply] parent=Feature Engineering for Financial Data  |  Create lagged momentum, volatility, and volume features with proper time indexing to avoid look-ahead.
+    - Dealing with non-IID and regime changes [analyze] parent=Feature Engineering for Financial Data  |  Diagnose distribution shifts and design features robust to changing market regimes.
+    - Supervised learning for next-period direction or return [apply] parent=Machine Learning for Strategy Modeling  |  Train classifiers/regressors with walk-forward cross-validation, and perform hyperparameter tuning.
+    - Avoiding overfitting in financial ML [analyze] parent=Machine Learning for Strategy Modeling  |  Apply purging, embargo, and deflated Sharpe ratio techniques to obtain statistically sound performance estimates.
+    - Vectorized backtesting and performance metrics [apply] parent=Backtesting and Validation  |  Implement a loop-free event-driven simulation in Python and compute Sharpe, max drawdown, and Calmar ratios.
+    - Survivorship bias and data-snooping tests [analyze] parent=Backtesting and Validation  |  Design out-of-sample periods and use Monte Carlo permutation tests to assess false discovery risk.
+    - Transaction cost modeling [apply] parent=Risk and Execution Management  |  Incorporate commission, bid-ask spread, and market impact into net performance calculations.
+    - Position sizing and risk budgeting [evaluate] parent=Risk and Execution Management  |  Compare volatility targeting, Kelly criterion, and VaR-based position limits under regime uncertainty.
+  前置知识(3):
+    - Basic probability and statistics (distributions, correlation, hypothesis testing) [required]  |  Fundamental statistical concepts needed to understand financial returns, risk, and model evaluation.
+    - Fundamentals of financial instruments (stocks, ETFs, futures, FX) [recommended]  |  Basic knowledge of what is traded and typical market conventions (though your intro finance course partially covers this).
+    - Python with numpy, pandas, matplotlib, scikit-learn [required]  |  You already have this; we will rely heavily on pandas for time series and sklearn pipelines.
+  summary: Your journey starts by solidifying financial market mechanics and time series stationarity, then moves to building robust features and training ML models with strict anti-overfitting protocols. Finally you'll learn to backtest rigorously and manage real-world friction like transaction costs and risk limits.
+
+【ScheduleAgent 输出】
+  标题: AI驱动的量化交易策略系统学习计划
+  总天数: 21 | 每日容量: 3 任务
+  步骤数: 63
+  Day1: [review|understand] 前置知识回顾：概率统计基础 — 复习分布、相关性、假设检验等核心概念，结合金融场景理解统计意义
+  Day1: [review|understand] 前置知识回顾：金融工具基础 — 梳理股票、ETF、期货、外汇等金融产品的基本交易规则与数据特征
+  Day1: [exercise|apply] 环境搭建与数据准备 — 配置Python环境，使用pandas、numpy、matplotlib加载并可视化示例金融数据
+  Day2: [learn|understand] 市场微观结构与订单簿动态 — 学习市场微观结构、订单簿、买卖价差、流动性等对价格形成的影响
+  Day2: [learn|understand] 量化交易基础概念 — 理解Alpha、Beta、夏普比率、最大回撤等核心绩效指标，认识量化策略开发流程
+  Day2: [learn|understand] 金融时间序列的特性 — 学习时间序列的非平稳性、自相关、异方差，掌握平稳性检验方法
+  Day3: [learn|apply] 收益率变换与平稳化 — 学习对数收益率、差分、分数阶差分等平稳化技术，并进行代码实现
+  Day3: [exercise|apply] 时间序列分解与趋势提取 — 利用移动平均、HP滤波等方法分解趋势、季节性与残差，分析金融序列
+  Day3: [exercise|apply] 金融数据清洗与对齐 — 处理期货主力连续合约拼接、复权、缺失值、时间对齐等常见问题
+  Day4: [learn|apply] 技术指标特征构建 — 学习基于价格和成交量的技术指标（RSI, MACD, 布林带等）及Python实现
+  Day4: [learn|understand] 另类数据与基本面特征 — 理解情绪、新闻、资金流等另类数据，如何转化为量化特征
+  Day4: [exercise|apply] 特征重要性初探 — 使用互信息、相关系数矩阵对构建的特征进行初步筛选
+  Day5: [learn|understand] 非独立同分布与概念漂移 — 认识金融数据非IID、存在体制转换的特点，介绍马尔可夫体制转换模型
+  Day5: [learn|apply] 样本内与样本外划分 — 学习时间序列交叉验证（Purged Walk-Forward），避免未来信息泄露
+  Day5: [exercise|apply] 特征组合与筛选实战 — 基于真实或模拟数据，构建特征矩阵，应用递归特征消除等选择有效特征
+  Day6: [learn|apply] 监督学习用于方向/收益预测 — 学习分类模型（逻辑回归、SVM）用于预测下一期涨跌，回归模型预测收益率
+  Day6: [learn|apply] 集成学习与稳健建模 — 介绍随机森林、梯度提升树（XGBoost/LightGBM）在金融建模中的优势与调参
+  Day6: [exercise|apply] 初级策略构建练习 — 利用单个模型生成交易信号，编写简单策略规则，计算粗略盈亏曲线
+  Day7: [learn|understand] 金融机器学习中的过拟合 — 理解数据窥探、幸存者偏差，学习如何通过拒绝抽样、组合交叉验证减轻过拟合
+  Day7: [learn|apply] 正则化与早期停止 — 练习L1/L2正则化、Dropout、早停等技术在金融ML模型中的应用
+  Day7: [exercise|apply] 模型稳定性检验 — 对之前训练的模型进行样本内外稳定性测试，分析特征重要性随时间变化
+  Day8: [learn|understand] 向量化回测框架基础 — 理解向量化回测与事件驱动回测的区别，设计简单的矩阵运算回测引擎
+  Day8: [learn|apply] 回测性能指标计算 — 实现夏普比率、最大回撤、胜率、盈亏比、卡尔马比率等指标的自动化计算
+  Day8: [exercise|apply] 回测实践 — 将之前的策略进行向量化回测，输出完整绩效报告，分析净值曲线
+  Day9: [learn|understand] 常见回测陷阱 — 学习存活偏差、前视偏差、信号滞后、手续费忽视等问题及修正方法
+  Day9: [learn|apply] 交易成本建模 — 学习佣金、滑点、冲击成本、资金占用成本的简化模型与实现
+  Day9: [exercise|apply] 改进回测引擎 — 在回测框架中加入滑点和手续费模块，重新评估策略表现
+  Day10: [learn|understand] 数据窥探检验 — 学习基于Bootstrap的White’s Reality Check、稳健FDR控制等方法
+  Day10: [exercise|apply] 过拟合检测实战 — 对练习中使用的多个策略进行P-hacking检测，理解结果可靠性
+  Day10: [exercise|apply] 策略泛化能力评估 — 使用滚动窗口优化、多资产验证方式评估策略的稳健性
+  Day11: [learn|understand] 资金管理基础 — 学习凯利公式、风险平价、固定比例资金管理等方法，理解其对长期增长的影响
+  Day11: [learn|apply] 头寸规模确定 — 将资金管理模型与交易信号结合，实现动态头寸调整代码
+  Day11: [exercise|apply] 风险预算与止损 — 设计基于波动率或ATR的动态止损和风险分配方案，集成到回测中
+  Day12: [learn|understand] 执行优化简介 — 学习执行缺口、TWAP/VWAP算法基础，理解订单执行对策略收益的影响
+  Day12: [learn|understand] 多策略组合与对冲 — 学习如何将多个策略组合，降低组合波动，构建对冲组合
+  Day12: [exercise|apply] 综合风险报告生成 — 编写脚本输出仓位、杠杆、敞口、回撤瀑布图等完备的风控报告
+  Day13: [review|understand] 完整策略开发流程串讲 — 从特征定义、模型训练、信号生成、回测评估、风险管理全链路串讲
+  Day13: [exercise|apply] 实战项目1：基于技术指标的日内方向预测 — 独立完成一个完整项目，应用所学所有模块，输出绩效报告和改进建议
+  Day13: [exercise|apply] 实战项目1：代码实现与调试 — 编写并调试项目代码，记录遇到的坑与解决方案
+  Day14: [exercise|apply] 实战项目2：多因子选股与动量反转策略 — 基于基本面和技术因子构建选股模型，完成回测与风险调整
+  Day14: [exercise|apply] 实战项目2：回测结果分析 — 分析策略在不同市场环境下的表现，讨论改进方向
+  Day14: [exercise|apply] 策略记录与文档撰写 — 学习用专业方式记录策略假设、参数、绩效，形成可复现的研究文档
+  Day15: [learn|apply] 机器学习模型调优专题 — 系统学习贝叶斯优化、超参数优化框架（Optuna等）在金融数据上的使用
+  Day15: [learn|understand] 自动化机器学习（AutoML） — 了解AutoML工具，思考其与手工建模的优劣，并尝试应用
+  Day15: [exercise|apply] 模型解释性 — 应用SHAP、LIME解释模型输出，确保策略逻辑可理解
+  Day16: [learn|understand] 高频数据与实时策略 — 了解tick级数据特点，实时流处理框架（如Kafka）的基本概念
+  Day16: [learn|understand] 事件驱动策略基础 — 学习业绩公告、经济数据发布等事件驱动型策略的建模思路
+  Day16: [exercise|apply] 另类数据特征工程实战 — 处理新闻情绪数据或社交媒体热度，建立另类因子并验证效果
+  Day17: [learn|understand] 组合优化理论 — 学习均值-方差优化、Black-Litterman模型、风险预算组合构建
+  Day17: [exercise|apply] 组合优化代码实现 — 使用cvxopt或PyPortfolioOpt实现带约束的组合优化，生成有效前沿
+  Day17: [exercise|apply] 动态再平衡策略 — 设计定期再平衡的组合策略，考虑交易成本与税务影响
+  Day18: [learn|understand] 强化学习在交易中的应用 — 了解Q-learning、Policy Gradient等RL方法在单资产交易中的建模思路
+  Day18: [exercise|apply] 强化学习环境搭建 — 使用OpenAI Gym风格搭建自定义交易环境，测试简单RL智能体
+  Day18: [learn|understand] 深度学习时序模型 — 学习LSTM、Transformer在金融时序预测中的应用与注意事项
+  Day19: [exercise|apply] 深度学习预测练习 — 用LSTM预测收益率，并与传统ML模型对比，讨论过拟合问题
+  Day19: [learn|understand] 对抗生成式过拟合防范 — 了解如何通过生成对抗网络合成市场数据来检验策略稳健性
+  Day19: [exercise|apply] 对抗样本检验 — 给过往策略添加微扰，观察信号稳定性和回撤变化
+  Day20: [learn|understand] 策略生命周期管理 — 学习策略上线、监控、退役的标准流程，了解策略衰减的检测方法
+  Day20: [exercise|apply] 综合回测系统搭建 — 将所学回测、风控、绩效模块整合成一个可复用的回测框架
+  Day20: [exercise|apply] 系统化测试与代码鲁棒性 — 编写单元测试，确保框架正确处理各种数据、信号和极端行情
+  Day21: [review|understand] 课程总复习与知识体系梳理 — 回顾整个学习路径，强化各模块之间的关联，形成系统化知识网络
+  Day21: [exercise|apply] 个人策略答辩与复盘 — 准备一份完整策略研究报告，进行模拟答辩，反思不足
+  Day21: [exercise|apply] 进阶学习路径规划 — 列出未来可深入的方向（衍生品定价、高频统计套利等），制定后续学习目标
+  里程碑: ['第5天：完成特征工程体系构建，能够独立从原始行情构建结构化特征矩阵', '第10天：掌握避免金融ML过拟合的核心方法，并能对简单策略进行数据窥探检验', '第15天：独立完成两个端到端的机器学习量化策略项目，包含完整回测与风险分析', '第21天：形成可复用的回测与风险管理系统，能够系统化评估和改进策略']
+
+【Judge 评分】 A=18 D=17 H=16 S=15 F=17 total=83.0
+  brief: 目标明确，知识点覆盖全面，排期合理但部分细节需优化
+
+================================================================================
+Case #3  diff=2  score=90.0  |  转方向：CV→NLP+时间明确
+================================================================================
+
+【用户输入】
+  下个月想入门NLP，之前做过图像分类（用ResNet微调过）。数学还行，每周能投入15小时左右。
+
+【GoalAgent 输出】
+  标题: 入门自然语言处理
+  主题: 自然语言处理基础
+  层级: understand
+  动机: 已有图像分类经验，希望将深度学习能力拓展到自然语言处理领域。
+  约束: ['每周可投入约15小时', '数学基础较好', '有ResNet微调等图像分类实战经验']
+  response: 你想在下个月内入门NLP，每周能投入15小时，之前有图像分类和不错的数学基础，这个目标很清晰，我们一起来规划吧。
+
+【DecomposeAgent 输出】
+  宏观主题(5): ['自然语言处理基本概念', '文本预处理与表示方法', '词向量与分布式表示', '循环神经网络与序列建模', '注意力机制与Transformer架构']
+  微观技能(8):
+    - 文本预处理流程设计 [apply] parent=文本预处理与表示方法  |  能够针对不同语言和任务设计分词、去停用词、词干提取等步骤
+    - TF-IDF与词袋模型实现 [apply] parent=文本预处理与表示方法  |  使用sklearn等库构建词袋/TF-IDF特征，用于文本分类基线
+    - Word2Vec训练与评估 [apply] parent=词向量与分布式表示  |  用Gensim训练Word2Vec模型，并通过相似度、类比任务评估语义质量
+    - RNN/LSTM实现文本分类 [apply] parent=循环神经网络与序列建模  |  基于PyTorch/TensorFlow搭建LSTM进行情感分析，理解长距离依赖问题
+    - 序列到序列模型与注意力 [apply] parent=注意力机制与Transformer架构  |  实现带注意力机制的seq2seq用于简单机器翻译，直观感受注意力作用
+    - Transformer编码器原理剖析 [analyze] parent=注意力机制与Transformer架构  |  逐层解析多头注意力、位置编码、残差连接等组件，与CNN/RNN对比
+    - NLP任务类型区分 [understand] parent=自然语言处理基本概念  |  区分分类、序列标注、生成、抽取等任务范式并举例
+    - 预训练语言模型微调基础 [apply] parent=自然语言处理基本概念  |  借鉴ResNet微调经验，使用Hugging Face加载BERT并对下游任务进行微调
+  前置知识(4):
+    - 线性代数基础 [required]  |  矩阵乘法、向量空间、特征值等，用于理解词向量和注意力计算
+    - 概率论与统计 [required]  |  条件概率、最大似然估计，对语言模型和序列生成至关重要
+    - Python与深度学习框架经验 [required]  |  需熟练使用Python，并具备PyTorch/TensorFlow基础，因有图像分类经验假设已满足
+    - 神经网络基本训练流程 [recommended]  |  掌握前向传播、反向传播、损失函数、优化器，微调ResNet的经验可直接迁移
+  summary: 考虑到你具备图像分类的实践经验和不错的数学基础，NLP入门可以类比你熟悉的工作流：从数据预处理（类似图像归一化、增强）到模型搭建（从简单全连接/CNN到Transformer），再到微调预训练模型（如同在ImageNet预训练ResNet上微调）。建议按上述路径学习，优先动手实现文本分类和简单的seq2seq，快速建立手感，再深入Transformer内部机制。
+
+【ScheduleAgent 输出】
+  标题: 自然语言处理入门学习计划
+  总天数: 7 | 每日容量: 3 任务
+  步骤数: 17
+  Day1: [review|understand] 线性代数与概率统计回顾 — 复习线性代数核心概念（向量、矩阵运算、特征值），概率论基础（概率分布、贝叶斯定理）
+  Day1: [review|understand] Python与深度学习框架基础 — 回顾Python数据处理库（NumPy/Pandas）及PyTorch/TensorFlow基本操作与自动微分
+  Day2: [learn|understand] 自然语言处理基本概念 — 学习NLP的定义、发展历史、典型任务（分类、序列标注、生成、问答等）和应用场景
+  Day2: [learn|understand] 文本预处理流程设计 — 掌握分词、去停用词、词干提取、词形还原等预处理步骤，以及正则表达式与Unicode处理
+  Day2: [learn|understand] TF-IDF与词袋模型 — 理解词袋表示、TF-IDF的数学原理，通过scikit-learn实现文本向量化
+  Day3: [learn|understand] 词向量与分布式表示 — 学习word2vec原理（CBOW/Skip-gram）、GloVe等，理解分布式语义假设
+  Day3: [exercise|understand] Word2Vec训练与评估 — 使用gensim或PyTorch训练skip-gram模型，并通过词相似任务评估词向量质量
+  Day3: [learn|understand] 循环神经网络原理 — 学习RNN、LSTM、GRU的结构、梯度问题及其在序列数据中的应用
+  Day4: [exercise|understand] RNN/LSTM实现文本分类 — 使用PyTorch搭建LSTM模型对IMDB影评进行情感二分类，理解序列填充与打包
+  Day4: [learn|understand] 序列到序列模型与注意力机制 — 学习seq2seq架构、注意力机制的动机与计算流程（点积、加性注意力）
+  Day5: [exercise|understand] 注意力机制深入与实现 — 从零实现Luong注意力模块，结合编码器-解码器框架完成简单机器翻译任务
+  Day5: [learn|understand] Transformer架构 — 学习Transformer整体架构、自注意力、多头注意力、位置编码、前馈网络和层归一化
+  Day5: [exercise|understand] Transformer编码器原理剖析 — 阅读并调试Transformer编码器源码，可视化注意力权重，理解并行化处理
+  Day6: [learn|understand] 预训练语言模型微调基础 — 了解BERT、GPT等预训练模型的结构与Pretrain-Finetune范式，学习下游任务适配
+  Day6: [exercise|understand] 预训练模型微调实践 — 使用HuggingFace Transformers库加载BERT，在SST-2数据集上完成微调与评估
+  Day7: [review|understand] NLP任务类型区分与总结回顾 — 系统梳理文本分类、序列标注、生成、抽取等任务对应的模型与评价指标
+  Day7: [exercise|understand] 综合练习与知识图谱构建 — 选择一个小型NLP项目（如新闻分类或命名实体识别），端到端实现并撰写学习笔记
+  里程碑: ['掌握文本预处理与词向量表示方法', '理解循环神经网络与序列建模核心思想', '实现注意力机制并理解Transformer架构', '完成预训练语言模型微调实践，建立NLP任务全局观']
+
+【Judge 评分】 A=18 D=19 H=17 S=18 F=18 total=90.0
+  brief: 目标明确，知识点拆解全面，排期合理，适配学生情况，整体一致。
+
+================================================================================
+Case #4  diff=2  score=91.0  |  学术目标：GNN零基础+论文导向
+================================================================================
+
+【用户输入】
+  毕业论文要写图神经网络方面的，但我GNN零基础。三个月时间，每天大概3小时，希望能从入门到能复现论文。
+
+【GoalAgent 输出】
+  标题: 图神经网络从入门到论文复现
+  主题: 图神经网络 (Graph Neural Networks)
+  层级: apply
+  动机: 完成毕业论文，需要掌握图神经网络并能复现相关论文
+  约束: ['时间限制：三个月，每天3小时', '已有基础：零基础']
+  response: 了解了，你希望在三个月内从零基础开始学习图神经网络，最终达到能够复现论文的水平，以支持毕业论文的撰写。这个目标很有挑战性，但通过合理规划是可以实现的。我们接下来会针对你的时间和基础制定学习路径。
+
+【DecomposeAgent 输出】
+  宏观主题(6): ['图论基础与图数据表示', '消息传递与图神经网络基本框架', '经典图神经网络模型', '图神经网络的训练与评估', '扩展主题与前沿发展', '论文复现与实践']
+  微观技能(10):
+    - 图的基本概念与矩阵表示 [understand] parent=图论基础与图数据表示  |  区分有向图/无向图、有权图/无权图，熟练写出邻接矩阵、度矩阵、拉普拉斯矩阵及其归一化形式
+    - 图数据的预处理与批量化 [apply] parent=图论基础与图数据表示  |  使用PyG/DGL等库加载Cora、PubMed等标准图数据，理解节点特征、边索引、数据拆分等实际操作
+    - 消息传递范式的数学表达 [understand] parent=消息传递与图神经网络基本框架  |  将邻居聚合过程写成消息函数、聚合函数、更新函数的形式，理解其与Weisfeiler-Lehman同构测试的关联
+    - 图卷积网络（GCN）的谱域与空域推导 [analyze] parent=经典图神经网络模型  |  从图傅里叶变换理解谱域GCN，再过渡到空域一阶近似，能推导二层GCN的前向传播公式
+    - 归纳式学习与GraphSAGE采样策略 [apply] parent=经典图神经网络模型  |  掌握GraphSAGE的邻居采样、聚合器设计（均值、LSTM、池化），理解其如何实现归纳式节点嵌入
+    - 图注意力网络（GAT）的注意力计算 [analyze] parent=经典图神经网络模型  |  推导GAT中的注意力系数计算与多头注意力机制，分析其与GCN和GraphSAGE的差异
+    - 节点分类与图分类任务的训练实现 [apply] parent=图神经网络的训练与评估  |  编写完整的训练循环，实现早停、学习率衰减，比较micro-F1、macro-F1等指标，并能诊断过平滑现象
+    - GNN模型的代码实现与调参 [apply] parent=图神经网络的训练与评估  |  基于PyTorch Geometric从零搭建GCN/GAT/GraphSAGE，调整隐藏层维度、层数、dropout等关键超参数
+    - 异构图与关系图神经网络 [understand] parent=扩展主题与前沿发展  |  区分同构/异构图，了解RGCN、HAN等模型如何处理多种节点与边类型
+    - 论文阅读与实验重现计划 [create] parent=论文复现与实践  |  选择一篇经典GNN论文，制定复现路线：阅读论文→下载基准数据→搭建模型→对比原文结果→撰写分析报告
+  前置知识(4):
+    - 线性代数与矩阵运算 [required]  |  矩阵乘法、特征值分解、矩阵的谱半径、对称矩阵的性质，是理解GCN谱域推导和拉普拉斯矩阵的基础
+    - 概率论与信息论基础 [recommended]  |  交叉熵损失、KL散度、注意力机制中的softmax等概念需要基本的概率与信息论知识
+    - 机器学习与深度神经网络基础 [required]  |  掌握梯度下降、反向传播、过拟合、正则化等概念，能区分监督/半监督/无监督学习
+    - PyTorch基本使用 [required]  |  能够使用PyTorch定义模型、优化器、数据加载，熟悉张量操作和自动求导，为使用PyG/DGL铺路
+  summary: 亲爱的同学，你的学习路径可以这样规划：先用两周补强图论与线性代数基础，然后快速进入消息传递框架的直观理解；接下来三四周深入剖析GCN、GraphSAGE、GAT等经典模型，边学边用PyTorch Geometric实现它们；之后结合节点分类和图分类任务反复训练调优，同时关注过平滑等问题；最后留一个月专门阅读和复现你感兴趣的目标论文。整个过程每天3小时，完全能在三个月内从零基础达到复现顶会GNN论文的水平。
+
+【ScheduleAgent 输出】
+  标题: 图神经网络从入门到论文复现学习计划
+  总天数: 14 | 每日容量: 3 任务
+  步骤数: 29
+  Day1: [review|understand] 线性代数与矩阵运算 — 快速回顾矩阵乘法、特征分解、谱理论等关键概念，为图矩阵表示打基础
+  Day1: [review|understand] 概率论与信息论基础 — 复习条件概率、贝叶斯公式、交叉熵等，为损失函数和信息传递理解做准备
+  Day1: [review|understand] 机器学习与深度神经网络基础 — 回顾前馈网络、反向传播、优化器，确保能理解GNN训练流程
+  Day2: [review|apply] PyTorch基本使用 — 练习PyTorch张量操作、自动求导、DataLoader，为后续代码实现做准备
+  Day2: [learn|understand] 图的基本概念与矩阵表示 — 学习图的邻接矩阵、度矩阵、拉普拉斯矩阵及其归一化形式，理解图的结构描述
+  Day3: [learn|understand] 图数据的预处理与批量化 — 掌握常见图数据格式（如DGLGraph/PyG Data），学习批处理图的块对角构造方法
+  Day3: [learn|understand] 消息传递范式的数学表达 — 深入理解消息传递、聚合、更新三步框架，推导通用的消息传递方程
+  Day4: [learn|understand] 图卷积网络（GCN）的谱域推导 — 从图傅里叶变换出发，推导谱域图卷积，理解切比雪夫多项式近似与一阶简化
+  Day4: [learn|understand] 图卷积网络（GCN）的空域推导 — 从邻居聚合的角度解释GCN，对比谱域与空域视角的等价性
+  Day5: [exercise|apply] 实现GCN层 — 使用PyTorch或PyG手动实现GCN前向传播，验证输出维度
+  Day5: [exercise|apply] 在节点分类任务上应用GCN — 在Cora、CiteSeer等引文网络数据集上训练两层GCN，完成节点分类并报告准确率
+  Day6: [learn|understand] 归纳式学习与GraphSAGE采样策略 — 学习归纳式学习的必要性，掌握GraphSAGE的邻居采样、聚合函数（mean/LSTM/pool）
+  Day6: [exercise|apply] 实现GraphSAGE — 基于PyG实现带采样的GraphSAGE，在更大规模图上验证归纳能力
+  Day7: [learn|understand] 图注意力网络（GAT）的注意力计算 — 推导多头注意力在图上的计算方式，理解注意力系数与归一化
+  Day7: [exercise|apply] 实现GAT层 — 实现多头注意力GAT层，替换GCN并在PPI等数据集上测试
+  Day8: [learn|understand] 图分类任务的训练实现 — 学习图级别的读出(readout)操作（平均、求和、Set2Set），构建图分类pipeline
+  Day8: [learn|understand] 节点分类与图分类的评估指标与实验设计 — 掌握准确率、F1、ROC-AUC等指标，设计合理的训练/验证/测试划分
+  Day9: [exercise|apply] GNN模型调参与优化 — 针对过平滑、过拟合问题调整学习率、隐藏维度、层数、Dropout等
+  Day9: [exercise|apply] 横向对比GCN、GraphSAGE、GAT — 在统一实验设置下对比三种模型的性能与效率，撰写实验报告
+  Day10: [learn|understand] 异构图与关系图神经网络 — 学习异构图概念，掌握RGCN、HAN等模型处理多种节点和边类型的方法
+  Day10: [exercise|apply] 处理异构图数据 — 使用PyG或DGL加载异构图数据集，构建简单的RGCN进行节点分类
+  Day11: [learn|analyze] 经典GNN论文精读（如GCN原文） — 逐段阅读论文，理解动机、方法、实验设计，记录关键公式和实验细节
+  Day11: [learn|understand] 分析论文代码仓库与实验配置 — 查找论文官方/开源代码，理解数据预处理、模型定义、训练脚本的结构
+  Day12: [exercise|apply] 复现论文核心实验 — 基于作者代码或自己实现，运行实验并尽力复现论文中的表格关键结果
+  Day12: [exercise|evaluate] 调试与结果记录 — 对比复现结果与原论文，分析差异并记录，编写简短复现报告
+  Day13: [learn|understand] 图神经网络的扩展应用 — 浏览GNN在推荐系统、药物发现、计算机视觉等领域的应用案例，拓宽视野
+  Day13: [learn|understand] 前沿发展概述 — 了解图Transformer、等变GNN、自监督学习等方向的最新趋势
+  Day14: [review|understand] 整体回顾与知识梳理 — 整理学习笔记，绘制知识图谱，反思遇到的问题与解决方案
+  Day14: [exercise|create] 小型综合项目或总结报告 — 选择一个有趣的数据集，完整走一遍数据处理、模型选型、训练、分析流程，输出报告
+  里程碑: ['完成图论基础与消息传递理论学习，能手动推导GCN前向公式', '在Cora数据集上使用自实现GCN达到≥80%的节点分类准确率', '成功复现一篇经典GNN论文的主要实验，误差在可接受范围内']
+
+【Judge 评分】 A=18 D=19 H=17 S=18 F=19 total=91.0
+  brief: 目标明确，拆解详尽，排期合理，适配度高，整体一致
+
+================================================================================
+Case #5  diff=2  score=91.0  |  短期实操：具体工具+时间紧
+================================================================================
+
+【用户输入】
+  两周内学会用sklearn做分类和回归，要能独立完成一个简单的预测项目。有Python基础但没做过ML，每天1.5小时。
+
+【GoalAgent 输出】
+  标题: 两周内掌握sklearn分类与回归及预测项目实战
+  主题: scikit-learn分类与回归算法
+  层级: apply
+  动机: 希望快速入门机器学习，能独立完成简单预测项目
+  约束: ['每天学习1.5小时，总时长两周', '有Python基础，无机器学习经验']
+  response: 好的，你的目标是在两周内学会用sklearn进行分类和回归，并能独立完成一个简单预测项目。考虑到你每天有1.5小时且已具备Python基础，我会为你设计一条从理解核心概念到动手实践的高效路径。
+
+【DecomposeAgent 输出】
+  宏观主题(7): ['scikit-learn基础工作流', '数据预处理', '回归算法', '分类算法', '模型评估与选择', '模型调参', '预测项目实践']
+  微观技能(12):
+    - 数据拆分与fit/predict循环 [apply] parent=scikit-learn基础工作流  |  使用train_test_split划分数据，并用估计器的fit和predict方法完成训练与预测
+    - 数值数据预处理流水线 [apply] parent=数据预处理  |  通过Pipeline组合缺失值填充(SimpleImputer)与标准化(StandardScaler)，避免数据泄露
+    - 线性回归建模 [apply] parent=回归算法  |  用LinearRegression拟合连续目标，解释系数含义并预测新样本
+    - 决策树回归与过拟合分析 [analyze] parent=回归算法  |  构建DecisionTreeRegressor，观察不同树深度下训练/测试误差变化，识别过拟合
+    - 逻辑回归分类 [apply] parent=分类算法  |  使用LogisticRegression进行二分类，理解概率阈值和决策边界
+    - 随机森林分类 [apply] parent=分类算法  |  应用RandomForestClassifier，通过feature_importances_评估特征贡献，比较集成效果
+    - KNN分类器及其k值影响 [analyze] parent=分类算法  |  训练KNeighborsClassifier，分析邻居数量k对偏差-方差权衡的影响
+    - 交叉验证评估稳定性 [evaluate] parent=模型评估与选择  |  调用cross_val_score进行k折交叉验证，观察性能波动
+    - 分类指标与ROC曲线 [evaluate] parent=模型评估与选择  |  计算精确率、召回率，绘制ROC曲线并选择合适阈值
+    - 回归指标计算 [evaluate] parent=模型评估与选择  |  使用mean_squared_error, mean_absolute_error, r2_score评估回归模型
+    - 网格搜索自动调参 [apply] parent=模型调参  |  通过GridSearchCV在参数网格上搜索，自动选取交叉验证最优模型
+    - 端到端预测项目实践 [create] parent=预测项目实践  |  完整流程：加载数据、探索、预处理、选择模型、评估、调参，并预测新样本
+  前置知识(4):
+    - Python编程基础 [required]  |  掌握函数定义、循环、条件判断和常见数据结构的操作
+    - NumPy与Pandas基本操作 [required]  |  能用pandas读取CSV、查看数据形状与摘要，进行DataFrame切片、分组等基本操作
+    - 基本统计量 [required]  |  理解均值、方差、标准差、相关系数的含义，能利用它们描述数据
+    - 监督学习直观概念 [recommended]  |  知道特征矩阵X、目标向量y的形态，理解训练集与测试集的作用
+  summary: 我们将从sklearn的统一接口入手，接着掌握数据预处理步骤，然后分别学习回归（线性回归、决策树回归）和分类（逻辑回归、随机森林、KNN）的核心算法。进一步通过交叉验证、指标计算和网格搜索进行模型评估与优化，最后把所有技能串联成一个完整的预测项目。按流程循序渐进，每天配合动手练习能高效达成目标。
+
+【ScheduleAgent 输出】
+  标题: 两周掌握sklearn分类与回归实战
+  总天数: 14 | 每日容量: 3 任务
+  步骤数: 27
+  Day1: [review|understand] 前置知识回顾 — 回顾Python基础、NumPy数组操作、Pandas DataFrame基本使用以及常用统计量（均值、方差、分位数等）
+  Day1: [review|understand] 监督学习概念回顾 — 梳理监督学习的基本流程：特征、标签、训练集/测试集、损失函数的直观理解
+  Day2: [learn|understand] scikit-learn基础工作流 — 学习sklearn的统一API设计：估计器（estimator）、fit/predict循环，使用train_test_split划分数据
+  Day2: [exercise|apply] 第一个sklearn示例 — 用简单数据集（如波士顿房价或加利福尼亚房价）完成一次完整的fit/predict流程，观察输出
+  Day3: [learn|understand] 数值数据预处理（一） — 学习缺失值处理（SimpleImputer）、标准化（StandardScaler）和归一化（MinMaxScaler）的原理与代码
+  Day3: [learn|understand] 数值数据预处理（二） — 学习处理数值特征的流水线（Pipeline）构建，理解ColumnTransformer的作用
+  Day4: [exercise|apply] 预处理流水线实践 — 在包含缺失值和不同量纲的数据集上构建预处理流水线，并与模型结合使用
+  Day5: [learn|understand] 线性回归建模 — 学习LinearRegression的原理、假设、参数含义，以及如何解读系数和截距
+  Day5: [exercise|apply] 线性回归实践 — 在回归数据集上训练线性回归模型，计算R²和均方误差（MSE），并可视化拟合结果
+  Day6: [learn|understand] 决策树回归与过拟合 — 学习DecisionTreeRegressor的工作原理，理解max_depth等参数如何控制模型复杂度，识别过拟合与欠拟合
+  Day6: [exercise|apply] 决策树回归实验 — 调整决策树深度，观察训练集与测试集性能变化，绘制学习曲线，体会偏差-方差权衡
+  Day7: [learn|understand] 逻辑回归分类 — 学习LogisticRegression的原理、决策边界、正则化参数C的含义及对模型的影响
+  Day7: [exercise|apply] 逻辑回归实践 — 在二分类数据集上训练逻辑回归模型，绘制决策边界，观察不同C值下的变化
+  Day8: [learn|understand] 随机森林分类 — 学习随机森林的集成思想、n_estimators等关键参数，理解特征重要性
+  Day8: [exercise|apply] 随机森林实践 — 在同一数据集上训练随机森林，对比逻辑回归的性能，绘制特征重要性条形图
+  Day9: [learn|understand] KNN分类器与k值影响 — 学习K近邻算法的原理、距离度量、k值对决策边界和泛化能力的影响
+  Day9: [exercise|apply] KNN实验与分析 — 使用不同k值训练KNN，通过交叉验证选择最佳k，可视化k值与准确率的关系
+  Day10: [learn|understand] 交叉验证与评估稳定性 — 学习交叉验证（KFold、StratifiedKFold、cross_val_score）的原理，理解其如何评估模型稳定性
+  Day10: [exercise|apply] 交叉验证实践 — 在分类和回归数据集上应用交叉验证，计算并比较不同模型的平均性能与标准差
+  Day11: [learn|understand] 分类指标与ROC曲线 — 学习准确率、精确率、召回率、F1-score，以及ROC曲线和AUC的含义与适用场景
+  Day11: [exercise|apply] 分类指标实践 — 在多分类任务中输出分类报告，绘制ROC曲线（OvR），计算AUC值
+  Day12: [learn|understand] 回归指标计算与模型调参 — 学习MAE、MSE、RMSE、R²等回归指标，并了解网格搜索（GridSearchCV）和随机搜索（RandomizedSearchCV）的调参方法
+  Day12: [exercise|apply] 模型调参实践 — 选择一个模型（如随机森林或SVM），使用GridSearchCV进行超参数调优，观察调参前后性能变化
+  Day13: [exercise|apply] 预测项目实战（一） — 选取一个完整数据集（如Titanic或糖尿病预测），完成数据探索、预处理、特征工程、模型训练与选择的完整流程
+  Day13: [exercise|apply] 预测项目实战（二） — 对项目模型进行调优，对比多个候选模型，撰写简洁的分析报告，总结关键发现
+  Day14: [review|understand] 项目完善与回顾 — 完善项目代码，整理笔记，回顾两周内学习的核心概念与技术路线，自我评估掌握程度
+  Day14: [learn|understand] 扩展与展望 — 了解scikit-learn其他常用模块（如聚类、降维），规划下一步学习路径
+  里程碑: ['第4天完成：掌握sklearn基础工作流和数值数据预处理流水线', '第9天完成：熟练使用线性回归、决策树、逻辑回归、随机森林和KNN进行建模', '第12天完成：能够运用交叉验证、多种评估指标和网格搜索对模型进行评估与调优', '第14天完成：独立完成一个端到端的分类或回归预测项目']
+
+【Judge 评分】 A=18 D=19 H=17 S=18 F=19 total=91.0
+  brief: 目标准确，拆解全面，排期合理，适配学生需求，一致性高。
+
+================================================================================
+Case #6  diff=1  score=91.0  |  入门转折：有编程不知方向
+================================================================================
+
+【用户输入】
+  刚学完Python基础（列表、字典、函数、类），下一步该学什么来入门AI？每天大概2小时。
+
+【GoalAgent 输出】
+  标题: 人工智能基础入门
+  主题: 人工智能核心概念与基础算法
+  层级: understand
+  动机: 希望从Python编程转向人工智能领域的学习
+  约束: ['每天约2小时学习时间']
+  response: 你的Python基础打得很好，下一步我们可以从人工智能的核心概念和经典算法开始，逐步理解机器学习的基本思想。每天2小时的节奏很合适，我会帮你规划清晰的学习路径。
+
+【DecomposeAgent 输出】
+  宏观主题(6): ['人工智能概览与问题类型', '机器学习基础概念', '监督学习经典算法', '无监督学习入门', '深度学习感知与神经网络初步', 'AI项目实践与评估']
+  微观技能(12):
+    - 区分AI、机器学习、深度学习的层级关系 [understand] parent=人工智能概览与问题类型  |  能用简单语言说出三者的从属关系并举例。
+    - 识别任务类型（分类、回归、聚类） [apply] parent=人工智能概览与问题类型  |  针对给定实际场景判断属于哪种机器学习任务。
+    - 构建并划分训练/测试集 [apply] parent=机器学习基础概念  |  用scikit-learn的train_test_split完成数据划分并理解其必要性。
+    - 解释过拟合与欠拟合现象 [analyze] parent=机器学习基础概念  |  能根据学习曲线判断模型状态并给出简单纠正方向。
+    - 实现K近邻分类器 [apply] parent=监督学习经典算法  |  使用Python手动实现简单版KNN或调用sklearn完成分类任务。
+    - 训练并解释线性回归 [apply] parent=监督学习经典算法  |  完成房价预测等回归任务，解读系数含义。
+    - 逻辑回归与二分类决策边界 [apply] parent=监督学习经典算法  |  实现逻辑回归并可视化决策边界，理解sigmoid函数。
+    - K-means聚类实验 [apply] parent=无监督学习入门  |  对二维数据执行K-means并观察聚类效果与K值影响。
+    - 主成分分析降维可视化 [apply] parent=无监督学习入门  |  对高维数据集应用PCA降至2/3维并可视化，理解方差解释率。
+    - 构建简单神经网络模型（多层感知机） [create] parent=深度学习感知与神经网络初步  |  使用TensorFlow或PyTorch搭建包含隐藏层的全连接网络。
+    - 模型性能评估与指标选择 [evaluate] parent=AI项目实践与评估  |  计算准确率、精确率、召回率、F1-score，并根据问题类型选择合适指标。
+    - 完成一个端到端分类项目 [create] parent=AI项目实践与评估  |  从数据加载、探索、预处理到模型训练、评估的完整流程，撰写简要报告。
+  前置知识(5):
+    - Python面向对象编程（类与对象） [required]  |  能够定义类、创建实例、使用方法，以便封装算法或数据处理逻辑。
+    - NumPy基础数组操作 [required]  |  掌握ndarray创建、切片、形状变换和向量化运算，是数据处理和算法实现的数学基础。
+    - Pandas数据框基本操作 [required]  |  能读取CSV、进行分组、过滤、填充缺失值等操作，用于数据预处理。
+    - Matplotlib/Seaborn基础绘图 [recommended]  |  绘制散点图、线图、直方图等，用于数据探索和结果可视化。
+    - 线性代数初步（向量、矩阵运算） [recommended]  |  理解点积、矩阵乘法和基本几何含义，帮助理解模型参数更新与特征变换。
+  summary: 从AI整体框架入手，先理解任务类型和基础概念，再逐步上手经典监督/无监督算法并用Python实现，最后通过小型项目练习评估与集成。每天2小时建议先巩固NumPy/Pandas，再按顺序完成微观技能练习。
+
+【ScheduleAgent 输出】
+  标题: 人工智能基础入门 7 天学习计划
+  总天数: 7 | 每日容量: 3 任务
+  步骤数: 21
+  Day1: [review|understand] Python 面向对象编程回顾 — 回顾类与对象的定义、继承、方法等核心概念，为后续算法实现打基础
+  Day1: [learn|understand] NumPy 数组基础 — 学习创建、索引、变形、广播等数组操作，理解向量化计算的优势
+  Day1: [learn|understand] Pandas 数据框基本操作 — 学习数据读取、过滤、分组、合并等操作，掌握结构化数据处理方式
+  Day2: [learn|understand] 数据可视化基础 — 使用 Matplotlib 和 Seaborn 绘制折线图、散点图、直方图，理解可视化在数据分析中的作用
+  Day2: [learn|understand] 线性代数初步 — 复习向量、矩阵、点积、矩阵乘法等运算，建立对特征空间的基本直觉
+  Day2: [exercise|understand] 数据操作与可视化练习 — 使用 Pandas 处理一个真实数据集，并用 Matplotlib 进行探索性可视化，巩固前两日所学
+  Day3: [learn|understand] 人工智能概览：AI、ML、DL 层级关系 — 讲解人工智能、机器学习、深度学习的包含关系与关键里程碑，建立宏观认知
+  Day3: [learn|understand] 任务类型：分类、回归、聚类 — 通过实例区分监督学习、无监督学习，识别分类、回归、聚类等典型问题
+  Day3: [exercise|understand] 任务类型辨识练习 — 给定一系列现实场景，判断应使用分类、回归还是聚类，并说明理由
+  Day4: [learn|understand] 训练集与测试集划分 — 理解数据拆分的目的，学习留出法与交叉验证的基本思想，使用 scikit-learn 实现划分
+  Day4: [learn|understand] 过拟合与欠拟合 — 解释模型容量、偏差-方差权衡，能识别训练/验证曲线中的过拟合与欠拟合现象
+  Day4: [exercise|understand] 数据划分与拟合现象实验 — 对一个回归数据集进行不同复杂度的多项式拟合，观察过拟合与欠拟合的曲线表现
+  Day5: [learn|understand] K 近邻分类器 (KNN) — 学习 KNN 的基本原理、距离度量、k 值影响，并基于 scikit-learn 实现一个 KNN 分类器
+  Day5: [learn|understand] 线性回归 — 推导最小二乘解，理解损失函数、梯度下降，能训练并解释线性回归模型的系数
+  Day5: [learn|understand] 逻辑回归与二分类决策边界 — 掌握 sigmoid 函数、交叉熵损失，理解决策边界的几何意义，完成二分类预测
+  Day6: [learn|understand] K-means 聚类 — 学习 K-means 的迭代过程、肘部法则，用 scikit-learn 进行聚类实验并可视化结果
+  Day6: [learn|understand] 主成分分析 (PCA) 降维 — 理解特征值分解、方差解释率，实现 PCA 降维并可视化高维数据在二维平面上的分布
+  Day6: [exercise|understand] 聚类与降维综合练习 — 对一个未标注数据集先使用 PCA 降维，再进行 K-means 聚类，评估聚类效果并绘制图表
+  Day7: [learn|understand] 深度学习与多层感知机 (MLP) 初步 — 介绍神经元、激活函数、前向传播与反向传播的基本概念，搭建一个简单 MLP 模型
+  Day7: [exercise|understand] 构建并训练简单神经网络 — 使用 Keras/PyTorch 构建一个多层感知机，在 MNIST 或简单数据集上训练并观察收敛过程
+  Day7: [review|understand] AI 项目评估与回顾 — 梳理完整 AI 项目流程：数据准备、模型选择、训练评估，回顾整周所学并解答疑问
+  里程碑: ['完成前置知识复习与数据操作，能够熟练使用 Python 科学计算栈', '掌握机器学习基础概念与监督学习经典算法，独立实现 KNN、线性/逻辑回归', '实现无监督学习与简单神经网络，理解 PCA 降维和 MLP 训练流程']
+
+【Judge 评分】 A=18 D=19 H=17 S=18 F=19 total=91.0
+  brief: 目标精准，知识点全面，排期稍紧，整体适配良好
+
+================================================================================
+Case #7  diff=1  score=91.0  |  极简微计划：零基础+极短时间
+================================================================================
+
+【用户输入】
+  每天只有1小时学AI，帮我安排一周的学习计划。目前零基础，想看看AI是什么。
+
+【GoalAgent 输出】
+  标题: 人工智能初探
+  主题: 人工智能基础概念与应用领域
+  层级: understand
+  动机: 了解人工智能是什么，建立对AI领域的基本认识。
+  约束: ['每天学习时间不超过1小时', '零基础']
+  response: 了解了，你希望在接下来的一周里，每天用1小时来初步了解人工智能是什么。我会为你规划一个轻松入门的学习路线，从基本概念到有趣的应用，帮助你建立对AI的整体认识。
+
+【DecomposeAgent 输出】
+  宏观主题(5): ['人工智能定义与历史', 'AI核心子领域', 'AI典型应用场景', '数据与算法基础意识', 'AI伦理与社会影响']
+  微观技能(7):
+    - 区分弱AI、强AI与通用AI [understand] parent=人工智能定义与历史  |  能用自己的话解释AI的不同层次与当前能力边界
+    - 简述AI发展简史与标志性事件 [remember] parent=人工智能定义与历史  |  能列举图灵测试、深蓝、AlphaGo等里程碑
+    - 识别机器学习与传统编程的区别 [understand] parent=AI核心子领域  |  能说明数据驱动与规则驱动两种范式的核心差异
+    - 列举监督学习、无监督学习、强化学习的基本例子 [remember] parent=AI核心子领域  |  能口头举出各自1-2个现实应用
+    - 说出至少3个AI落地的真实案例 [remember] parent=AI典型应用场景  |  能描述人脸识别、语音助手、内容推荐等场景的基本原理
+    - 绘制一个简化的机器学习工作流 [apply] parent=数据与算法基础意识  |  能画出从数据采集到模型评估的基本步骤
+    - 讨论一个AI伦理困境 [analyze] parent=AI伦理与社会影响  |  能分析自动驾驶中碰撞选择的伦理矛盾或推荐系统中的算法偏见现象
+  前置知识(3):
+    - 基本计算机操作能力 [required]  |  熟悉文件管理、浏览器使用、基础办公软件
+    - 逻辑思维与基本数学概念 [recommended]  |  了解函数、方程、概率等初中级数学概念
+    - 对科技新闻的基本关注 [recommended]  |  知道ChatGPT、自动驾驶等近期AI话题
+  summary: 你将从认识AI是什么开始，了解它的历史与能力边界，然后快速浏览机器学习、计算机视觉等关键子领域，并通过真实案例感受AI如何改变生活。最后你会试着画出简单的AI工作流，并参与一次伦理讨论。整体难度偏向理解与记忆，每天1小时，一周刚好可以建立起对AI的系统性初识。
+
+【ScheduleAgent 输出】
+  标题: 人工智能初探学习计划
+  总天数: 7 | 每日容量: 3 任务
+  步骤数: 14
+  Day1: [learn|understand] 人工智能定义与历史 — 学习人工智能的定义，区分弱AI、强AI与通用AI，了解AI发展简史与标志性事件。
+  Day1: [review|understand] 人工智能定义与历史 — 回顾AI的三类划分，用自己的话总结AI发展历程中的关键转折点。
+  Day2: [learn|understand] AI核心子领域 — 了解机器学习与传统编程的区别，学习监督学习、无监督学习、强化学习的基本例子。
+  Day2: [exercise|understand] AI核心子领域 — 针对每种学习类型举出一个生活中的实际例子，并简单说明其工作原理。
+  Day3: [learn|understand] 数据与算法基础意识 — 理解数据在AI中的作用，学习机器学习工作流的主要环节：数据收集、预处理、模型训练、评估和部署。
+  Day3: [exercise|understand] 数据与算法基础意识 — 绘制一个简化的机器学习工作流图，并标注各环节的输入和输出。
+  Day4: [learn|understand] AI典型应用场景 — 学习AI在医疗、交通、金融、教育等领域的真实落地案例，说出至少3个具体应用。
+  Day4: [review|understand] AI典型应用场景 — 整理案例库，对比不同应用场景中AI技术的异同点。
+  Day5: [learn|understand] AI伦理与社会影响 — 探讨AI伦理核心议题，如公平性、隐私、责任归属，并阅读一个经典AI伦理困境案例。
+  Day5: [exercise|understand] AI伦理与社会影响 — 选择一个AI伦理困境，撰写简短讨论，分析不同利益相关者的视角。
+  Day6: [review|understand] 综合回顾与应用 — 回顾本周所有知识点，制作思维导图连接AI定义、子领域、应用与伦理。
+  Day6: [exercise|understand] 综合回顾与应用 — 完成一份综合小测：区分AI类型、匹配学习算法与场景、简述一个伦理观点。
+  Day7: [learn|understand] 拓展与反思 — 阅读一篇关于AI前沿趋势的科普文章，了解生成式AI、大模型等新概念。
+  Day7: [exercise|understand] 拓展与反思 — 撰写200字反思：你对AI的未来持乐观还是谨慎态度？结合本周学习说明理由。
+  里程碑: ['完成AI定义与历史的初步理解', '掌握机器学习的三种基本类型及例子', '画出并解释机器学习工作流', '收集并阐述至少3个AI应用案例', '形成对AI伦理的基本分析能力', '完成综合回顾与自我检测']
+
+【Judge 评分】 A=18 D=19 H=17 S=18 F=19 total=91.0
+  brief: 目标明确，知识点全面，排期合理，高度适配学生需求。
+
+================================================================================
+Case #8  diff=1  score=88.0  |  一句话：无任何背景信息
+================================================================================
+
+【用户输入】
+  帮我制定一个机器学习入门学习计划。
+
+【GoalAgent 输出】
+  标题: 机器学习入门学习计划
+  主题: 机器学习基础
+  层级: understand
+  动机: 希望系统了解机器学习的基本概念和方法
+  约束: []
+  response: 好的，我将为你梳理机器学习入门的学习目标，从核心概念到常用算法，帮你建立清晰的知识框架。让我们一起迈出第一步吧！
+
+【DecomposeAgent 输出】
+  宏观主题(6): ['机器学习概述', '数据预处理与特征工程', '监督学习核心算法', '模型评估与选择', '无监督学习与聚类', '机器学习项目实战流程']
+  微观技能(11):
+    - 区分监督、无监督、半监督与强化学习 [understand] parent=机器学习概述  |  根据数据标注情况和学习目标准确分类不同的学习范式。
+    - 识别过拟合与欠拟合现象 [analyze] parent=机器学习概述  |  通过训练误差和验证误差的变化曲线诊断偏差-方差问题。
+    - 处理缺失值与异常值 [apply] parent=数据预处理与特征工程  |  使用删除、填充（均值/中位数/众数）、插值等方法清洗数据。
+    - 特征缩放与编码 [apply] parent=数据预处理与特征工程  |  对数值特征进行标准化/归一化，对类别特征进行One-Hot或标签编码。
+    - 实现线性回归与逻辑回归 [apply] parent=监督学习核心算法  |  理解线性模型的假设，能够用梯度下降或解析解训练模型。
+    - 理解决策树分裂准则 [analyze] parent=监督学习核心算法  |  比较信息增益、基尼系数等分裂标准，并可视化决策边界。
+    - 使用交叉验证调参 [evaluate] parent=模型评估与选择  |  运用k折交叉验证结合网格搜索或随机搜索选择最优超参数。
+    - 绘制并解读ROC曲线与AUC值 [analyze] parent=模型评估与选择  |  评估二分类模型的性能，理解阈值对TPR和FPR的影响。
+    - 应用K-Means聚类并选取K值 [apply] parent=无监督学习与聚类  |  使用肘部法则和轮廓系数确定簇的个数，并对数据进行聚类。
+    - 用PCA可视化高维数据 [apply] parent=无监督学习与聚类  |  能解释主成分的方差贡献率，将数据降到2维或3维进行可视化。
+    - 构建端到端ML流水线 [create] parent=机器学习项目实战流程  |  将数据预处理、特征工程、建模、评估整合为可复用的pipeline。
+  前置知识(4):
+    - Python编程基础（numpy, pandas, matplotlib） [required]  |  能够使用numpy进行矩阵运算，使用pandas读取和操作表格数据，使用matplotlib绘制基本图形。
+    - 线性代数基础（向量、矩阵、特征值） [required]  |  理解向量和矩阵的运算法则，能计算矩阵乘法、求逆、特征值分解等。
+    - 概率与统计基础（条件概率、分布、估计） [required]  |  理解概率密度函数、条件概率、贝叶斯定理、均值和方差等概念。
+    - 微积分初步（导数、梯度） [recommended]  |  理解函数求导、偏导数、梯度的含义，能够计算简单函数的导数。
+  summary: 这个学习计划从机器学习基本概念出发，逐步深入到数据预处理、经典监督与无监督算法，最后通过模型评估和项目实战巩固所学。建议先确保 Python 和必要的数学基础牢固，再按顺序推进各个主题，每个主题都结合代码练习加深理解。
+
+【ScheduleAgent 输出】
+  标题: 机器学习入门7天学习计划
+  总天数: 7 | 每日容量: 3 任务
+  步骤数: 19
+  Day1: [learn|understand] 机器学习概述 — 学习机器学习的定义、应用场景，区分监督学习、无监督学习、半监督学习与强化学习
+  Day1: [learn|understand] 过拟合与欠拟合 — 理解过拟合与欠拟合的概念、产生原因及解决方案
+  Day1: [exercise|understand] 概念辨析练习 — 完成一组选择题或简答题，正确区分各类学习任务及判断数据场景下的缺陷
+  Day2: [learn|understand] 数据预处理 — 学习处理缺失值与异常值的方法（删除、插补、转换等）
+  Day2: [learn|understand] 特征工程基础 — 掌握特征缩放（归一化、标准化）和类别特征编码（独热编码、标签编码）的原理
+  Day2: [exercise|understand] 数据处理练习 — 使用Python的pandas和scikit-learn对给定的数据集进行缺失值处理和特征缩放编码操作
+  Day3: [learn|understand] 线性回归与逻辑回归 — 学习线性回归（最小二乘原理）与逻辑回归（sigmoid函数、交叉熵损失）的基本推导与应用场景
+  Day3: [learn|understand] 决策树分裂准则 — 理解决策树的分裂过程，比较ID3、C4.5和CART算法中的信息增益、增益率与基尼指数
+  Day3: [exercise|understand] 监督学习算法练习 — 用scikit-learn实现线性回归、逻辑回归和决策树模型，并在小数据集上训练、预测
+  Day4: [learn|understand] 模型评估与选择 — 学习常用评估指标（准确率、精确率、召回率、F1分数），理解ROC曲线与AUC值的含义
+  Day4: [learn|understand] 交叉验证调参 — 掌握交叉验证的原理（K折交叉验证）及如何用于模型选择和超参数调优
+  Day4: [exercise|understand] 评估与调参练习 — 结合前一日的模型，绘制ROC曲线、计算AUC，用GridSearchCV进行交叉验证调参并比较结果
+  Day5: [learn|understand] K-Means聚类 — 学习K-Means算法原理，理解如何选取K值（肘部法则、轮廓系数）及其优缺点
+  Day5: [learn|understand] PCA降维与可视化 — 理解主成分分析（PCA）的数学思想，学习如何使用PCA对高维数据进行降维和可视化
+  Day5: [exercise|understand] 无监督学习练习 — 使用scikit-learn对数据集进行K-Means聚类并评估最佳K值，用PCA将特征降至2维并可视化聚类结果
+  Day6: [learn|understand] 机器学习项目实战流程 — 了解一个完整机器学习项目的步骤：问题定义、数据收集与清洗、探索性分析、建模、评估与部署
+  Day6: [exercise|understand] 综合项目练习 — 选择一个经典数据集（如泰坦尼克号或房价预测），按照项目流程完成从数据预处理到模型评估的全过程
+  Day7: [review|understand] 知识回顾与查漏补缺 — 回顾前6天学习的所有关键概念，梳理知识体系，整理疑惑点并通过查找资料或复现代码解决
+  Day7: [exercise|understand] 拓展练习 — 完成一组涵盖分类、回归、聚类和降维的综合性习题，撰写简短的学习总结与反思
+  里程碑: ['第2天结束：能独立完成数据预处理与特征工程', '第4天结束：能实现并评估常见监督学习算法', '第5天结束：掌握无监督学习基础方法并可视化', '第7天结束：完成一个端到端的机器学习小项目']
+
+【Judge 评分】 A=18 D=19 H=17 S=16 F=18 total=88.0
+  brief: 目标准确，知识点全面，排期合理，适配度稍低
+

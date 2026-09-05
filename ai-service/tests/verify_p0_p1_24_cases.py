@@ -30,7 +30,7 @@ logging.getLogger("app.utils.content_guard").setLevel(logging.ERROR)
 logging.getLogger("app.utils.security_logger").setLevel(logging.ERROR)
 
 # ── LLM-as-Judge 初始化 ────────────────────────────────────────────────
-# 复用 PROFILE_DIRECTOR 的 flash 通道 (deepseek-v4-flash, DashScope)
+# 复用 PROFILE_DIRECTOR 的 MiniMax-M3 通道
 # 与 profile_agent.semantic_judge 共享同一条低成本快速通道
 
 from app.services.llm_service import PROFILE_DIRECTOR, OpenAILLM
