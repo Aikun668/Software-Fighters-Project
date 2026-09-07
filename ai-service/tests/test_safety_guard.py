@@ -120,7 +120,9 @@ class TestHallucinationGuard:
     def test_verify_and_format_low(self, mock_kb):
         guard = HallucinationGuard(mock_kb)
         result = guard.verify_and_format("这是一段完全虚构的内容没有任何依据。第二个虚构说法也无法验证。第三个随机句子也一样无法查证。")
-        assert "内容核查" in result or "仅供参考" in result
+        # af-01 修复：正文原样返回，内部核查文本只进日志，不拼接进回答
+        assert "内容核查" not in result
+        assert "置信度" not in result
 
 
 class TestComputeConfidence:

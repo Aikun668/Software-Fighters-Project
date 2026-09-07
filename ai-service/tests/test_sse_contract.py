@@ -21,7 +21,7 @@ from httpx import ASGITransport, AsyncClient
 from unittest.mock import AsyncMock
 
 import internal_api
-from app.events.types import content_event, done_event
+from app.events.types import content_event, done_event, error_event, inquiry_event
 from app.utils.sse_heartbeat import sse_heartbeat_generator
 
 pytestmark = pytest.mark.asyncio(loop_scope="function")
@@ -145,6 +145,27 @@ class TestSuccessContract:
 # ── 2. 异常终止合同 ──────────────────────────────────────────
 
 class TestExceptionContract:
+    async def test_error_event_exposes_frontend_readable_content(self, sse_client, monkeypatch):
+        center = FakeChatCenter(events=[
+            error_event("auto", "回答生成失败，请稍后再试"),
+            done_event({"summary": "failed"}),
+        ])
+        _install(center, monkeypatch)
+
+        events = await _collect_sse(sse_client, CHAT_OK)
+
+        error = next(event for event in events if event.get("type") == "error")
+        assert error["content"] == "回答生成失败，请稍后再试"
+
+    async def test_empty_success_done_is_converted_to_error_before_done(self, sse_client, monkeypatch):
+        center = FakeChatCenter(events=[done_event({"summary": "only metadata"})])
+        _install(center, monkeypatch)
+
+        events = await _collect_sse(sse_client, CHAT_OK)
+
+        assert [event["type"] for event in events] == ["error", "done"]
+        assert events[0]["content"] == "模型未返回有效内容，请重试"
+
     async def test_pipeline_exception_yields_error_then_done(self, sse_client, monkeypatch):
         center = FakeChatCenter(
             events=[content_event({"response": "前半段"})],
@@ -168,6 +189,71 @@ class TestExceptionContract:
 
         resp = client.post("/internal/api/chat", json=CHAT_OK)
         assert resp.status_code >= 400, "route 异常必须返回错误状态码"
+
+
+# ── 2b. 合法空正文模式不误报（终态合同边界） ────────────────
+
+class TestLegitimateNoTextContentContract:
+    async def test_inquiry_done_is_not_a_failure(self, sse_client, monkeypatch):
+        """追问模式正文就是问题本身，done 载荷 is_clear=False 不得转 error。"""
+        center = FakeChatCenter(events=[
+            inquiry_event("你想了解什么？"),
+            done_event({"type": "inquiry", "question": "你想了解什么？", "is_clear": False}),
+        ])
+        _install(center, monkeypatch)
+
+        events = await _collect_sse(sse_client, CHAT_OK)
+
+        types = [e.get("type") for e in events]
+        assert "error" not in types, f"追问是合法产出，不得误报 error: {types}"
+        assert types.count("done") == 1 and types[-1] == "done"
+
+    async def test_resource_done_without_stream_text_is_success(self, sse_client, monkeypatch):
+        """资源/习题模式正文随 done 载荷下发，无 token 流不算空正文失败。"""
+        center = FakeChatCenter(events=[
+            done_event({"content_blocks": [{"type": "course_doc", "heading": "卷积"}]}),
+        ])
+        _install(center, monkeypatch)
+
+        events = await _collect_sse(sse_client, CHAT_OK)
+
+        types = [e.get("type") for e in events]
+        assert "error" not in types, f"资源模式无流式正文是正常的: {types}"
+        assert types.count("done") == 1 and types[-1] == "done"
+
+    async def test_done_with_error_field_surfaces_error_content(self, sse_client, monkeypatch):
+        """done 载荷携带 error 时，必须先转成前端可读的 error 事件再收尾。"""
+        center = FakeChatCenter(events=[done_event({"error": "资源生成失败，请稍后重试"})])
+        _install(center, monkeypatch)
+
+        events = await _collect_sse(sse_client, CHAT_OK)
+
+        types = [e.get("type") for e in events]
+        error = next(e for e in events if e.get("type") == "error")
+        assert error["content"] == "资源生成失败，请稍后重试"
+        assert types.count("done") == 1 and types[-1] == "done"
+
+    async def test_missing_done_synthesized_exactly_once(self, sse_client, monkeypatch):
+        """管线正常结束但没发 done 时，边界补发恰好一个 done。"""
+        center = FakeChatCenter(events=[content_event({"response": "只有正文"})])
+        _install(center, monkeypatch)
+
+        events = await _collect_sse(sse_client, CHAT_OK)
+
+        types = [e.get("type") for e in events]
+        assert types.count("done") == 1, f"缺失 done 必须恰好补一个: {types}"
+        assert types[-1] == "done"
+
+    async def test_pipeline_error_event_without_done_converges(self, sse_client, monkeypatch):
+        """管线发过 error 但未发 done：不得重复补 error，且必须以唯一 done 收尾。"""
+        center = FakeChatCenter(events=[error_event("auto", "答疑失败")])
+        _install(center, monkeypatch)
+
+        events = await _collect_sse(sse_client, CHAT_OK)
+
+        types = [e.get("type") for e in events]
+        assert types.count("error") == 1, f"管线已发 error，不得重复: {types}"
+        assert types.count("done") == 1 and types[-1] == "done"
 
 
 # ── 3. 非法请求合同 ──────────────────────────────────────────

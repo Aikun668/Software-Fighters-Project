@@ -114,9 +114,17 @@ class HallucinationGuard:
         )
 
     def verify_and_format(self, text: str) -> str:
+        """校验文本并记录低置信警告，正文原样返回。
+
+        P4 评审 af-01：旧实现曾把"内容核查提示：…以下内容置信度较低，仅供参考：…"
+        等 QA 管线内部文本追加进回答正文（60 条真实回答中 15 条命中），且追加发生在
+        sanity 检查之后、无法被拦截。现在核查详情只进日志；用户侧免责声明由
+        kb_verify 的 DISCLAIMER_TEXT 统一承担；结构化报告仍可经 verify() 获取，
+        供将来做成前端独立 UI 元素。
+        """
         report = self.verify(text)
 
-        # 无法验证（无可提取事实声明）— 不附加警告，避免误报
+        # 无法验证（无可提取事实声明）— 无需警告
         if report.verdict == "unverifiable" and not report.coverage_results:
             return text
 
@@ -126,24 +134,9 @@ class HallucinationGuard:
                              report.verdict, report.confidence.overall, report.warnings)
             return text
 
-        # Only add disclaimers when confidence is critically low
         logger.warning("Hallucination guard — LOW confidence (verdict=%s, %.2f): %s",
                        report.verdict, report.confidence.overall, report.warnings)
-
-        parts = [text]
-
-        if report.warnings:
-            parts.append("\n---")
-            parts.append("**内容核查提示：**")
-            for w in report.warnings:
-                parts.append(f"- {w}")
-
-        if report.confidence.low_confidence_claims:
-            parts.append("\n**以下内容置信度较低，仅供参考：**")
-            for claim in report.confidence.low_confidence_claims[:3]:
-                parts.append(f"- {claim[:100]}")
-
-        return "\n".join(parts)
+        return text
 
 
 DISCLAIMER_TEXT = "\n\n> 以上部分内容未在教材中找到对应验证，建议结合教材核实。"

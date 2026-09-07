@@ -37,6 +37,10 @@ class StreamEvent:
             payload["stage"] = self.stage
         if self.message:
             payload["message"] = self.message
+        if self.type is StreamEventType.ERROR:
+            # 错误合同：前端 parseSSEStream 与 Java 网关都从 content 键读取
+            # 错误信息，只带 message 会让用户看到 "Unknown error"
+            payload["content"] = self.message or "处理失败，请稍后重试"
         if self.progress:
             payload["progress"] = round(self.progress, 2)
         if self.data is not None:

@@ -174,10 +174,15 @@ class ResultAgent:
     def _ensure_user_visible_response(result: CenterResult) -> dict:
         """统一 content 合同（Task 11 评审回归项）：前端与 internal_api 的正文
         只从 payload 的 response/content 键提取。中心产物 payload 若两者皆无，
-        合成一条用户可读摘要，避免用户在统一聊天里看到空回答（cap-01/05/06）。"""
+        优先取真实产物文本（solve 的 solution），仍无才合成用户可读摘要
+        （cap-01/05/06）。合不出摘要时保持 payload 原样，空正文由
+        internal_api 的终态合同转成 error，而不是伪造 content。"""
         payload = result.payload if isinstance(result.payload, dict) else {}
         if payload.get("response") or payload.get("content"):
             return payload
+        solution = payload.get("solution")
+        if isinstance(solution, str) and solution.strip():
+            return {**payload, "response": solution, "content": solution}
         summary = ResultAgent._summarize_product(result.mode, payload)
         if not summary:
             return payload
@@ -211,7 +216,9 @@ class ResultAgent:
             return f"已为你生成{quoted}的 {count} 道练习题。" if count else f"已为你生成{quoted}练习题。"
         if mode == "resource":
             return f"已为你生成{quoted}的学习资源。"
-        return f"已完成{mode}处理。"
+        # 无可描述产物（如 auto 中心空回答）时返回空串：由上层终态合同
+        # 补 error，而不是伪造「已完成xx处理。」
+        return ""
 
     def _map_event_type(self, event_type: str) -> StreamEventType:
         mapping = {

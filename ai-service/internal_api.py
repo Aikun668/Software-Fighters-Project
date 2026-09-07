@@ -14,6 +14,7 @@ import os
 import re
 import threading
 import time
+from typing import Any
 
 from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse, FileResponse
@@ -2070,6 +2071,30 @@ async def unified_chat(body: UnifiedChatRequest):
 RECOMMENDATION_EXTRACTION_TIMEOUT_SEC = 10.0
 
 
+def _done_payload_has_content(done_data: Any) -> bool:
+    """done 载荷本身是否携带合法的"无需流式正文"的成功产物。
+
+    资源/习题/路径/画像等模式正文不走 token 流，而是随 done 载荷下发；
+    追问（inquiry）以问题文本作为本轮产出。这些都不算"空正文失败"。
+    summary/results 是终止事件的描述性元数据，不参与判定。
+    """
+    if not isinstance(done_data, dict):
+        return False
+    if done_data.get("is_clear") is False or done_data.get("type") == "inquiry":
+        return True
+    for key in ("content_blocks", "questions", "plan", "_path_steps", "steps", "profile_delta"):
+        value = done_data.get(key)
+        if isinstance(value, list) and value:
+            return True
+        if isinstance(value, dict) and value:
+            return True
+    for key in ("response", "content", "solution"):
+        value = done_data.get(key)
+        if isinstance(value, str) and value.strip():
+            return True
+    return False
+
+
 async def _unified_chat(body: UnifiedChatRequest):
     body = sanitize_model(body)
     message = body.message.strip()
@@ -2092,7 +2117,8 @@ async def _unified_chat(body: UnifiedChatRequest):
 
     async def event_stream():
         assistant_content = ""
-        pending_done: list[str] = []
+        pending_done: list[StreamEvent] = []
+        saw_error = False
 
         try:
             async for event in chat_center.execute(plan):
@@ -2102,11 +2128,13 @@ async def _unified_chat(body: UnifiedChatRequest):
                     elif isinstance(event.data, dict):
                         # 正文键兼容：TutorAgent 用 response，部分中心用 content
                         assistant_content += event.data.get("response", "") or event.data.get("content", "")
+                if event.type == "error":
+                    saw_error = True
                 sse = event.to_sse()
 
                 # Defer DONE event so recommendation can be inserted before it
                 if event.type == "done":
-                    pending_done.append(sse)
+                    pending_done.append(event)
                     continue
 
                 yield sse
@@ -2146,11 +2174,22 @@ async def _unified_chat(body: UnifiedChatRequest):
             logger.warning(f"Recommendation check skipped: {exc}")
 
         # Yield deferred DONE event(s)：终止责任唯一，多个内部 done 收敛为一个
-        if pending_done:
-            yield pending_done[0]
+        final_done = pending_done[0] if pending_done else None
+        final_data = final_done.data if final_done is not None else None
 
-        # Guarantee a DONE event if none was emitted
-        if not pending_done:
+        # 终态合同：失败必须有 error。正文与 done 载荷皆无有效内容（思考模式
+        # 吞掉正文、模型异常、空计划等）时，在 done 前补发 error，前端不得
+        # 渲染空白或以本地假答案顶替。
+        done_error = final_data.get("error") if isinstance(final_data, dict) else None
+        if isinstance(done_error, str) and done_error.strip():
+            yield f"data: {json.dumps({'type': 'error', 'content': done_error}, ensure_ascii=False)}\n\n"
+        elif not assistant_content.strip() and not _done_payload_has_content(final_data) and not saw_error:
+            yield f"data: {json.dumps({'type': 'error', 'content': '模型未返回有效内容，请重试'}, ensure_ascii=False)}\n\n"
+
+        if final_done is not None:
+            yield final_done.to_sse()
+        else:
+            # Guarantee a DONE event if none was emitted
             yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")

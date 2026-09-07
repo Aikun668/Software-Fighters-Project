@@ -22,6 +22,14 @@ _INTERNAL_JSON_KEYS = frozenset({
     "messages_history", "internal_instructions", "few_shot", "kb_evidence",
 })
 
+# 高置信内部核查标记（P4 评审 af-01）：这些 QA 管线措辞只应存在于日志，
+# 出现在回答正文即为泄露。历史脏数据里带着核查块的旧回答可能被模型模仿，
+# 用精确短语拦截，宁可漏过也不用宽泛词（如"仅供参考"）误伤正常回答。
+_INTERNAL_MARKERS = (
+    "内容核查提示",
+    "以下内容置信度较低",
+)
+
 # 未闭合代码围栏：``` 出现奇数次
 _FENCE_RE = re.compile(r"```")
 
@@ -86,6 +94,10 @@ def _has_prompt_leak(text: str) -> bool:
     return bool(set(data.keys()) & _INTERNAL_JSON_KEYS)
 
 
+def _has_internal_marker(text: str) -> bool:
+    return any(marker in text for marker in _INTERNAL_MARKERS)
+
+
 def _has_heavy_repetition(text: str) -> bool:
     # 退化情形：长文本但字符种类极少（如 "哈"×200）
     compact = "".join(text.split())
@@ -148,6 +160,13 @@ def check_response(text: str | None, request_message: str = "") -> SanityResult:
             reason="prompt_leak",
             error_code=ERROR_CODES["prompt_leak"],
             detail="回答为含内部提示字段的 JSON，不重试直接降级",
+        )
+    if _has_internal_marker(text):
+        return SanityResult(
+            verdict=SanityVerdict.USER_SAFE_ERROR,
+            reason="prompt_leak",
+            error_code=ERROR_CODES["prompt_leak"],
+            detail="回答包含内部核查标记，不重试直接降级",
         )
     if _has_heavy_repetition(text):
         return SanityResult(

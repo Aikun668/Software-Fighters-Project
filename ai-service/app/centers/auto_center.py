@@ -80,6 +80,7 @@ class AutoCenter:
                 "messages": messages,
                 "student_profile": student_profile,
                 "style": style,
+                "conversation_id": (task.context or {}).get("conversation_id"),
             })
             blocks = state.get("content_blocks", [])
             response = state.get("response", "")

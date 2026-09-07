@@ -28,6 +28,31 @@ const suggestions = [
 
 const findMessage = (id: string) => messages.value.find((m) => m.id === id)
 
+/**
+ * 已完成的对话历史：只收完整且有正文的 user/assistant 轮次。
+ * - 正在流式生成、内容为空的 assistant 气泡不进历史；对应 user 也不单独送入模型；
+ * - 出错但已有部分正文的 assistant，连同其 user 按用户实际看到的内容保留；
+ * - 不含当前这次要发送的消息（后端会把 message 追加为最后一条）。
+ */
+const buildHistory = () => {
+  const history: Array<{ role: 'user' | 'assistant'; content: string }> = []
+  let pendingUser: { role: 'user'; content: string } | null = null
+
+  for (const message of messages.value) {
+    const content = message.content.trim()
+    if (!content) continue
+    if (message.role === 'user') {
+      pendingUser = { role: 'user', content: message.content }
+      continue
+    }
+    if (pendingUser) {
+      history.push(pendingUser, { role: 'assistant', content: message.content })
+      pendingUser = null
+    }
+  }
+  return history
+}
+
 const scrollToEnd = async () => {
   await nextTick()
   const list = document.querySelector('.conversation-list')
@@ -48,6 +73,7 @@ const send = async () => {
   if (!text || sending.value) return
 
   prompt.value = ''
+  const history = buildHistory()
   messages.value.push({ id: `u-${Date.now()}`, role: 'user', content: text })
   const assistantId = `a-${Date.now()}`
   messages.value.push({ id: assistantId, role: 'assistant', content: '', streaming: true })
@@ -55,7 +81,7 @@ const send = async () => {
   await scrollToEnd()
 
   try {
-    const stream = await sendMessageStream({ message: text, conversation_id: null })
+    const stream = await sendMessageStream({ message: text, conversation_id: null, messages: history })
     await parseSSEStream(
       stream,
       (delta) => {

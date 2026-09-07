@@ -88,7 +88,7 @@ _VAGUE_TOPICS = {
     "继续", "然后", "接着", "还是", "另外", "对了", "好的", "好吧",
     "嗯", "嗯嗯", "谢谢", "请问", "ok", "okay", "明白", "清楚",
     "理解", "懂了", "会了", "解决", "搞定", "学会了",
-    "什么", "怎么", "如何", "哪些", "哪个", "为啥",
+    "什么", "怎么", "如何", "哪些", "哪个", "为啥", "为什么",
     "随便", "随便聊聊", "聊聊", "随便看看",
 }
 _ASCII_TERM_RE = re.compile(r"[A-Za-z][A-Za-z0-9+#\-]*")
@@ -162,6 +162,27 @@ class SummaryMaintainer:
         turns = group_turns(history or [])
         evicted = turns[: -self.max_turns] if len(turns) > self.max_turns else []
         for turn in evicted:
+            for msg in turn:
+                if msg.get("role") == "user":
+                    self._apply_message(state, str(msg.get("content", "")))
+        if current_message:
+            self._apply_message(state, current_message)
+        return state
+
+    def rebuild_from_history(
+        self,
+        history: list[dict] | None = None,
+        current_message: str = "",
+    ) -> SummaryState:
+        """从完整历史确定性重建摘要（每轮全量重放，等价于持久化）。
+
+        按时间顺序重放历史中全部 user 消息，再应用当前消息；同一输入必得
+        同一摘要。供 TutorAgent 每轮调用——后端不持久化摘要时，只要会话层
+        每轮回传完整 messages（Java 现有行为），全量重放的结果就与
+        "持久化 + 增量更新"一致，且纠正/完成信号不会随轮次推进丢失。
+        """
+        state = SummaryState()
+        for turn in group_turns(history or []):
             for msg in turn:
                 if msg.get("role") == "user":
                     self._apply_message(state, str(msg.get("content", "")))

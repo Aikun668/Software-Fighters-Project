@@ -70,6 +70,9 @@ def group_turns(history: list[dict]) -> list[list[dict]]:
     for msg in history:
         if not isinstance(msg, dict):
             continue
+        # 空/纯空白消息（历史脏数据，如异常轮的空 assistant 回复）不构成上下文
+        if not str(msg.get("content") or "").strip():
+            continue
         role = msg.get("role")
         last_role = turns[-1][-1].get("role") if turns else None
         if not turns or (role == "user" and last_role != "user"):
@@ -102,7 +105,8 @@ class BuiltContext:
         """组装 LLM 消息列表：最近轮次 + 当前消息（最后一个 user 位置）。"""
         msgs = [dict(m) for m in self.recent_turns if isinstance(m, dict)]
         msgs.append({"role": "user", "content": self.current_message})
-        return msgs
+        # 兜底：任何空正文消息都不得进入 LLM 上下文
+        return [m for m in msgs if str(m.get("content", "") or "").strip()]
 
     def system_prompt(self) -> str:
         """组装系统提示：system → 摘要 → 相关画像 → 相关知识库，空段整体省略。"""
@@ -166,7 +170,9 @@ class ContextBuilder:
             system=system or "",
             summary=self._clean_summary(summary),
             recent_turns=recent_turns,
-            profile_facts=self._select_profile_facts(student_profile, query),
+            # 画像只随当前问题注入：上轮话题（如刚问过摄影）不得借跨轮回看
+            # 混入本轮无关问答（问 TCP 不带入摄影兴趣）。KB 证据仍用回看 query。
+            profile_facts=self._select_profile_facts(student_profile, current_message or ""),
             kb_evidence=self._select_kb_evidence(kb_candidates, query),
             current_message=current_message or "",
         )
@@ -174,7 +180,11 @@ class ContextBuilder:
     # ── 相关性判断 ──────────────────────────────────────────────
 
     def _build_relevance_query(self, current_message: str, recent_turns: list[dict]) -> str:
-        """相关性判断依据：当前消息 + 最近几条 user 消息（承接"那线程呢？"）。"""
+        """KB 证据的相关性判断依据：当前消息 + 最近几条 user 消息（承接"那线程呢？"）。
+
+        画像片段不用本 query——只看当前消息（见 build()），避免上轮无关话题
+        借回看把画像字段带进本轮上下文。
+        """
         parts = [current_message or ""]
         user_msgs = [
             m.get("content", "")

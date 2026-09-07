@@ -114,15 +114,15 @@ class TestHallucinationGuardVerifyAndFormat:
         result = guard.verify_and_format(text)
         assert result == text
 
-    def test_low_confidence_appends_disclaimer(self):
+    def test_low_confidence_returns_text_without_qa_block(self):
+        # af-01 修复：低置信时正文原样返回，内部核查块不再拼接进回答
         kb = _make_mock_kb([])
         guard = HallucinationGuard(kb)
         text = "人工智能可以完美解决所有问题并替代人类完成全部工作无需监督。"
         result = guard.verify_and_format(text)
-        if result != text:
-            # If modified, should still contain original text
-            assert text in result
-            assert "置信度" in result
+        assert result == text
+        assert "内容核查" not in result
+        assert "置信度" not in result
 
     def test_short_text_without_claims_returns_original(self):
         kb = _make_mock_kb([])

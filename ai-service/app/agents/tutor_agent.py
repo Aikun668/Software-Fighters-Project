@@ -46,6 +46,10 @@ class TutorState(TypedDict, total=False):
     response: str
     conversation_id: int | None  # 用于加载对话摘要
     conversation_summary: str
+    # sanity 检查结果必须声明为状态通道，否则节点返回后会被 LangGraph 静默丢弃，
+    # AutoCenter 将无法感知失败、把空回答当正常 content 放行
+    sanity_error_code: str | None
+    retry_count: int
     style: str                   # "standard" | "socratic"
     socratic_round: int          # 苏格拉底追问轮次（0-based）
 
@@ -317,15 +321,28 @@ class TutorAgent(BaseAgent):
             if isinstance(message, dict) and message.get("role") == "user":
                 current_message = self._extract_text(message.get("content", ""))
                 break
-        conversation_summary = state.get("conversation_summary", "")
-        if self.summary_maintainer.should_update(messages, current_message):
-            conversation_summary = self.summary_maintainer.update(
-                conversation_summary, messages, current_message,
-            ).to_text()
+
+        # 与 ContextBuilder 相同的末尾去重：喂给摘要/上下文的 history 不含当前消息
+        history_wo_current = list(messages)
+        if (
+            history_wo_current
+            and current_message
+            and isinstance(history_wo_current[-1], dict)
+            and history_wo_current[-1].get("role") == "user"
+            and str(history_wo_current[-1].get("content", "")) == current_message
+        ):
+            history_wo_current = history_wo_current[:-1]
+
+        # 摘要每轮从完整历史确定性重建（等价持久化）：
+        # 旧实现只在该轮触发信号时算一次、下一轮即丢，纠正后的主题无法跨轮保留
+        conversation_summary = self.summary_maintainer.rebuild_from_history(
+            history_wo_current, current_message,
+        ).to_text()
+
         built_context = self.context_builder.build(
             system=system_with_context,
             current_message=current_message,
-            history=messages,
+            history=history_wo_current,
             summary=conversation_summary,
             student_profile=student_profile,
             kb_candidates=(state.get("kb_candidates") or []) if knowledge_context else [],
@@ -361,12 +378,19 @@ class TutorAgent(BaseAgent):
                     "conversation_summary": conversation_summary,
                 }
         except (ConnectionError, RuntimeError, ValueError) as e:
+            # 失败必须有 error：LLM 不可用不得伪造「抱歉…」当正文放行，
+            # 与 sanity 失败同路 → AutoCenter 转成 SSE error 事件
             logger.error(f"Tutor respond failed: {e}")
-            response = "抱歉，我暂时无法回答这个问题。请稍后再试。"
-            api_success = False
+            return {
+                "response": "",
+                "domain": domain,
+                "sanity_error_code": "LLM_UNAVAILABLE",
+                "retry_count": 0,
+                "conversation_summary": conversation_summary,
+            }
 
-        # ── 幻觉守护只对 AI 领域 + API 调用成功的回复生效 ──
-        if api_success and domain == "ai":
+        # ── 幻觉守护只对 AI 领域的成功回复生效 ──
+        if domain == "ai":
             try:
                 kb = get_kb()
                 guard = HallucinationGuard(kb)

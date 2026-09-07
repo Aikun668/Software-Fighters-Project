@@ -57,6 +57,7 @@ describe('QuestionNavChat 真实聊天链路（Task 2 合同）', () => {
     expect(sendMessageStreamMock).toHaveBeenCalledWith({
       message: '什么是进程？',
       conversation_id: null,
+      messages: [],
     })
     // 客户端返回的流交给唯一 SSE 解析位置
     expect(parseSSEStreamMock).toHaveBeenCalledTimes(1)
@@ -122,5 +123,64 @@ describe('QuestionNavChat 真实聊天链路（Task 2 合同）', () => {
 
     release(new ReadableStream())
     await flushPromises()
+  })
+})
+
+describe('QuestionNavChat 对话历史传输（Task 11 后续合同）', () => {
+  it('第二次发送必须携带第一轮的用户与助手内容', async () => {
+    sendMessageStreamMock.mockResolvedValue(new ReadableStream())
+    parseSSEStreamMock.mockImplementation(
+      async (_stream: ReadableStream, onData: (d: string) => void, onDone: () => void) => {
+        onData('第一轮的完整回答。')
+        onDone()
+      },
+    )
+
+    const wrapper = mountPage()
+    await sendViaEnter(wrapper, '第一问')
+    await sendViaEnter(wrapper, '第二问')
+
+    expect(sendMessageStreamMock).toHaveBeenCalledTimes(2)
+    const [firstCall, secondCall] = sendMessageStreamMock.mock.calls.map(
+      (call) => call[0] as { message: string; messages: Array<{ role: string; content: string }> },
+    )
+    // 首次发送历史为空
+    expect(firstCall.messages).toEqual([])
+    // 第二次发送携带第一轮完整问答对，且不含当前消息本身
+    expect(secondCall.message).toBe('第二问')
+    expect(secondCall.messages).toEqual([
+      { role: 'user', content: '第一问' },
+      { role: 'assistant', content: '第一轮的完整回答。' },
+    ])
+  })
+
+  it('出错且无正文时，下一轮历史必须丢弃整组失败问答', async () => {
+    sendMessageStreamMock.mockResolvedValue(new ReadableStream())
+    parseSSEStreamMock.mockImplementation(
+      async (_stream: ReadableStream, onData: (d: string) => void, onDone: () => void) => {
+        onData('正常的第二答。')
+        onDone()
+      },
+    )
+
+    const wrapper = mountPage()
+    // 第一轮：请求直接失败，assistant 无正文
+    sendMessageStreamMock.mockRejectedValueOnce(new Error('HTTP error! status: 502'))
+    await sendViaEnter(wrapper, '第一问')
+
+    // 第二轮：成功
+    await sendViaEnter(wrapper, '第二问')
+    // 第三轮
+    await sendViaEnter(wrapper, '第三问')
+
+    const thirdCall = sendMessageStreamMock.mock.calls[2][0] as {
+      messages: Array<{ role: string; content: string }>
+    }
+    // 第三次发送的历史：第一轮没有可见回答，整组失败问答都不进；
+    // 第二轮的正常问答对保留。
+    expect(thirdCall.messages).toEqual([
+      { role: 'user', content: '第二问' },
+      { role: 'assistant', content: '正常的第二答。' },
+    ])
   })
 })
