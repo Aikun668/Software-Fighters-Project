@@ -6,7 +6,6 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
  * 创建 axios 实例
  */
 const createInstance = (): AxiosInstance => {
-  console.log(localStorage.getItem('token'))
   const instance = axios.create({
     baseURL: API_BASE_URL,
     timeout: 10000,
