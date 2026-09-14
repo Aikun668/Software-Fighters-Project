@@ -65,3 +65,10 @@ minio:
 logging:
   level:
     com.university: debug
+
+learning:
+  auth:
+    required: false
+
+python:
+  base-url: http://127.0.0.1:8001/internal

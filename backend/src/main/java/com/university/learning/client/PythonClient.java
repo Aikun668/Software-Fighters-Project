@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.university.learning.common.AIServiceException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
@@ -13,6 +14,7 @@ import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.*;
@@ -27,7 +29,8 @@ public class PythonClient {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
-    private static final String BASE_URL = "http://127.0.0.1:8001/internal";
+    @Value("${python.base-url}")
+    private String baseUrl;
 
     // ==================== 统一对话入口 ====================
 
@@ -65,7 +68,7 @@ public class PythonClient {
             request.put("style", style);
         }
 
-        return createSseEmitter(BASE_URL + "/api/chat", request, onDone);
+        return createSseEmitter(baseUrl + "/api/chat", request, onDone);
     }
 
     // ==================== 流式接口 ====================
@@ -77,7 +80,7 @@ public class PythonClient {
         request.put("user_id", userId);
         request.put("messages", messages);
 
-        return createSseEmitter(BASE_URL + "/profile/chat", request, onDone);
+        return createSseEmitter(baseUrl + "/profile/chat", request, onDone);
     }
 
     /**
@@ -98,7 +101,7 @@ public class PythonClient {
         }
         request.put("student_profile", profile != null ? profile : new HashMap<>());
 
-        return createSseEmitter(BASE_URL + "/resources/generate", request, onDone);
+        return createSseEmitter(baseUrl + "/resources/generate", request, onDone);
     }
 
     /**
@@ -131,7 +134,7 @@ public class PythonClient {
         }
         request.put("student_profile", profile != null ? profile : new HashMap<>());
 
-        return createSseEmitter(BASE_URL + "/tutor/chat", request, onDone);
+        return createSseEmitter(baseUrl + "/tutor/chat", request, onDone);
     }
 
     /**
@@ -160,7 +163,7 @@ public class PythonClient {
         request.put("difficulty", difficulty != null ? difficulty : "medium");
         request.put("student_profile", profile != null ? profile : new HashMap<>());
 
-        return createSseEmitter(BASE_URL + "/exercise/generate", request, onDone);
+        return createSseEmitter(baseUrl + "/exercise/generate", request, onDone);
     }
 
     // ==================== 非流式接口 ====================
@@ -173,7 +176,7 @@ public class PythonClient {
         Map<String, Object> request = new HashMap<>();
         request.put("user_id", userId);
         request.put("student_profile", studentProfile != null ? studentProfile : new HashMap<>());
-        return doPost(BASE_URL + "/profile/workflow/status", request);
+        return doPost(baseUrl + "/profile/workflow/status", request);
     }
 
     /**
@@ -186,7 +189,7 @@ public class PythonClient {
         request.put("user_id", userId);
         request.put("topic", topic != null ? topic : "");
         request.put("student_profile", studentProfile != null ? studentProfile : new HashMap<>());
-        return doPost(BASE_URL + "/path/" + userId, request);
+        return doPost(baseUrl + "/path/" + userId, request);
     }
 
     public Map<String, Object> gradeExercise(String type, String userAnswer,
@@ -207,21 +210,21 @@ public class PythonClient {
             request.put("rubric", rubric);
         }
 
-        return doPost(BASE_URL + "/exercise/grade", request);
+        return doPost(baseUrl + "/exercise/grade", request);
     }
 
     public Map<String, Object> getEvaluationReport(Long userId, Map<String, Object> evaluationResults) {
         Map<String, Object> request = new HashMap<>();
         request.put("user_id", userId);
         request.put("evaluation_results", evaluationResults);
-        return doPost(BASE_URL + "/evaluation/report", request);
+        return doPost(baseUrl + "/evaluation/report", request);
     }
 
     public Map<String, Object> exportPptx(List<Map<String, Object>> contentBlocks, String title) {
         Map<String, Object> request = new HashMap<>();
         request.put("content_blocks", contentBlocks);
         request.put("title", title != null ? title : "AI学习资源");
-        return doPost(BASE_URL + "/resources/export-pptx", request);
+        return doPost(baseUrl + "/resources/export-pptx", request);
     }
 
     // ==================== 解题（SSE流式） ====================
@@ -237,7 +240,7 @@ public class PythonClient {
         request.put("context", context != null ? context : "");
         request.put("user_id", userId);
 
-        return createSseEmitter(BASE_URL + "/solve", request, onDone);
+        return createSseEmitter(baseUrl + "/solve", request, onDone);
     }
 
     // ==================== 知识图谱 ====================
@@ -246,7 +249,7 @@ public class PythonClient {
     public Map<String, Object> getKnowledgeGraph(String courseId, Map<String, Float> masteries) {
         Map<String, Object> request = new HashMap<>();
         request.put("masteries", masteries != null ? masteries : new HashMap<>());
-        return doPost(BASE_URL + "/knowledge-graph/" + courseId, request);
+        return doPost(baseUrl + "/knowledge-graph/" + courseId, request);
     }
 
     /** 获取知识图谱节点卡片详情（子概念掌握度+图谱上下文+推荐动作） */
@@ -257,7 +260,7 @@ public class PythonClient {
         request.put("masteries", masteries != null ? masteries : new HashMap<>());
         request.put("total_exercises", totalExercises);
         request.put("last_practiced", lastPracticed != null ? lastPracticed : "");
-        return doPost(BASE_URL + "/knowledge-graph/" + courseId + "/node/" + nodeId, request);
+        return doPost(baseUrl + "/knowledge-graph/" + courseId + "/node/" + nodeId, request);
     }
 
     // ==================== 学习计划 ====================
@@ -269,7 +272,7 @@ public class PythonClient {
         request.put("user_id", userId);
         request.put("course_id", courseId);
         request.put("student_profile", studentProfile != null ? studentProfile : new HashMap<>());
-        return doPost(BASE_URL + "/plans/create-from-path", request);
+        return doPost(baseUrl + "/plans/create-from-path", request);
     }
 
     // createPlan 在 Python 端不存在，已移除
@@ -280,7 +283,7 @@ public class PythonClient {
         Map<String, Object> request = new HashMap<>();
         request.put("plan", plan != null ? plan : new HashMap<>());
         request.put("steps", steps != null ? steps : new ArrayList<>());
-        return doPost(BASE_URL + "/plans/status", request);
+        return doPost(baseUrl + "/plans/status", request);
     }
 
     // updatePlanProgress、resumePlan 在 Python 端不存在，已移除
@@ -305,7 +308,7 @@ public class PythonClient {
         request.put("plan", plan != null ? plan : new HashMap<>());
         request.put("steps", steps != null ? steps : new ArrayList<>());
         request.put("days_idle", daysIdle);
-        return doPost(BASE_URL + "/plans/" + planId + "/regression-check", request);
+        return doPost(baseUrl + "/plans/" + planId + "/regression-check", request);
     }
 
     /**
@@ -317,7 +320,7 @@ public class PythonClient {
         Map<String, Object> request = new HashMap<>();
         request.put("steps", steps != null ? steps : new ArrayList<>());
         request.put("days_ahead", daysAhead);
-        return doPost(BASE_URL + "/plans/" + planId + "/review-schedule", request);
+        return doPost(baseUrl + "/plans/" + planId + "/review-schedule", request);
     }
 
     // onNodeStatusChange 在 Python 端不存在，已移除
@@ -346,7 +349,7 @@ public class PythonClient {
         request.put("suggested_types", suggestedTypes != null ? suggestedTypes : new ArrayList<>());
         request.put("clarified_topic", clarifiedTopic != null ? clarifiedTopic : "");
 
-        return createSseEmitter(BASE_URL + "/inquiry/resolve", request, onDone);
+        return createSseEmitter(baseUrl + "/inquiry/resolve", request, onDone);
     }
 
     // ==================== 会话管理 ====================
@@ -360,7 +363,7 @@ public class PythonClient {
         Map<String, Object> request = new HashMap<>();
         request.put("messages", messages != null ? messages : new ArrayList<>());
         request.put("course_id", courseId != null ? courseId : "ai_intro");
-        return doPost(BASE_URL + "/conversations/" + conversationId + "/summary", request);
+        return doPost(baseUrl + "/conversations/" + conversationId + "/summary", request);
     }
 
     // ==================== 错题分析 ====================
@@ -370,7 +373,7 @@ public class PythonClient {
         Map<String, Object> request = new HashMap<>();
         request.put("errors", errors);
         request.put("level", level);
-        return doPost(BASE_URL + "/exercise/error-analysis", request);
+        return doPost(baseUrl + "/exercise/error-analysis", request);
     }
 
     // ==================== 练习模块三服务（v3.0 新增） ====================
@@ -383,7 +386,7 @@ public class PythonClient {
         request.put("exercises", exercises);
         request.put("knowledge_nodes", knowledgeNodes != null ? knowledgeNodes : new ArrayList<>());
         request.put("course_id", courseId != null ? courseId : "ai_intro");
-        return doPost(BASE_URL + "/exercise/categorize", request);
+        return doPost(baseUrl + "/exercise/categorize", request);
     }
 
     /** 分析一次练习会话，返回逐知识点报告 + 掌握度更新建议 */
@@ -394,7 +397,7 @@ public class PythonClient {
         request.put("records", records);
         request.put("masteries", masteries != null ? masteries : new HashMap<>());
         request.put("course_id", courseId != null ? courseId : "ai_intro");
-        return doPost(BASE_URL + "/exercise/session/analyze", request);
+        return doPost(baseUrl + "/exercise/session/analyze", request);
     }
 
     /** 练习仪表盘：练习统计 + 薄弱/强项 + 推荐节点 */
@@ -407,7 +410,7 @@ public class PythonClient {
         request.put("masteries", masteries != null ? masteries : new HashMap<>());
         request.put("recent_records", recentRecords != null ? recentRecords : new ArrayList<>());
         request.put("course_id", courseId != null ? courseId : "ai_intro");
-        return doPost(BASE_URL + "/exercise/dashboard", request);
+        return doPost(baseUrl + "/exercise/dashboard", request);
     }
 
     /** 练习数据反哺学生画像：合并薄弱点、强项、技能等级 */
@@ -420,7 +423,7 @@ public class PythonClient {
         request.put("student_profile", studentProfile != null ? studentProfile : new HashMap<>());
         request.put("recent_records", recentRecords != null ? recentRecords : new ArrayList<>());
         request.put("session_analysis", sessionAnalysis != null ? sessionAnalysis : new HashMap<>());
-        return doPost(BASE_URL + "/exercise/profile/enrich", request);
+        return doPost(baseUrl + "/exercise/profile/enrich", request);
     }
 
     // ==================== 图谱分析/维护/可视化 ====================
@@ -433,7 +436,7 @@ public class PythonClient {
         request.put("user_message", userMessage);
         request.put("assistant_reply", assistantReply);
         request.put("existing_node_ids", existingNodeIds != null ? existingNodeIds : new ArrayList<>());
-        return doPost(BASE_URL + "/graph/extract", request);
+        return doPost(baseUrl + "/graph/extract", request);
     }
 
     /** 批量更新图谱节点和边（add_node / add_edge） */
@@ -442,7 +445,7 @@ public class PythonClient {
         Map<String, Object> request = new HashMap<>();
         request.put("course_id", courseId);
         request.put("updates", updates != null ? updates : new ArrayList<>());
-        return doPost(BASE_URL + "/graph/nodes", request);
+        return doPost(baseUrl + "/graph/nodes", request);
     }
 
     /** 根据学习事件批量更新节点掌握度（Python计算，Java自行持久化） */
@@ -453,7 +456,7 @@ public class PythonClient {
         request.put("course_id", courseId != null ? courseId : "ai_intro");
         request.put("masteries", masteries != null ? masteries : new HashMap<>());
         request.put("events", events);
-        return doPost(BASE_URL + "/graph/masteries", request);
+        return doPost(baseUrl + "/graph/masteries", request);
     }
 
     /** 知识缺口分析：根据当前掌握度推荐下一个该学的节点 */
@@ -461,7 +464,7 @@ public class PythonClient {
         Map<String, Object> request = new HashMap<>();
         request.put("masteries", masteries != null ? masteries : new HashMap<>());
         request.put("course_id", courseId != null ? courseId : "ai_intro");
-        return doPost(BASE_URL + "/graph/next-node", request);
+        return doPost(baseUrl + "/graph/next-node", request);
     }
 
     /** 学习进度概要：全局掌握率 + 各分类统计 */
@@ -469,7 +472,7 @@ public class PythonClient {
         Map<String, Object> request = new HashMap<>();
         request.put("masteries", masteries != null ? masteries : new HashMap<>());
         request.put("course_id", courseId != null ? courseId : "ai_intro");
-        return doPost(BASE_URL + "/graph/progress", request);
+        return doPost(baseUrl + "/graph/progress", request);
     }
 
     /** 前置条件检查：用户是否可以学习指定节点 */
@@ -481,7 +484,7 @@ public class PythonClient {
         request.put("masteries", masteries != null ? masteries : new HashMap<>());
         request.put("threshold", threshold);
         request.put("course_id", courseId != null ? courseId : "ai_intro");
-        return doPost(BASE_URL + "/graph/check-prerequisites", request);
+        return doPost(baseUrl + "/graph/check-prerequisites", request);
     }
 
     /** 导出知识图谱为 Mermaid 流程图语法 */
@@ -490,7 +493,7 @@ public class PythonClient {
         Map<String, Object> request = new HashMap<>();
         request.put("course_id", courseId != null ? courseId : "ai_intro");
         request.put("masteries", masteries != null ? masteries : new HashMap<>());
-        return doPost(BASE_URL + "/graph/export-mermaid", request);
+        return doPost(baseUrl + "/graph/export-mermaid", request);
     }
 
     /** 返回带层级信息的图谱（前端分层布局） */
@@ -498,7 +501,7 @@ public class PythonClient {
         Map<String, Object> request = new HashMap<>();
         request.put("masteries", masteries != null ? masteries : new HashMap<>());
         request.put("course_id", courseId != null ? courseId : "ai_intro");
-        return doPost(BASE_URL + "/graph/layered", request);
+        return doPost(baseUrl + "/graph/layered", request);
     }
 
     // ==================== 计划模块扩展 ====================
@@ -509,7 +512,7 @@ public class PythonClient {
         Map<String, Object> request = new HashMap<>();
         request.put("plan", plan != null ? plan : new HashMap<>());
         request.put("steps", steps != null ? steps : new ArrayList<>());
-        return doPost(BASE_URL + "/plans/" + planId + "/status", request);
+        return doPost(baseUrl + "/plans/" + planId + "/status", request);
     }
 
     /** 完成学习步骤后触发巩固练习生成 */
@@ -520,7 +523,7 @@ public class PythonClient {
         request.put("step", step != null ? step : new HashMap<>());
         request.put("plan", plan != null ? plan : new HashMap<>());
         request.put("steps", steps != null ? steps : new ArrayList<>());
-        return doPost(BASE_URL + "/plans/" + planId + "/complete-step", request);
+        return doPost(baseUrl + "/plans/" + planId + "/complete-step", request);
     }
 
     /** 获取今日学习任务 + 资源建议 */
@@ -535,7 +538,7 @@ public class PythonClient {
             request.put("start_date", startDate);
         }
         request.put("masteries", masteries != null ? masteries : new HashMap<>());
-        return doPost(BASE_URL + "/plans/" + planId + "/today", request);
+        return doPost(baseUrl + "/plans/" + planId + "/today", request);
     }
 
     /** 更新步骤进度 + 计算掌握度变化 */
@@ -555,7 +558,7 @@ public class PythonClient {
         request.put("score", score);
         request.put("duration_minutes", durationMinutes != null ? durationMinutes : 0);
         request.put("masteries", masteries != null ? masteries : new HashMap<>());
-        return doPost(BASE_URL + "/plans/" + planId + "/progress", request);
+        return doPost(baseUrl + "/plans/" + planId + "/progress", request);
     }
 
     /** 节点状态变更联动计划（同步计划步骤） */
@@ -571,7 +574,7 @@ public class PythonClient {
         request.put("plan", plan != null ? plan : new HashMap<>());
         request.put("steps", steps != null ? steps : new ArrayList<>());
         request.put("masteries", masteries != null ? masteries : new HashMap<>());
-        return doPost(BASE_URL + "/plans/" + planId + "/node-status-change", request);
+        return doPost(baseUrl + "/plans/" + planId + "/node-status-change", request);
     }
 
     // ==================== 资源导出 ====================
@@ -581,7 +584,7 @@ public class PythonClient {
         Map<String, Object> request = new HashMap<>();
         request.put("content_blocks", contentBlocks);
         request.put("title", title != null ? title : "AI学习资源");
-        return doPost(BASE_URL + "/resources/export-pdf", request);
+        return doPost(baseUrl + "/resources/export-pdf", request);
     }
 
     // ==================== 图片转换 ====================
@@ -659,14 +662,14 @@ public class PythonClient {
 
                 String requestBody = objectMapper.writeValueAsString(request);
                 log.info("调用Python: {} body={}", pythonUrl, requestBody);
-                conn.getOutputStream().write(requestBody.getBytes());
+                conn.getOutputStream().write(requestBody.getBytes(StandardCharsets.UTF_8));
                 conn.getOutputStream().flush();
 
                 int responseCode = conn.getResponseCode();
                 if (responseCode != 200) {
                     InputStream errorStream = conn.getErrorStream();
                     if (errorStream != null) {
-                        BufferedReader errorReader = new BufferedReader(new InputStreamReader(errorStream));
+                        BufferedReader errorReader = new BufferedReader(new InputStreamReader(errorStream, StandardCharsets.UTF_8));
                         StringBuilder errorBody = new StringBuilder();
                         String line;
                         while ((line = errorReader.readLine()) != null) {
@@ -679,7 +682,7 @@ public class PythonClient {
                 }
 
                 try (BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(conn.getInputStream()))) {
+                        new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
 
                     String line;
                     StringBuilder dataBuffer = new StringBuilder();
