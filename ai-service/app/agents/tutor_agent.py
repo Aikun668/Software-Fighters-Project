@@ -350,12 +350,28 @@ class TutorAgent(BaseAgent):
         truncated = self._truncate_messages(built_context.messages())
         system_with_context = built_context.system_prompt()
 
+        # ── SSE token 流（B1）：上层传入 on_token 时，在 chat_stream 推
+        # chunk 时同步回调 on_token。**只调一次 chat_stream**，sanity
+        # check 复用同一个累积的 response 字符串。
+        # BaseAgent.run 把 _on_token 挂在 self._current_on_token 上
+        # （LangGraph 的 ainvoke 会丢弃 schema 外字段）。
+        on_token = getattr(self, "_current_on_token", None)
+
         async def generate_once(_context):
             response = ""
             async for chunk in self.llm.chat_stream(
                 truncated, system_prompt=system_with_context
             ):
                 response += chunk
+                if on_token is not None:
+                    try:
+                        await on_token(chunk)
+                    except Exception:
+                        # 上层 on_token 异常不影响 sanity/response 累积
+                        logger.warning(
+                            "TutorAgent on_token raised (non-blocking)",
+                            exc_info=True,
+                        )
             return response
 
         api_success = True

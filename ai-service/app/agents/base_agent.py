@@ -119,8 +119,24 @@ class BaseAgent(ABC):
         raise NotImplementedError
 
     async def run(self, input_state: dict) -> dict:
-        """执行智能体工作流（使用缓存的 compiled graph）"""
-        result = await self._compiled_graph.ainvoke(input_state)
+        """执行智能体工作流（使用缓存的 compiled graph）
+
+        B1-2：input_state 里的 ``_on_token`` 会被提取到 agent 实例上，
+        供 LangGraph 节点在执行期间回调（如 SSE token 流）。LangGraph
+        的 ainvoke 会丢弃 schema 之外的字段，必须用实例属性中转。
+        """
+        on_token = input_state.pop("_on_token", None)
+        prev_on_token = getattr(self, "_current_on_token", None)
+        if on_token is not None:
+            self._current_on_token = on_token
+        try:
+            result = await self._compiled_graph.ainvoke(input_state)
+        finally:
+            if on_token is not None:
+                if prev_on_token is None:
+                    delattr(self, "_current_on_token")
+                else:
+                    self._current_on_token = prev_on_token
         return self._postprocess_output(result, input_state)
 
     def _postprocess_output(self, output: dict, input_state: dict) -> dict:

@@ -130,6 +130,11 @@ export const parseSSEStream = async (
             case 'content': {
               // 后端统一事件：正文在 data.data.response / data.data.content / data.data（字符串）
               const payload = data.data
+              // partial=true 表示 token 流已逐字送完，最终事件只是结构化收尾，
+              // 不要重复追加文本（避免后端 _result_to_event 再渲染一次完整文本）
+              if (payload && typeof payload === 'object' && payload.partial === true) {
+                break
+              }
               if (typeof payload === 'string' && payload) {
                 onData(payload, data.mode || 'chat')
               } else if (payload && typeof payload === 'object') {

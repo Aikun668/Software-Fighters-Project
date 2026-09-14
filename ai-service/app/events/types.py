@@ -17,6 +17,7 @@ class StreamEventType(str, Enum):
     CENTER_END = "center_end"
     INQUIRY = "inquiry"
     RECOMMENDATION = "recommendation"
+    TOKEN = "token"
 
 
 @dataclass
@@ -44,7 +45,14 @@ class StreamEvent:
         if self.progress:
             payload["progress"] = round(self.progress, 2)
         if self.data is not None:
-            payload["data"] = self.data
+            # B1：token 事件把 data 平铺到顶层（前端 case 'token'
+            # 直接读 data.content，不在 data.data.content 里找），
+            # 其余事件保持原嵌套结构不变。
+            if self.type is StreamEventType.TOKEN and isinstance(self.data, dict):
+                for k, v in self.data.items():
+                    payload[k] = v
+            else:
+                payload["data"] = self.data
         return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 

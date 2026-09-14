@@ -52,7 +52,7 @@ class AutoCenter:
         self.profile_agent = profile_agent
         self.visualize_pipeline = visualize_pipeline
 
-    async def execute(self, task: CenterTask) -> CenterResult:
+    async def execute(self, task: CenterTask, on_token=None) -> CenterResult:
         intent = task.intent
         context = task.context or {}
         student_profile = context.get("student_profile", {})
@@ -65,7 +65,7 @@ class AutoCenter:
             return await self._run_diagnose(task, student_profile)
         if intent == "profile_building":
             return await self._run_profile_building(task, messages, student_profile)
-        return await self._run_tutor(task, messages, student_profile, style)
+        return await self._run_tutor(task, messages, student_profile, style, on_token)
 
     async def _run_tutor(
         self,
@@ -73,15 +73,21 @@ class AutoCenter:
         messages: list[dict],
         student_profile: dict,
         style: str,
+        on_token=None,
     ) -> CenterResult:
         agent = self.tutor_agent or TutorAgent()
+        # ── B1：把 on_token 透传给 agent.run，最终到 TutorAgent._respond_node
+        # 启动 chat_stream 旁路。None 时维持原非流式路径。
+        run_state: dict = {
+            "messages": messages,
+            "student_profile": student_profile,
+            "style": style,
+            "conversation_id": (task.context or {}).get("conversation_id"),
+        }
+        if on_token is not None:
+            run_state["_on_token"] = on_token
         try:
-            state = await agent.run({
-                "messages": messages,
-                "student_profile": student_profile,
-                "style": style,
-                "conversation_id": (task.context or {}).get("conversation_id"),
-            })
+            state = await agent.run(run_state)
             blocks = state.get("content_blocks", [])
             response = state.get("response", "")
             if state.get("sanity_error_code"):

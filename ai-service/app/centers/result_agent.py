@@ -28,6 +28,26 @@ from app.events.types import (
     inquiry_event,
     knowledge_candidates_event,
 )
+
+
+def _token_event(chunk: str) -> StreamEvent:
+    """逐字 token 事件：前端 parseSSEStream 已有 case 'token' 分支直接消费。
+    不用 content_event 因为前端 content 分支会读 response/content 字段
+    重复追加完整文本。"""
+    return StreamEvent(
+        type=StreamEventType.TOKEN,
+        data={"content": chunk},
+    )
+
+
+def _finalize_event(payload: dict) -> StreamEvent:
+    """最终事件：带 partial=True 标记，前端 case 'content' 据此跳过文本追加
+    （token 流阶段已经把字送完了）。payload 仍保留 blocks 等结构化信息，
+    供后续渲染 / 推荐抽取使用。"""
+    return StreamEvent(
+        type=StreamEventType.CONTENT,
+        data={**payload, "partial": True},
+    )
 from app.services.graph_service import get_graph_service
 from app.services.knowledge_extraction import extract_knowledge_nodes
 
@@ -94,8 +114,52 @@ class ResultAgent:
                 sequence=idx,
             )
 
-            result = await self._execute_task(task)
-            aggregated.results.append(result)
+            # ── B1-4：边等 center 完整结果边把 token 流式 yield 到 SSE。
+            # 只有 auto/tutor 路径会真正产生 token（auto_center 内部
+            # TutorAgent 在 generate_once 内 await on_token(chunk)，
+            # 必须 await 才能保证逐字流出）；其他 center 忽略 on_token，
+            # queue 始终为空，主循环 0.05s 后拿到 result。
+            #
+            # 用 asyncio.Queue + 异步 on_token：
+            #   - put 是 await 的（流速自然匹配消费速度，逐字）
+            #   - get 是 await 的（主循环一边 yield 一边等 chunk）
+            token_queue: asyncio.Queue = asyncio.Queue()
+
+            async def _on_token(chunk: str) -> None:
+                await token_queue.put(chunk)
+
+            result_task = asyncio.create_task(
+                self._execute_task(task, on_token=_on_token)
+            )
+
+            try:
+                while not result_task.done():
+                    try:
+                        chunk = await asyncio.wait_for(
+                            token_queue.get(), timeout=0.05
+                        )
+                        yield _token_event(chunk)
+                    except asyncio.TimeoutError:
+                        continue
+
+                result = await result_task
+                # 排空残留 chunk（generate_once 完成时旁路可能还有几个
+                # chunk 没被消费），避免和最终的完整 content 重复。
+                while not token_queue.empty():
+                    try:
+                        chunk = token_queue.get_nowait()
+                    except asyncio.QueueEmpty:
+                        break
+                    yield _token_event(chunk)
+
+                aggregated.results.append(result)
+            finally:
+                if not result_task.done():
+                    result_task.cancel()
+                    try:
+                        await result_task
+                    except (asyncio.CancelledError, Exception):
+                        pass
 
             yield center_end_event(
                 center=task.mode,
@@ -103,7 +167,12 @@ class ResultAgent:
                 sequence=idx,
             )
 
-            yield self._result_to_event(result, progress)
+            # 出错时不发 finalize（partial 对错误事件无意义，走 error_event）
+            if result.error:
+                yield error_event(stage=result.mode, message=result.error)
+            else:
+                # ── B1 终态事件：partial=True，前端不再重复追加（token 流已逐字送完）
+                yield _finalize_event(self._serialize_final_payload(result, progress))
 
             if result.profile_delta:
                 aggregated.profile_delta.update(result.profile_delta)
@@ -127,10 +196,10 @@ class ResultAgent:
             "results": [self._serialize_result(r) for r in aggregated.results],
         })
 
-    async def _execute_task(self, task: CenterTask) -> CenterResult:
+    async def _execute_task(self, task: CenterTask, on_token=None) -> CenterResult:
         try:
             if task.mode == "auto":
-                return await self.auto_center.execute(task)
+                return await self.auto_center.execute(task, on_token=on_token)
             if task.mode == "plan":
                 return await self.plan_center.execute(task)
             if task.mode == "resource":
@@ -169,6 +238,21 @@ class ResultAgent:
             progress=progress,
             data=self._ensure_user_visible_response(result),
         )
+
+    def _serialize_final_payload(
+        self, result: CenterResult, progress: float
+    ) -> dict:
+        """B1 终态：与 _result_to_event 共享 payload 抽取逻辑，但只返回 dict
+        （让 _finalize_event 包装成 partial=True 事件）。出错时返回空 dict，
+        改走 error_event（partial 对错误事件无意义）。"""
+        if result.error:
+            return {}
+        return {
+            "stage": result.mode,
+            "message": f"{result.agent} 输出",
+            "progress": progress,
+            **self._ensure_user_visible_response(result),
+        }
 
     @staticmethod
     def _ensure_user_visible_response(result: CenterResult) -> dict:
