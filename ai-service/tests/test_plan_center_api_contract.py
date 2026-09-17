@@ -74,6 +74,24 @@ def _make_fake_step_classifier():
     return fake
 
 
+def _make_graph_service_with_unrelated_nodes():
+    """返回节点 topic 与测试步骤不相关的 graph_service，确保所有 steps 进入 unknowns。"""
+    from unittest.mock import MagicMock
+
+    graph = MagicMock()
+    graph.load_skeleton.return_value = {
+        "nodes": [
+            {"id": "other1", "name": "其他主题1", "category": "基础", "description": ""},
+            {"id": "other2", "name": "其他主题2", "category": "基础", "description": ""},
+        ]
+    }
+    graph._all_nodes.return_value = [
+        {"id": "other1", "name": "其他主题1", "category": "基础"},
+        {"id": "other2", "name": "其他主题2", "category": "基础"},
+    ]
+    return graph
+
+
 class TestPlanCenterCreateFromPath:
     @pytest.mark.asyncio
     async def test_create_from_path_returns_full_api_payload(self):
@@ -406,6 +424,141 @@ class TestGenerateBasePlanOrchestration:
         assert result["course_id"] == "ai_intro"
         assert result["total_steps"] == 2
         assert result["title"] == "Transformer学习计划"
+
+
+class TestEnrichStepsConservativeFallback:
+    """P1.1 锁定：_enrich_steps_with_nodes 失败时只丢 knowledge_node_id，不丢原始 steps。"""
+
+    _UNMATCHED_STEPS = [
+        {"topic": "注意力机制", "estimated_days": 1, "topic_difficulty": 3, "status": "pending"},
+        {"topic": "编码器", "estimated_days": 1, "topic_difficulty": 3, "status": "pending"},
+    ]
+
+    @pytest.mark.asyncio
+    async def test_graph_service_failure_preserves_all_steps(self):
+        """graph_service.load_skeleton() 抛异常：所有原始步骤必须按顺序返回，knowledge_node_id=""。"""
+        from unittest.mock import AsyncMock, MagicMock
+        from app.centers.plan_center import PlanCenter
+
+        graph = MagicMock()
+        graph.load_skeleton.side_effect = RuntimeError("graph unavailable")
+        graph._all_nodes.return_value = []
+
+        classifier_called = {"flag": False}
+
+        async def classifier(exercises, knowledge_nodes, course_id):
+            classifier_called["flag"] = True
+            return []
+
+        center = PlanCenter(
+            goal_agent=AsyncMock(),
+            decompose_agent=AsyncMock(),
+            schedule_agent=AsyncMock(),
+            graph_service=graph,
+            step_classifier=classifier,
+        )
+
+        result = await center._enrich_steps_with_nodes(self._UNMATCHED_STEPS, "ai_intro")
+
+        assert len(result) == 2
+        assert [step["topic"] for step in result] == ["注意力机制", "编码器"]
+        assert all(step["knowledge_node_id"] == "" for step in result)
+        assert all("suggested_resource_types" in step for step in result)
+        # 图谱失败，分类器也不应被调用
+        assert classifier_called["flag"] is False
+
+    @pytest.mark.asyncio
+    async def test_empty_skeleton_preserves_all_steps_without_calling_classifier(self):
+        """load_skeleton 返回 {"nodes": []}, _all_nodes 返回 []：所有步骤必须返回，分类器不能被调。"""
+        from unittest.mock import AsyncMock, MagicMock
+        from app.centers.plan_center import PlanCenter
+
+        graph = MagicMock()
+        graph.load_skeleton.return_value = {"nodes": []}
+        graph._all_nodes.return_value = []
+
+        classifier_called = {"flag": False}
+
+        async def classifier(exercises, knowledge_nodes, course_id):
+            classifier_called["flag"] = True
+            return []
+
+        center = PlanCenter(
+            goal_agent=AsyncMock(),
+            decompose_agent=AsyncMock(),
+            schedule_agent=AsyncMock(),
+            graph_service=graph,
+            step_classifier=classifier,
+        )
+
+        result = await center._enrich_steps_with_nodes(self._UNMATCHED_STEPS, "ai_intro")
+
+        assert len(result) == 2
+        assert [step["step_order"] for step in result] == [1, 2]
+        assert all(step["knowledge_node_id"] == "" for step in result)
+        # 静态节点为空，没必要调用分类器
+        assert classifier_called["flag"] is False
+
+    @pytest.mark.asyncio
+    async def test_classifier_failure_preserves_all_steps_with_empty_node_id(self):
+        """分类器抛异常：所有原始步骤按 step_order 排序后返回，knowledge_node_id=""。"""
+        from unittest.mock import AsyncMock
+        from app.centers.plan_center import PlanCenter
+
+        graph = _make_graph_service_with_unrelated_nodes()
+
+        async def classifier(exercises, knowledge_nodes, course_id):
+            raise RuntimeError("classifier unavailable")
+
+        center = PlanCenter(
+            goal_agent=AsyncMock(),
+            decompose_agent=AsyncMock(),
+            schedule_agent=AsyncMock(),
+            graph_service=graph,
+            step_classifier=classifier,
+        )
+
+        result = await center._enrich_steps_with_nodes(self._UNMATCHED_STEPS, "ai_intro")
+
+        assert len(result) == 2
+        assert [step["step_order"] for step in result] == [1, 2]
+        assert [step["topic"] for step in result] == ["注意力机制", "编码器"]
+        assert all(step["knowledge_node_id"] == "" for step in result)
+
+    @pytest.mark.asyncio
+    async def test_multiple_unknown_steps_get_correct_node_id_mapping(self):
+        """分类器返回 [index:0→node-a, index:1→node-b]：两个未知步骤必须各自落到正确的 node_id。
+
+        实现不能从 exercise 字典读取不存在的 index 构造映射——只能从 classifier 返回的 results 中取 index。
+        """
+        from unittest.mock import AsyncMock
+        from app.centers.plan_center import PlanCenter
+
+        graph = _make_graph_service_with_unrelated_nodes()
+
+        async def classifier(exercises, knowledge_nodes, course_id):
+            return [
+                {"index": 0, "knowledge_node_id": "node-a"},
+                {"index": 1, "knowledge_node_id": "node-b"},
+            ]
+
+        center = PlanCenter(
+            goal_agent=AsyncMock(),
+            decompose_agent=AsyncMock(),
+            schedule_agent=AsyncMock(),
+            graph_service=graph,
+            step_classifier=classifier,
+        )
+
+        result = await center._enrich_steps_with_nodes(self._UNMATCHED_STEPS, "ai_intro")
+
+        assert len(result) == 2
+        assert result[0]["step_order"] == 1
+        assert result[0]["topic"] == "注意力机制"
+        assert result[0]["knowledge_node_id"] == "node-a"
+        assert result[1]["step_order"] == 2
+        assert result[1]["topic"] == "编码器"
+        assert result[1]["knowledge_node_id"] == "node-b"
 
 
 class TestNormalizeMilestones:

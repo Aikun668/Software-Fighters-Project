@@ -253,19 +253,21 @@ class PlanCenter:
             except Exception as exc:
                 logger.warning(f"Step enrichment LLM fallback failed: {exc}")
                 result_map = {}
+        else:
+            result_map = {}
 
-            for u in unknowns:
-                step = u["step"]
-                nid = result_map.get(u["index"], "")
-                plan_steps.append({
-                    "step_order": u["index"] + 1,
-                    "topic": u["topic"],
-                    "knowledge_node_id": nid,
-                    "status": step.get("status", "pending"),
-                    "estimated_days": step.get("estimated_days", 1),
-                    "topic_difficulty": step.get("topic_difficulty", 3),
-                    "suggested_resource_types": _suggest_resources(u["topic"], ""),
-                })
+        for u in unknowns:
+            step = u["step"]
+            nid = result_map.get(u["index"], "")
+            plan_steps.append({
+                "step_order": u["index"] + 1,
+                "topic": u["topic"],
+                "knowledge_node_id": nid,
+                "status": step.get("status", "pending"),
+                "estimated_days": step.get("estimated_days", 1),
+                "topic_difficulty": step.get("topic_difficulty", 3),
+                "suggested_resource_types": _suggest_resources(u["topic"], ""),
+            })
 
         plan_steps.sort(key=lambda s: s["step_order"])
         return plan_steps
