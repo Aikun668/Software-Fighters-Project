@@ -44,9 +44,49 @@ class PlanCenter:
         student_profile: dict,
     ) -> CenterResult:
         try:
+            payload = await self._generate_base_plan(
+                user_input=task.input,
+                topic=topic,
+                context=task.params.get("context", ""),
+                student_profile=student_profile,
+            )
+            return CenterResult(
+                mode="plan",
+                intent=task.intent,
+                event_type="plan",
+                payload=payload,
+                agent="GoalAgent+DecomposeAgent+ScheduleAgent",
+                sequence=task.sequence,
+            )
+        except Exception as e:
+            logger.error(f"PlanCenter base plan orchestration failed: {e}")
+            return CenterResult(
+                mode="plan",
+                intent=task.intent,
+                event_type="error",
+                error="计划编排失败",
+                agent="GoalAgent+DecomposeAgent+ScheduleAgent",
+                sequence=task.sequence,
+            )
+
+    async def _generate_base_plan(
+        self,
+        *,
+        user_input: str,
+        topic: str,
+        context: str,
+        student_profile: dict,
+    ) -> dict:
+        """唯一执行 Goal → Decompose → Schedule 的位置，返回未增强 payload。
+
+        - Goal 失败：降级为默认 goal（target_topic=topic）
+        - Decompose 失败：降级为默认 decomposition（空 dict）
+        - Schedule 失败：抛 PlanGenerationError，由调用者映射为对应错误形态
+        """
+        try:
             goal_state = await self.goal_agent.run({
-                "input": task.input,
-                "context": task.params.get("context", ""),
+                "input": user_input,
+                "context": context,
                 "student_profile": student_profile,
             })
             goal = {
@@ -64,7 +104,7 @@ class PlanCenter:
         try:
             decompose_state = await self.decompose_agent.run({
                 "topic": goal.get("target_topic", topic),
-                "context": task.input,
+                "context": user_input,
                 "student_profile": student_profile,
             })
             decomposition = {
@@ -83,31 +123,16 @@ class PlanCenter:
                 "student_profile": student_profile,
                 "existing_plan": {},
             })
-            steps = schedule_state.get("steps", [])
-            payload = self._build_plan_payload(
-                topic=topic,
-                goal=goal,
-                decomposition=decomposition,
-                schedule_state=schedule_state,
-            )
-            return CenterResult(
-                mode="plan",
-                intent=task.intent,
-                event_type="plan",
-                payload=payload,
-                agent="GoalAgent+DecomposeAgent+ScheduleAgent",
-                sequence=task.sequence,
-            )
         except Exception as e:
             logger.error(f"PlanCenter schedule failed: {e}")
-            return CenterResult(
-                mode="plan",
-                intent=task.intent,
-                event_type="error",
-                error="计划编排失败",
-                agent="ScheduleAgent",
-                sequence=task.sequence,
-            )
+            raise PlanGenerationError("计划编排失败，请稍后重试") from e
+
+        return self._build_plan_payload(
+            topic=goal.get("target_topic") or topic,
+            goal=goal,
+            decomposition=decomposition,
+            schedule_state=schedule_state,
+        )
 
     @staticmethod
     def _build_plan_payload(
@@ -254,69 +279,23 @@ class PlanCenter:
     ) -> dict:
         """API 一键生成学习计划专用入口。
 
-        复用 Goal/Decompose/Schedule + _build_plan_payload 同一份生成逻辑，
+        复用 _generate_base_plan 同一份 Goal/Decompose/Schedule 编排，
         再叠加知识图谱节点匹配和里程碑标准化，输出完整 API payload。
         空 steps 抛 PlanGenerationError，由 API 层映射为 400 GENERATION_FAILED。
         """
         if self.goal_agent is None or self.decompose_agent is None or self.schedule_agent is None:
             raise PlanGenerationError("计划生成依赖未装配（Goal/Decompose/Schedule Agent）")
 
-        try:
-            goal_state = await self.goal_agent.run({
-                "input": topic,
-                "context": "",
-                "student_profile": student_profile,
-            })
-        except Exception as e:
-            logger.error(f"PlanCenter goal extraction failed: {e}")
-            goal_state = {}
+        payload = await self._generate_base_plan(
+            user_input=topic,
+            topic=topic,
+            context="",
+            student_profile=student_profile,
+        )
 
-        goal = {
-            "goal_title": goal_state.get("goal_title", topic),
-            "target_topic": goal_state.get("target_topic", topic),
-            "target_level": goal_state.get("target_level", "understand"),
-            "deadline": goal_state.get("deadline", ""),
-            "motivation": goal_state.get("motivation", ""),
-            "constraints": goal_state.get("constraints", []),
-        }
-
-        try:
-            decompose_state = await self.decompose_agent.run({
-                "topic": goal.get("target_topic", topic),
-                "context": topic,
-                "student_profile": student_profile,
-            })
-        except Exception as e:
-            logger.error(f"PlanCenter decomposition failed: {e}")
-            decompose_state = {}
-
-        decomposition = {
-            "macro_topics": decompose_state.get("macro_topics", []),
-            "micro_skills": decompose_state.get("micro_skills", []),
-            "prerequisites": decompose_state.get("prerequisites", []),
-        }
-
-        try:
-            schedule_state = await self.schedule_agent.run({
-                "goal": goal,
-                "decomposition": decomposition,
-                "student_profile": student_profile,
-                "existing_plan": {},
-            })
-        except Exception as e:
-            logger.error(f"PlanCenter schedule failed: {e}")
-            raise PlanGenerationError("计划编排失败，请稍后重试") from e
-
-        steps = schedule_state.get("steps", [])
+        steps = payload.get("steps", [])
         if not steps:
             raise PlanGenerationError("未能生成学习计划，请确认输入更具体")
-
-        payload = self._build_plan_payload(
-            topic=goal.get("target_topic") or topic,
-            goal=goal,
-            decomposition=decomposition,
-            schedule_state=schedule_state,
-        )
 
         enriched_steps = await self._enrich_steps_with_nodes(steps, course_id)
         normalized_milestones = self._normalize_milestones(

@@ -317,6 +317,97 @@ class TestPlanCenterSharedPayload:
             assert "knowledge_node_id" not in s
 
 
+class TestGenerateBasePlanOrchestration:
+    """P1.1 锁定：execute() 与 create_from_path() 都复用 _generate_base_plan()。"""
+
+    @pytest.mark.asyncio
+    async def test_execute_calls_generate_base_plan_once(self):
+        """execute() 路径：独立 Center，patch _generate_base_plan，断言 await 一次。"""
+        from unittest.mock import AsyncMock, patch
+        from app.centers.plan_center import PlanCenter
+        from app.centers.schemas import CenterTask
+
+        fake_payload = {
+            "type": "plan",
+            "title": "X学习计划",
+            "topic": "X",
+            "total_steps": 1,
+            "steps": [{"topic": "t", "estimated_days": 1, "topic_difficulty": 3, "status": "pending"}],
+            "milestones": [],
+            "estimated_days": 7,
+            "daily_capacity": 3,
+            "goal": {},
+            "concept_graph": {},
+            "summary": "OK",
+        }
+
+        center = PlanCenter(
+            goal_agent=AsyncMock(),
+            decompose_agent=AsyncMock(),
+            schedule_agent=AsyncMock(),
+        )
+
+        with patch.object(center, "_generate_base_plan", AsyncMock(return_value=fake_payload)) as mock_method:
+            task = CenterTask(
+                mode="plan",
+                intent="learning_path",
+                input="我想学 X",
+                params={"topic": "X"},
+                context={"student_profile": {}},
+            )
+            result = await center.execute(task)
+
+        mock_method.assert_awaited_once()
+        # execute() 包装 CenterResult；payload 应等于 _generate_base_plan 的返回值
+        assert result.event_type == "plan"
+        assert result.payload["title"] == "X学习计划"
+        assert result.payload["total_steps"] == 1
+
+    @pytest.mark.asyncio
+    async def test_create_from_path_calls_generate_base_plan_once(self):
+        """create_from_path() 路径：独立 Center，patch _generate_base_plan，断言 await 一次。"""
+        from unittest.mock import AsyncMock, patch
+        from app.centers.plan_center import PlanCenter
+
+        fake_payload = {
+            "type": "plan",
+            "title": "Transformer学习计划",
+            "topic": "Transformer",
+            "total_steps": 2,
+            "steps": [
+                {"topic": "注意力机制", "estimated_days": 1, "topic_difficulty": 3, "status": "pending"},
+                {"topic": "编码器", "estimated_days": 1, "topic_difficulty": 3, "status": "pending"},
+            ],
+            "milestones": [],
+            "estimated_days": 7,
+            "daily_capacity": 3,
+            "goal": {},
+            "concept_graph": {},
+            "summary": "OK",
+        }
+
+        center = PlanCenter(
+            goal_agent=AsyncMock(),
+            decompose_agent=AsyncMock(),
+            schedule_agent=AsyncMock(),
+            graph_service=_make_fake_graph_service(),
+            step_classifier=_make_fake_step_classifier(),
+        )
+
+        with patch.object(center, "_generate_base_plan", AsyncMock(return_value=fake_payload)) as mock_method:
+            result = await center.create_from_path(
+                topic="Transformer",
+                course_id="ai_intro",
+                student_profile={},
+            )
+
+        mock_method.assert_awaited_once()
+        # create_from_path 包装 API payload；course_id 应回填、total_steps 应等于 steps 数
+        assert result["course_id"] == "ai_intro"
+        assert result["total_steps"] == 2
+        assert result["title"] == "Transformer学习计划"
+
+
 class TestNormalizeMilestones:
     def test_string_list_normalized(self):
         from app.centers.plan_center import PlanCenter
