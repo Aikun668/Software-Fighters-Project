@@ -12,11 +12,15 @@ class PlanCenter:
         decompose_agent=None,
         schedule_agent=None,
         adjustment_agent=None,
+        graph_service=None,
+        step_classifier=None,
     ):
         self.goal_agent = goal_agent
         self.decompose_agent = decompose_agent
         self.schedule_agent = schedule_agent
         self.adjustment_agent = adjustment_agent
+        self.graph_service = graph_service
+        self.step_classifier = step_classifier
 
     async def execute(self, task: CenterTask) -> CenterResult:
         context = task.context or {}
@@ -75,23 +79,17 @@ class PlanCenter:
                 "existing_plan": {},
             })
             steps = schedule_state.get("steps", [])
+            payload = self._build_plan_payload(
+                topic=topic,
+                goal=goal,
+                decomposition=decomposition,
+                schedule_state=schedule_state,
+            )
             return CenterResult(
                 mode="plan",
                 intent=task.intent,
                 event_type="plan",
-                payload={
-                    "type": "plan",
-                    "title": schedule_state.get("plan_title", f"{topic}学习计划"),
-                    "topic": topic,
-                    "total_steps": len(steps),
-                    "steps": steps,
-                    "milestones": schedule_state.get("milestones", []),
-                    "estimated_days": schedule_state.get("estimated_days", 7),
-                    "daily_capacity": schedule_state.get("daily_capacity", 3),
-                    "goal": goal,
-                    "concept_graph": decomposition,
-                    "summary": schedule_state.get("response", ""),
-                },
+                payload=payload,
                 agent="GoalAgent+DecomposeAgent+ScheduleAgent",
                 sequence=task.sequence,
             )
@@ -105,6 +103,29 @@ class PlanCenter:
                 agent="ScheduleAgent",
                 sequence=task.sequence,
             )
+
+    @staticmethod
+    def _build_plan_payload(
+        *,
+        topic: str,
+        goal: dict,
+        decomposition: dict,
+        schedule_state: dict,
+    ) -> dict:
+        steps = schedule_state.get("steps", [])
+        return {
+            "type": "plan",
+            "title": schedule_state.get("plan_title", f"{topic}学习计划"),
+            "topic": topic,
+            "total_steps": len(steps),
+            "steps": steps,
+            "milestones": schedule_state.get("milestones", []),
+            "estimated_days": schedule_state.get("estimated_days", 7),
+            "daily_capacity": schedule_state.get("daily_capacity", 3),
+            "goal": goal,
+            "concept_graph": decomposition,
+            "summary": schedule_state.get("response", ""),
+        }
 
     async def _run_adjustment(self, task: CenterTask, student_profile: dict) -> CenterResult:
         try:
