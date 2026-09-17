@@ -71,6 +71,7 @@ from app.services.plan_constants import RETURN_MESSAGES
 from app.events.types import StreamEvent, done_event
 from app.services.intent_extractor import IntentExtractor
 from app.centers.chat_center import ChatCenter
+from app.centers.plan_center import PlanCenter, PlanGenerationError
 
 logger = logging.getLogger(__name__)
 
@@ -155,6 +156,9 @@ def _get_mindmap_agent():
 
 _solve_agent_singleton = None
 
+_plan_center_singleton = None
+_plan_center_lock = threading.Lock()
+
 
 def _get_solve_agent():
     global _solve_agent_singleton
@@ -202,6 +206,30 @@ def _get_inquiry_service():
         from app.services.inquiry_service import InquiryService
         _inquiry_service_singleton = InquiryService()
     return _inquiry_service_singleton
+
+
+def _get_plan_center():
+    """惰性单例工厂：构造 PlanCenter 并装配 Goal/Decompose/Schedule Agent。
+
+    该工厂是 API 层与 PlanCenter 之间的唯一依赖装配点。
+    graph_service / step_classifier 留 None，由 PlanCenter 走现网 fallback。
+    """
+    global _plan_center_singleton
+    if _plan_center_singleton is None:
+        with _plan_center_lock:
+            if _plan_center_singleton is None:
+                from app.agents.goal_agent import GoalAgent
+                from app.agents.decompose_agent import DecomposeAgent
+                from app.agents.schedule_agent import ScheduleAgent
+                from app.centers.plan_center import PlanCenter
+
+                mock = _get_mock_flag()
+                _plan_center_singleton = PlanCenter(
+                    goal_agent=GoalAgent(use_mock_llm=mock),
+                    decompose_agent=DecomposeAgent(use_mock_llm=mock),
+                    schedule_agent=ScheduleAgent(use_mock_llm=mock),
+                )
+    return _plan_center_singleton
 
 
 # ── SSE 输出安全 ─────────────────────────────────────────────────
@@ -1100,179 +1128,19 @@ async def get_layered_graph(body: GraphLayeredRequest):
 
 @router.post("/plans/create-from-path")
 async def create_plan_from_path(body: CreatePlanFromPathRequest):
-    """一键生成学习计划。
-
-    走新管线：GoalAgent → DecomposeAgent → ScheduleAgent。
-    生成后自动为每个 step 匹配知识图谱节点（knowledge_node_id）。
-    """
+    """一键生成学习计划。业务编排全部委派给 PlanCenter.create_from_path()。"""
     try:
-        user_id = body.user_id
-        course_id = body.course_id
-        student_profile = body.student_profile
-        topic = body.topic or ""
-
-        # ── 管线：Goal → Decompose → Schedule ─────────────────
-        from app.agents.goal_agent import GoalAgent
-        from app.agents.decompose_agent import DecomposeAgent
-        from app.agents.schedule_agent import ScheduleAgent
-
-        mock = _get_mock_flag()
-        goal_agent = GoalAgent(use_mock_llm=mock)
-        decompose_agent = DecomposeAgent(use_mock_llm=mock)
-        schedule_agent = ScheduleAgent(use_mock_llm=mock)
-
-        # Step 1: Goal extraction
-        goal_state = await goal_agent.run({
-            "input": topic,
-            "context": "",
-            "student_profile": student_profile,
-        })
-        goal = {
-            "goal_title": goal_state.get("goal_title", topic),
-            "target_topic": goal_state.get("target_topic", topic),
-            "target_level": goal_state.get("target_level", "understand"),
-            "deadline": goal_state.get("deadline", ""),
-            "motivation": goal_state.get("motivation", ""),
-            "constraints": goal_state.get("constraints", []),
-        }
-
-        # Step 2: Decomposition
-        effective_topic = goal.get("target_topic") or topic
-        decompose_state = await decompose_agent.run({
-            "topic": effective_topic,
-            "context": topic,
-            "student_profile": student_profile,
-        })
-        decomposition = {
-            "macro_topics": decompose_state.get("macro_topics", []),
-            "micro_skills": decompose_state.get("micro_skills", []),
-            "prerequisites": decompose_state.get("prerequisites", []),
-        }
-
-        # Step 3: Schedule generation
-        schedule_state = await schedule_agent.run({
-            "goal": goal,
-            "decomposition": decomposition,
-            "student_profile": student_profile,
-            "existing_plan": {},
-        })
-        steps = schedule_state.get("steps", [])
-
-        if not steps:
-            return api_error(
-                ErrorCode.GENERATION_FAILED, "未能生成学习计划，请确认输入更具体", status_code=400
-            )
-
-        # ── Step enrichment: 匹配 knowledge_node_id ────────────
-        plan_steps = await _enrich_steps_with_nodes(steps, course_id)
-
-        # ── Normalize milestones: 兼容字符串格式 → {milestone_id, after_step, description} ──
-        raw_milestones = schedule_state.get("milestones", [])
-        milestones = _normalize_milestones(raw_milestones, len(plan_steps))
-
-        return api_success({
-            "course_id": course_id,
-            "total_steps": len(plan_steps),
-            "steps": plan_steps,
-            "title": schedule_state.get("plan_title", f"{effective_topic}学习计划"),
-            "milestones": milestones,
-            "estimated_days": schedule_state.get("estimated_days", 7),
-            "daily_capacity": schedule_state.get("daily_capacity", 3),
-            "concept_graph": decomposition,
-            "summary": schedule_state.get("response", ""),
-        })
+        result = await _get_plan_center().create_from_path(
+            topic=body.topic or "",
+            course_id=body.course_id,
+            student_profile=body.student_profile,
+        )
+        return api_success(result)
+    except PlanGenerationError as e:
+        return api_error(ErrorCode.GENERATION_FAILED, str(e), status_code=400)
     except Exception as e:
         logger.error(f"Failed to create plan from path: {e}", exc_info=True)
         return api_error(ErrorCode.INTERNAL_ERROR, "创建学习计划失败，请稍后重试", status_code=500)
-
-
-async def _enrich_steps_with_nodes(steps: list[dict], course_id: str) -> list[dict]:
-    """用知识图谱节点匹配每个 step 的 topic，打上 knowledge_node_id + suggested_resource_types。
-
-    先用图谱已有节点精确匹配（name/id），匹配不到的用 LLM 分类兜底。
-    """
-    from app.services.exercise_categorization_service import categorize_exercises
-
-    # Collect all graph nodes
-    try:
-        graph_service = _get_graph_service()
-        all_nodes = graph_service.load_skeleton().get("nodes", [])
-        dynamic_nodes = graph_service._all_nodes(course_id)
-    except Exception as exc:
-        logger.warning(f"Graph service unavailable during step enrichment: {exc}")
-        all_nodes = []
-        dynamic_nodes = []
-    node_lookup: dict[str, str] = {}
-    node_category: dict[str, str] = {}
-    for n in dynamic_nodes:
-        name = (n.get("name") or "").strip().lower()
-        nid = (n.get("id") or "").strip()
-        if name and nid:
-            node_lookup[name] = nid
-            node_category[name] = (n.get("category") or "").strip()
-
-    def _suggest_resources(topic: str, category: str) -> list[str]:
-        """根据知识点类别建议资源类型。"""
-        cat_lower = category.lower()
-        if cat_lower in ("基础", "foundation", "概念", "concept"):
-            return ["document", "mindmap", "exercise"]
-        elif cat_lower in ("算法", "algorithm", "代码", "code"):
-            return ["document", "code_demo", "exercise", "mindmap"]
-        elif cat_lower in ("应用", "application", "实战", "practice"):
-            return ["document", "case_study", "code_demo", "exercise"]
-        elif cat_lower in ("数学", "math", "理论", "theory"):
-            return ["document", "formula_sheet", "exercise"]
-        else:
-            return ["document", "mindmap", "exercise"]
-
-    # Try exact match first, collect unknowns for LLM classification
-    unknowns: list[dict] = []
-    plan_steps: list[dict] = []
-    for i, step in enumerate(steps):
-        topic = (step.get("topic") or "").strip()
-        matched_id = node_lookup.get(topic.lower(), "")
-        matched_cat = node_category.get(topic.lower(), "")
-
-        if matched_id:
-            plan_steps.append({
-                "step_order": i + 1,
-                "topic": topic,
-                "knowledge_node_id": matched_id,
-                "status": step.get("status", "pending"),
-                "estimated_days": step.get("estimated_days", 1),
-                "topic_difficulty": step.get("topic_difficulty", 3),
-                "suggested_resource_types": _suggest_resources(topic, matched_cat),
-            })
-        else:
-            unknowns.append({"index": i, "topic": topic, "step": step})
-
-    # LLM classification for unmatched steps
-    if unknowns and all_nodes:
-        slim_nodes = [{"id": n.get("id",""), "name": n.get("name",""), "description": n.get("description","")} for n in all_nodes]
-        exercises = [{"question": u["topic"], "answer": "", "question_type": "short_answer"} for u in unknowns]
-        try:
-            results = await categorize_exercises(exercises, slim_nodes, course_id)
-            result_map = {r["index"]: r.get("knowledge_node_id", "") for r in results}
-        except Exception as exc:
-            logger.warning(f"Step enrichment LLM fallback failed: {exc}")
-            result_map = {}
-
-        for u in unknowns:
-            step = u["step"]
-            nid = result_map.get(u["index"], "")
-            plan_steps.append({
-                "step_order": u["index"] + 1,
-                "topic": u["topic"],
-                "knowledge_node_id": nid,
-                "status": step.get("status", "pending"),
-                "estimated_days": step.get("estimated_days", 1),
-                "topic_difficulty": step.get("topic_difficulty", 3),
-                "suggested_resource_types": _suggest_resources(u["topic"], ""),
-            })
-
-    # Sort by step_order
-    plan_steps.sort(key=lambda s: s["step_order"])
-    return plan_steps
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1469,28 +1337,6 @@ def _compute_next_milestone(plan: dict, completed_steps: int) -> dict | None:
                 "steps_remaining": m.get("after_step", 0) - completed_steps,
             }
     return None
-
-
-def _normalize_milestones(raw: list, total_steps: int) -> list[dict]:
-    """将 ScheduleAgent 返回的里程碑标准化为 {milestone_id, after_step, description}。
-
-    输入可能是字符串列表（LLM 直接输出）或已是正确格式。
-    """
-    if not raw:
-        return []
-    if isinstance(raw[0], dict) and "milestone_id" in raw[0]:
-        return raw
-    normalized = []
-    n = len(raw)
-    for i, item in enumerate(raw):
-        desc = item if isinstance(item, str) else item.get("description", str(item))
-        after_step = round(total_steps * (i + 1) / (n + 1))
-        normalized.append({
-            "milestone_id": f"m{i + 1}",
-            "after_step": after_step,
-            "description": desc,
-        })
-    return normalized
 
 
 # ═══════════════════════════════════════════════════════════════════

@@ -1,4 +1,4 @@
-"""PlanCenter API 契约离线测试（Task 2 阶段：覆盖 create_from_path + 共享 payload + 依赖注入）。
+"""PlanCenter API 契约离线测试。
 
 不调真实 LLM、真实 GraphService、真实网络。仅验证：
 - create_from_path() 成功路径产出完整 API payload
@@ -6,8 +6,8 @@
 - 依赖注入生效：注入实例则使用，未注入则走 fallback（用 is not None 不用 or）
 - 空 steps 抛 PlanGenerationError
 - _normalize_milestones / _enrich_steps_with_nodes 行为对齐 API 旧实现
-
-API 层去重 / _get_plan_center 单例 / internal_api 旧实现删除 → Task 3。
+- API 路由 /internal/plans/create-from-path 的 HTTP 契约：200/400/500 三种分支
+- API 路由只委派给 PlanCenter，不再重复 Goal → Decompose → Schedule（结构性搜索）
 """
 
 import pytest
@@ -341,3 +341,152 @@ class TestNormalizeMilestones:
         from app.centers.plan_center import PlanCenter
 
         assert PlanCenter._normalize_milestones([], total_steps=3) == []
+
+
+class TestCreatePlanFromPathHttpContract:
+    """API 层 HTTP 契约：/internal/plans/create-from-path 的 200/400/500 分支。"""
+
+    @pytest.fixture
+    def fake_center_factory(self):
+        """patch internal_api._get_plan_center，返回一个可控制行为的假 Center。"""
+        from unittest.mock import AsyncMock, patch
+
+        def _make(return_value=None, side_effect=None):
+            fake_center = AsyncMock()
+            if side_effect is not None:
+                fake_center.create_from_path.side_effect = side_effect
+            else:
+                fake_center.create_from_path.return_value = return_value
+            return patch("internal_api._get_plan_center", return_value=fake_center), fake_center
+
+        return _make
+
+    @pytest.mark.asyncio
+    async def test_success_returns_200_with_payload(self, fake_center_factory):
+        """假 Center 返回完整 dict → HTTP 200，body.success is True，data 与假 Center 一致。"""
+        from app.api.errors import api_success
+        from internal_api import CreatePlanFromPathRequest
+
+        payload = {
+            "course_id": "ai_intro",
+            "total_steps": 2,
+            "steps": [
+                {"step_order": 1, "topic": "注意力机制", "knowledge_node_id": "attention",
+                 "status": "pending", "estimated_days": 1, "topic_difficulty": 3,
+                 "suggested_resource_types": ["document", "mindmap", "exercise"]},
+            ],
+            "title": "Transformer学习计划",
+            "milestones": [{"milestone_id": "m1", "after_step": 1, "description": "完成基础"}],
+            "estimated_days": 7,
+            "daily_capacity": 3,
+            "concept_graph": {"macro_topics": []},
+            "summary": "OK",
+        }
+        ctx, fake_center = fake_center_factory(return_value=payload)
+        with ctx:
+            from fastapi.testclient import TestClient
+            from internal_api import router
+            from fastapi import FastAPI
+            app = FastAPI()
+            app.include_router(router)
+            client = TestClient(app)
+
+            response = client.post("/internal/plans/create-from-path", json={
+                "user_id": 123,
+                "course_id": "ai_intro",
+                "topic": "学习 Transformer",
+                "student_profile": {"level": "beginner"},
+            })
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["success"] is True
+        assert body["data"] == payload
+
+        # Center 只调一次，参数对齐
+        fake_center.create_from_path.assert_awaited_once()
+        call_kwargs = fake_center.create_from_path.await_args.kwargs
+        assert call_kwargs["topic"] == "学习 Transformer"
+        assert call_kwargs["course_id"] == "ai_intro"
+        assert call_kwargs["student_profile"] == {"level": "beginner"}
+
+    @pytest.mark.asyncio
+    async def test_plan_generation_error_returns_400(self, fake_center_factory):
+        """假 Center 抛 PlanGenerationError → HTTP 400 + errorCode=GENERATION_FAILED。"""
+        from app.centers.plan_center import PlanGenerationError
+
+        ctx, _ = fake_center_factory(side_effect=PlanGenerationError("未能生成学习计划，请确认输入更具体"))
+        with ctx:
+            from fastapi.testclient import TestClient
+            from internal_api import router
+            from fastapi import FastAPI
+            app = FastAPI()
+            app.include_router(router)
+            client = TestClient(app)
+
+            response = client.post("/internal/plans/create-from-path", json={
+                "user_id": 123,
+                "course_id": "ai_intro",
+                "topic": "模糊主题",
+                "student_profile": {},
+            })
+
+        assert response.status_code == 400
+        body = response.json()
+        assert body["success"] is False
+        assert body["errorCode"] == "GENERATION_FAILED"
+        assert "未能生成学习计划" in body["error"]
+
+    @pytest.mark.asyncio
+    async def test_unexpected_error_returns_500(self, fake_center_factory):
+        """假 Center 抛 RuntimeError → HTTP 500 + errorCode=INTERNAL_ERROR。"""
+        ctx, _ = fake_center_factory(side_effect=RuntimeError("boom"))
+        with ctx:
+            from fastapi.testclient import TestClient
+            from internal_api import router
+            from fastapi import FastAPI
+            app = FastAPI()
+            app.include_router(router)
+            client = TestClient(app)
+
+            response = client.post("/internal/plans/create-from-path", json={
+                "user_id": 123,
+                "course_id": "ai_intro",
+                "topic": "学习 X",
+                "student_profile": {},
+            })
+
+        assert response.status_code == 500
+        body = response.json()
+        assert body["success"] is False
+        assert body["errorCode"] == "INTERNAL_ERROR"
+
+
+class TestApiNoLongerReimplementsPipeline:
+    """结构性断言：API 路由内不再直接调 Goal/Decompose/Schedule Agent，不再有 enrichment/normalize。"""
+
+    def test_create_plan_from_path_route_does_not_call_agents_directly(self):
+        """读取路由函数源码，确认不出现 Agent 构造与三段式调用。"""
+        import inspect
+        from internal_api import create_plan_from_path
+
+        source = inspect.getsource(create_plan_from_path)
+        # 路由函数体内不能直接构造 Agent
+        assert "GoalAgent(" not in source, "create_plan_from_path 仍直接构造 GoalAgent"
+        assert "DecomposeAgent(" not in source, "create_plan_from_path 仍直接构造 DecomposeAgent"
+        assert "ScheduleAgent(" not in source, "create_plan_from_path 仍直接构造 ScheduleAgent"
+        assert "goal_agent.run" not in source, "create_plan_from_path 仍直接调 goal_agent.run"
+        assert "decompose_agent.run" not in source, "create_plan_from_path 仍直接调 decompose_agent.run"
+        assert "schedule_agent.run" not in source, "create_plan_from_path 仍直接调 schedule_agent.run"
+        # 必须委派给 _get_plan_center().create_from_path
+        assert "_get_plan_center" in source
+        assert "create_from_path" in source
+
+    def test_internal_api_no_longer_has_enrich_or_normalize_helpers(self):
+        """API 模块不再持有旧的领域辅助函数。"""
+        import internal_api
+
+        assert not hasattr(internal_api, "_enrich_steps_with_nodes"), "API 仍持有 _enrich_steps_with_nodes"
+        assert not hasattr(internal_api, "_normalize_milestones"), "API 仍持有 _normalize_milestones"
+        # 但 _compute_next_milestone 必须保留（计划状态端点还在用）
+        assert hasattr(internal_api, "_compute_next_milestone"), "_compute_next_milestone 被误删"
