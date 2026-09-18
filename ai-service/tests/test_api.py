@@ -102,17 +102,21 @@ class TestStreamingEndpoints:
 
     @pytest.mark.asyncio
     async def test_resources_stream(self, async_client):
-        with patch("internal_api._get_resource_workflow") as mock_get:
-            mock_workflow = AsyncMock()
-            mock_workflow.run = AsyncMock(return_value={
-                "content_blocks": [{"type": "section", "heading": "Test", "content": "Content"}],
-                "questions": [],
-                "resource_ids": [],
-                "response": "Done",
-                "error": "",
-            })
-            mock_get.return_value = mock_workflow
+        # Task 1 末尾迁移：patch 切到 ResourceCenter 工厂；Task 3 后转绿
+        from app.centers.resource_center import ResourceCenter
 
+        center = ResourceCenter()
+        fake_workflow = AsyncMock()
+        fake_workflow.run = AsyncMock(return_value={
+            "content_blocks": [{"type": "section", "heading": "Test", "content": "Content"}],
+            "questions": [],
+            "resource_ids": [],
+            "response": "Done",
+            "error": "",
+        })
+        center.resource_workflow = fake_workflow
+
+        with patch("internal_api._get_resource_center", return_value=center):
             response = await async_client.post(
                 "/internal/resources/generate",
                 json={"topic": "Python", "user_id": 1, "student_profile": {}},

@@ -136,6 +136,23 @@ def _mock_workflow_output(agent_name: str) -> dict:
     return outputs.get(agent_name, outputs["content"])
 
 
+def _make_fake_resource_center(workflow_state=None, *, side_effect=None):
+    """为 test_e2e_resource_workshop.py 构造 ResourceCenter + 注入 fake workflow。
+
+    Task 1 末尾迁移 patch 点用；Task 3 完成后 /internal/resources/generate 真正接 ResourceCenter 时转绿。
+    """
+    from app.centers.resource_center import ResourceCenter
+
+    center = ResourceCenter()
+    fake_workflow = AsyncMock()
+    if side_effect is not None:
+        fake_workflow.run = AsyncMock(side_effect=side_effect)
+    else:
+        fake_workflow.run = AsyncMock(return_value=workflow_state)
+    center.resource_workflow = fake_workflow
+    return center
+
+
 async def _consume_sse(response) -> list[dict]:
     """消费 SSE 流，返回解析后的事件列表。"""
     events = []
@@ -174,10 +191,7 @@ class TestL1_InputValidation:
 
     def test_invalid_resource_type_accepted_but_not_matched(self, client):
         """无效 resource_type 不阻塞请求，Director 走 rule/LLM 回退（scoped mock workflow）"""
-        with patch("internal_api._get_resource_workflow") as mock_get:
-            mock_workflow = AsyncMock()
-            mock_workflow.run = AsyncMock(return_value=_mock_workflow_output("content"))
-            mock_get.return_value = mock_workflow
+        with patch("internal_api._get_resource_center", return_value=_make_fake_resource_center(_mock_workflow_output("content"))):
             response = client.post("/internal/resources/generate", json={
                 "topic": "Python基础", "resource_type": "invalid_type_xyz",
             })
@@ -185,10 +199,7 @@ class TestL1_InputValidation:
 
     def test_topic_with_special_chars(self, client):
         """特殊字符 topic 通过验证（scoped mock workflow）"""
-        with patch("internal_api._get_resource_workflow") as mock_get:
-            mock_workflow = AsyncMock()
-            mock_workflow.run = AsyncMock(return_value=_mock_workflow_output("content"))
-            mock_get.return_value = mock_workflow
+        with patch("internal_api._get_resource_center", return_value=_make_fake_resource_center(_mock_workflow_output("content"))):
             response = client.post("/internal/resources/generate", json={
                 "topic": "C++ & Python 对比：谁更好？",
             })
@@ -326,10 +337,7 @@ class TestL4_SSEStreamContract:
     @pytest.mark.asyncio
     async def test_sse_stream_contains_required_events(self, async_client, student_profile):
         """SSE 流包含 stage_start → stage_end → done 完整序列"""
-        with patch("internal_api._get_resource_workflow") as mock_get:
-            mock_workflow = AsyncMock()
-            mock_workflow.run = AsyncMock(return_value=_mock_workflow_output("content"))
-            mock_get.return_value = mock_workflow
+        with patch("internal_api._get_resource_center", return_value=_make_fake_resource_center(_mock_workflow_output("content"))):
 
             response = await async_client.post(
                 "/internal/resources/generate",
@@ -349,10 +357,7 @@ class TestL4_SSEStreamContract:
     async def test_sse_stream_done_event_has_content_blocks(self, async_client):
         """done 事件携带 content_blocks 和 response"""
         output = _mock_workflow_output("content")
-        with patch("internal_api._get_resource_workflow") as mock_get:
-            mock_workflow = AsyncMock()
-            mock_workflow.run = AsyncMock(return_value=output)
-            mock_get.return_value = mock_workflow
+        with patch("internal_api._get_resource_center", return_value=_make_fake_resource_center(output)):
 
             response = await async_client.post(
                 "/internal/resources/generate",
@@ -379,10 +384,7 @@ class TestL4_SSEStreamContract:
         # 归一化：所有类型走 content mock 输出结构
         output = _mock_workflow_output("content")
 
-        with patch("internal_api._get_resource_workflow") as mock_get:
-            mock_workflow = AsyncMock()
-            mock_workflow.run = AsyncMock(return_value=output)
-            mock_get.return_value = mock_workflow
+        with patch("internal_api._get_resource_center", return_value=_make_fake_resource_center(output)):
 
             response = await async_client.post(
                 "/internal/resources/generate",
@@ -397,10 +399,7 @@ class TestL4_SSEStreamContract:
     @pytest.mark.asyncio
     async def test_sse_error_graceful_degradation(self, async_client):
         """工作流异常时 SSE 流仍返回 done 事件 + error 信息"""
-        with patch("internal_api._get_resource_workflow") as mock_get:
-            mock_workflow = AsyncMock()
-            mock_workflow.run = AsyncMock(side_effect=RuntimeError("模拟 LLM 调用失败"))
-            mock_get.return_value = mock_workflow
+        with patch("internal_api._get_resource_center", return_value=_make_fake_resource_center(side_effect=RuntimeError("模拟 LLM 调用失败"))):
 
             response = await async_client.post(
                 "/internal/resources/generate",
@@ -428,10 +427,7 @@ class TestL4b_SSEReviewMetadata:
             "fallback_used": False,
             "final_status": "success",
         }
-        with patch("internal_api._get_resource_workflow") as mock_get:
-            mock_workflow = AsyncMock()
-            mock_workflow.run = AsyncMock(return_value=output)
-            mock_get.return_value = mock_workflow
+        with patch("internal_api._get_resource_center", return_value=_make_fake_resource_center(output)):
 
             response = await async_client.post(
                 "/internal/resources/generate",
@@ -455,10 +451,7 @@ class TestL4b_SSEReviewMetadata:
             "fallback_used": False,
             "final_status": "success",
         }
-        with patch("internal_api._get_resource_workflow") as mock_get:
-            mock_workflow = AsyncMock()
-            mock_workflow.run = AsyncMock(return_value=output)
-            mock_get.return_value = mock_workflow
+        with patch("internal_api._get_resource_center", return_value=_make_fake_resource_center(output)):
 
             response = await async_client.post(
                 "/internal/resources/generate",
@@ -532,10 +525,7 @@ class TestL6_EdgeCases:
     async def test_very_long_topic(self, async_client):
         """超长 topic（500+ 字符）不会导致崩溃"""
         long_topic = "深度学习" * 200
-        with patch("internal_api._get_resource_workflow") as mock_get:
-            mock_workflow = AsyncMock()
-            mock_workflow.run = AsyncMock(return_value=_mock_workflow_output("content"))
-            mock_get.return_value = mock_workflow
+        with patch("internal_api._get_resource_center", return_value=_make_fake_resource_center(_mock_workflow_output("content"))):
 
             response = await async_client.post(
                 "/internal/resources/generate",
@@ -546,10 +536,7 @@ class TestL6_EdgeCases:
     @pytest.mark.asyncio
     async def test_topic_with_unicode_emoji(self, async_client):
         """含 emoji 和特殊 Unicode 的 topic"""
-        with patch("internal_api._get_resource_workflow") as mock_get:
-            mock_workflow = AsyncMock()
-            mock_workflow.run = AsyncMock(return_value=_mock_workflow_output("content"))
-            mock_get.return_value = mock_workflow
+        with patch("internal_api._get_resource_center", return_value=_make_fake_resource_center(_mock_workflow_output("content"))):
 
             response = await async_client.post(
                 "/internal/resources/generate",
@@ -560,10 +547,7 @@ class TestL6_EdgeCases:
     @pytest.mark.asyncio
     async def test_empty_student_profile(self, async_client):
         """空学生画像不会导致崩溃"""
-        with patch("internal_api._get_resource_workflow") as mock_get:
-            mock_workflow = AsyncMock()
-            mock_workflow.run = AsyncMock(return_value=_mock_workflow_output("content"))
-            mock_get.return_value = mock_workflow
+        with patch("internal_api._get_resource_center", return_value=_make_fake_resource_center(_mock_workflow_output("content"))):
 
             response = await async_client.post(
                 "/internal/resources/generate",
@@ -574,10 +558,7 @@ class TestL6_EdgeCases:
     @pytest.mark.asyncio
     async def test_concurrent_requests(self, async_client):
         """并发 5 请求不互相干扰"""
-        with patch("internal_api._get_resource_workflow") as mock_get:
-            mock_workflow = AsyncMock()
-            mock_workflow.run = AsyncMock(return_value=_mock_workflow_output("content"))
-            mock_get.return_value = mock_workflow
+        with patch("internal_api._get_resource_center", return_value=_make_fake_resource_center(_mock_workflow_output("content"))):
 
             async def one_request(i: int):
                 return await async_client.post(
