@@ -72,6 +72,7 @@ from app.events.types import StreamEvent, done_event
 from app.services.intent_extractor import IntentExtractor
 from app.centers.chat_center import ChatCenter
 from app.centers.plan_center import PlanCenter, PlanGenerationError
+from app.centers.resource_center import ResourceCenter
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +89,8 @@ _path_agent_singleton = None
 _mindmap_agent_singleton = None
 _code_agent_singleton = None
 _profile_workflow_singleton = None
-_resource_workflow_singleton = None
+_resource_center_singleton = None
+_resource_center_lock = threading.Lock()
 _path_workflow_singleton = None
 _inquiry_service_singleton = None
 
@@ -184,12 +186,21 @@ def _get_profile_workflow():
     return _profile_workflow_singleton
 
 
-def _get_resource_workflow():
-    global _resource_workflow_singleton
-    if _resource_workflow_singleton is None:
-        from app.workflows.resource_gen import ResourceGenWorkflow
-        _resource_workflow_singleton = ResourceGenWorkflow(use_mock=_get_mock_flag())
-    return _resource_workflow_singleton
+def _get_resource_center() -> ResourceCenter:
+    """资源域唯一业务入口工厂（API 层唯一允许装配 ResourceGenWorkflow 的位置）。
+
+    返回单例 ResourceCenter(resource_workflow=ResourceGenWorkflow(use_mock=_get_mock_flag()))。
+    API 路由不再直接获取 ResourceGenWorkflow；测试 patch 目标为 internal_api._get_resource_center。
+    """
+    global _resource_center_singleton
+    if _resource_center_singleton is None:
+        with _resource_center_lock:
+            if _resource_center_singleton is None:
+                from app.workflows.resource_gen import ResourceGenWorkflow
+                _resource_center_singleton = ResourceCenter(
+                    resource_workflow=ResourceGenWorkflow(use_mock=_get_mock_flag()),
+                )
+    return _resource_center_singleton
 
 
 def _get_path_workflow():
@@ -380,50 +391,14 @@ async def resources_generate(body: ResourceGenRequest):
     student_profile = body.student_profile
     resource_type = body.resource_type
 
-    workflow = _get_resource_workflow()
-
     async def event_stream():
-        queue: asyncio.Queue = asyncio.Queue(maxsize=256)
-        try:
-            async def run_workflow():
-                try:
-                    state = await workflow.run({
-                        "user_id": body.user_id,
-                        "topic": topic,
-                        "student_profile": student_profile,
-                        "resource_type": resource_type or "",
-                        "event_queue": queue,
-                    })
-                    await queue.put(done_event({
-                        "content_blocks": state.get("content_blocks", []),
-                        "questions": state.get("questions", []),
-                        "response": state.get("response", ""),
-                        "error": state.get("error", ""),
-                        "review_status": state.get("review_status", "not_applicable"),
-                        "repair_attempted": state.get("repair_attempted", False),
-                        "fallback_used": state.get("fallback_used", False),
-                        "final_status": state.get("final_status", "success"),
-                    }))
-                except Exception as e:
-                    logger.error(f"Resources generate workflow failed: {e}", exc_info=True)
-                    await queue.put(done_event({"error": "资源生成失败，请稍后重试"}))
-
-            task = asyncio.ensure_future(run_workflow())
-
-            while True:
-                event = await queue.get()
-                if isinstance(event, StreamEvent):
-                    yield event.to_sse()
-                    if event.type == "done":
-                        break
-                else:
-                    yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-
-            await task
-        except Exception as e:
-            logger.error(f"Resources generate SSE error: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'content': '资源生成失败，请稍后重试'}, ensure_ascii=False)}\n\n"
-            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
+        async for event in _get_resource_center().stream_generate(
+            user_id=body.user_id,
+            topic=topic,
+            student_profile=student_profile,
+            resource_type=resource_type or "",
+        ):
+            yield event.to_sse()
 
     return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
 
@@ -2047,7 +2022,7 @@ async def _unified_chat(body: UnifiedChatRequest):
 
 @router.post("/inquiry/resolve")
 async def inquiry_resolve(body: InquiryResolveRequest):
-    """接收用户对追问的回答，合并后调用 ResourceGenWorkflow 生成资源。"""
+    """接收用户对追问的回答，合并后委派给 ResourceCenter 生成资源。"""
     body = sanitize_model(body)
     student_profile = body.student_profile
 
@@ -2075,48 +2050,13 @@ async def inquiry_resolve(body: InquiryResolveRequest):
     enriched_profile["_inquiry_context"] = context_note
 
     async def event_stream():
-        queue: asyncio.Queue = asyncio.Queue(maxsize=256)
-        try:
-            async def run_workflow():
-                try:
-                    workflow = _get_resource_workflow()
-                    state = await workflow.run({
-                        "user_id": body.user_id,
-                        "topic": topic,
-                        "student_profile": enriched_profile,
-                        "resource_type": primary_type or "",
-                        "event_queue": queue,
-                    })
-                    await queue.put(done_event({
-                        "content_blocks": state.get("content_blocks", []),
-                        "questions": state.get("questions", []),
-                        "response": state.get("response", ""),
-                        "error": state.get("error", ""),
-                        "review_status": state.get("review_status", "not_applicable"),
-                        "repair_attempted": state.get("repair_attempted", False),
-                        "fallback_used": state.get("fallback_used", False),
-                        "final_status": state.get("final_status", "success"),
-                    }))
-                except Exception as e:
-                    logger.error(f"Inquiry resolve workflow failed: {e}", exc_info=True)
-                    await queue.put(done_event({"error": "资源生成失败，请稍后重试"}))
-
-            task = asyncio.ensure_future(run_workflow())
-
-            while True:
-                event = await queue.get()
-                if isinstance(event, StreamEvent):
-                    yield event.to_sse()
-                    if event.type == "done":
-                        break
-                else:
-                    yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-
-            await task
-        except Exception as e:
-            logger.error(f"Inquiry resolve SSE error: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'content': '资源生成失败'}, ensure_ascii=False)}\n\n"
-            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
+        async for event in _get_resource_center().stream_generate(
+            user_id=body.user_id,
+            topic=topic,
+            student_profile=enriched_profile,
+            resource_type=primary_type or "",
+        ):
+            yield event.to_sse()
 
     return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
 

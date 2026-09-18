@@ -239,3 +239,31 @@ class TestResourceCenterApiDelegation:
         events = await _consume_sse(response)
         done_events = [e for e in events if e.get("type") == "done"]
         assert len(done_events) == 1
+
+
+class TestResourceApiStructuralAssertions:
+    """API 路由源码结构断言：路由仅委派 ResourceCenter，不再直接运行 Workflow。"""
+
+    @staticmethod
+    def _route_source(func):
+        import inspect
+        return inspect.getsource(func)
+
+    def test_resources_generate_route_delegates_to_resource_center(self):
+        from internal_api import resources_generate
+
+        source = self._route_source(resources_generate)
+        assert "_get_resource_workflow" not in source, "resources_generate 仍直接取 Workflow"
+        assert "workflow.run" not in source, "resources_generate 仍直接调 workflow.run"
+        assert "_get_resource_center" in source, "resources_generate 未委派 ResourceCenter"
+        assert "stream_generate" in source, "resources_generate 未调 stream_generate"
+
+    def test_inquiry_resolve_route_delegates_to_resource_center(self):
+        from internal_api import inquiry_resolve
+
+        source = self._route_source(inquiry_resolve)
+        assert "_get_resource_workflow" not in source, "inquiry_resolve 仍直接取 Workflow"
+        assert "workflow.run" not in source, "inquiry_resolve 仍直接调 workflow.run"
+        assert "_get_resource_center" in source, "inquiry_resolve 未委派 ResourceCenter"
+        assert "stream_generate" in source, "inquiry_resolve 未调 stream_generate"
+        assert "_inquiry_context" in source, "inquiry_resolve 未保留 _inquiry_context 注入"
