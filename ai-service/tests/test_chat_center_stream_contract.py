@@ -35,7 +35,14 @@ from app.events.types import (
 )
 
 
-def _token(content: str) -> StreamEvent:
+def _token(content) -> StreamEvent:
+    """_StubResultAgent 的 token helper: 接受 dict 直接作 data,或字符串包成 {"content": s}。
+
+    真实 ResultAgent 用 _token_event(chunk: str) → data={"content": chunk}。
+    测试 helper 同时接受 `_token("你好")` 和 `_token({"content": "..."})`。
+    """
+    if isinstance(content, dict):
+        return StreamEvent(type=StreamEventType.TOKEN, data=content)
     return StreamEvent(type=StreamEventType.TOKEN, data={"content": content})
 
 
@@ -80,17 +87,36 @@ def _build_plan(mode: str = "auto", intent: str = "tutor_question", message: str
     )
 
 
-def _make_center(*, result_agent=None, extract_knowledge_nodes=None) -> ChatCenter:
+async def _stub_extract(*args, **kwargs):
+    """默认 stub:返回空分组,防止真实 LLM 调用污染测试。"""
+    return {"primary": [], "related": [], "broad": [], "all": []}
+
+
+def _make_center(
+    *,
+    result_agent=None,
+    extract_knowledge_nodes=None,
+    recommendation_timeout_sec=None,
+) -> ChatCenter:
     """构造 ChatCenter + 注入 stub ResultAgent + 注入 fake extract 函数。
 
     Test 1 (RED) 时 ChatCenter.stream_chat 尚未实现 → 全部 AttributeError。
+    Task 2 (GREEN) 后默认注入 stub result_agent + stub extract,避免真实 LLM 调用。
     """
     center = ChatCenter()
-    if result_agent is not None:
-        center.result_agent = result_agent
+    if result_agent is None:
+        # 默认 stub:一个 token + 一个 done,让 stream_chat 能立即收敛。
+        result_agent = _StubResultAgent(
+            events=[
+                _token({"content": "stub"}),
+                done_event({"summary": "stub"}),
+            ]
+        )
+    center.result_agent = result_agent
     # stream_chat 必须能从中心提取 extract 函数;测试通过构造时直接 monkey patch
-    if extract_knowledge_nodes is not None:
-        center._extract_knowledge_nodes = extract_knowledge_nodes
+    center._extract_knowledge_nodes = extract_knowledge_nodes or _stub_extract
+    if recommendation_timeout_sec is not None:
+        center._recommendation_timeout_sec = recommendation_timeout_sec
     return center
 
 
@@ -350,8 +376,9 @@ class TestChatCenterStreamChatRecommendation:
         center = _make_center(
             result_agent=ra,
             extract_knowledge_nodes=_hanging_extract,
+            recommendation_timeout_sec=0.5,
         )
-        # 预算默认 10s,测试运行时间应远小于此
+        # 预算是 0.5s,测试 wait_for 3s 作为兜底保护
         start = asyncio.get_event_loop().time()
         events = await asyncio.wait_for(
             _consume(center.stream_chat(
@@ -406,9 +433,10 @@ class TestChatCenterStreamChatCancellation:
 
             async def execute(self, plan):
                 self.execute_calls.append(plan)
+                # 先 yield 一个事件,让 consumer 能拿到第一个
+                yield StreamEvent(type=StreamEventType.CENTER_START, stage="auto", message="start")
                 # 永不结束
                 await asyncio.Event().wait()
-                yield  # 让 Python 把它当 generator
 
         ra = _HangingResultAgent()
         center = _make_center(result_agent=ra)
@@ -438,8 +466,10 @@ class TestChatCenterStreamChatStructural:
         """ChatCenter 必须有 stream_chat 方法(Task 2 实现后 GREEN)。"""
         assert hasattr(ChatCenter, "stream_chat"), "ChatCenter.stream_chat 必须存在"
         import inspect
-        assert inspect.iscoroutinefunction(ChatCenter.stream_chat), \
-            "stream_chat 必须是 async generator 或 async 函数"
+        assert (
+            inspect.iscoroutinefunction(ChatCenter.stream_chat)
+            or inspect.isasyncgenfunction(ChatCenter.stream_chat)
+        ), "stream_chat 必须是 async 函数或 async generator"
 
     def test_stream_chat_signature_accepts_required_kwargs(self):
         """stream_chat 必须支持聊天请求所需的全部 kwargs。"""

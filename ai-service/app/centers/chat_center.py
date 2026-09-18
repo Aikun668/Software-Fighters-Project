@@ -1,5 +1,7 @@
+import asyncio
 import logging
 import time
+from typing import Any, AsyncIterator
 
 from app.agents.adjustment_agent import AdjustmentAgent
 from app.agents.decompose_agent import DecomposeAgent
@@ -17,7 +19,14 @@ from app.centers.result_agent import ResultAgent
 from app.centers.router_agent import RouterAgent
 from app.centers.schemas import CenterTask, ExecutionPlan
 from app.centers.visualization_center import VisualizationCenter
-from app.events.types import StreamEventType
+from app.events.types import (
+    StreamEvent,
+    StreamEventType,
+    done_event,
+    error_event,
+    knowledge_candidates_event,
+    recommendation_event,
+)
 from app.services.capability_gate import CapabilityGate, CapabilityKind
 from app.services.intent_extractor import IntentExtractor
 from app.services.routing_audit import (
@@ -43,6 +52,11 @@ _KIND_TO_CENTER = {
 
 
 class ChatCenter:
+    # 推荐抽取（LLM 调用）的超时预算，防止 done 被阻塞。Task 2 收敛到
+    # 一次抽取,派生两个事件（recommendation_event + knowledge_candidates_event）;
+    # 实例属性 _recommendation_timeout_sec 可被测试或装配层覆盖。
+    RECOMMENDATION_TIMEOUT_SEC: float = 10.0
+
     def __init__(
         self,
         router_agent: RouterAgent | None = None,
@@ -225,3 +239,223 @@ class ChatCenter:
                     model_latency_ms=(time.perf_counter() - started) * 1000,
                     sse_terminal_event=terminal,
                 ))
+
+    @staticmethod
+    def _done_payload_has_content(done_data: Any) -> bool:
+        """done 载荷是否携带"无需 token 流"的合法产物。
+
+        资源 / 计划 / 练习 / 路径 / 画像模式正文不走 token 流,而是随 done 载荷下发;
+        追问（inquiry）以问题文本作为本轮产出,也不算"空正文失败"。
+        summary/results 等是描述性元数据,不参与判定。
+        """
+        if not isinstance(done_data, dict):
+            return False
+        if done_data.get("is_clear") is False or done_data.get("type") == "inquiry":
+            return True
+        for key in (
+            "content_blocks",
+            "questions",
+            "plan",
+            "_path_steps",
+            "steps",
+            "profile_delta",
+        ):
+            value = done_data.get(key)
+            if isinstance(value, list) and value:
+                return True
+            if isinstance(value, dict) and value:
+                return True
+        for key in ("response", "content", "solution"):
+            value = done_data.get(key)
+            if isinstance(value, str) and value.strip():
+                return True
+        return False
+
+    async def stream_chat(
+        self,
+        *,
+        message: str,
+        history: list[dict] | None = None,
+        mode: str = "auto",
+        student_profile: dict | None = None,
+        user_id: int,
+        conversation_id: str | None = None,
+        style: str = "standard",
+    ) -> AsyncIterator[StreamEvent]:
+        """统一聊天唯一业务入口（Task 2 收口）。
+
+        责任：
+        1. route() → ExecutionPlan
+        2. ResultAgent.execute(plan) → 业务事件流（含内部 done）
+        3. 收集 assistant_content（token / content / partial payload）
+        4. 在最终 done 前调一次 extract_knowledge_nodes（超时预算内）
+           ├─ primary[0] → recommendation_event
+           └─ primary/related/broad → knowledge_candidates_event
+        5. 多 done 收敛为唯一 done（失败补 error,缺 done 补 done）
+        6. 消费端取消时取消 ResultAgent 任务并回收
+        """
+        messages = list(history or []) + [{"role": "user", "content": message}]
+        context = {
+            "messages": messages,
+            "style": style,
+            "user_id": user_id,
+            "conversation_id": conversation_id,
+        }
+        plan = await self.route(
+            message=message,
+            mode=mode,
+            student_profile=student_profile,
+            context=context,
+        )
+
+        result = self._get_result()
+        extract_fn = getattr(self, "_extract_knowledge_nodes", None)
+        if extract_fn is None:
+            from app.services.knowledge_extraction import (
+                extract_knowledge_nodes as _default_extract,
+            )
+            extract_fn = _default_extract
+        timeout = (
+            getattr(self, "_recommendation_timeout_sec", None)
+            or self.RECOMMENDATION_TIMEOUT_SEC
+        )
+
+        queue: asyncio.Queue = asyncio.Queue(maxsize=256)
+        state: dict[str, Any] = {
+            "saw_done": False,
+            "final_data": None,
+            "assistant_content": "",
+            "saw_error": False,
+        }
+
+        async def _producer() -> None:
+            try:
+                async for event in result.execute(plan):
+                    # 收集正文（token + content 都视作正文流）
+                    if (
+                        event.type is StreamEventType.TOKEN
+                        and isinstance(event.data, dict)
+                    ):
+                        chunk = event.data.get("content", "")
+                        if isinstance(chunk, str):
+                            state["assistant_content"] += chunk
+                    elif event.type is StreamEventType.CONTENT and event.data:
+                        if isinstance(event.data, str):
+                            state["assistant_content"] += event.data
+                        elif isinstance(event.data, dict):
+                            chunk = (
+                                event.data.get("response")
+                                or event.data.get("content")
+                                or ""
+                            )
+                            if isinstance(chunk, str):
+                                state["assistant_content"] += chunk
+                    if event.type is StreamEventType.ERROR:
+                        state["saw_error"] = True
+
+                    # 第一个 done：在它之前插入推荐事件，再 yield done。
+                    if event.type is StreamEventType.DONE:
+                        if state["saw_done"]:
+                            continue
+                        state["saw_done"] = True
+                        state["final_data"] = event.data
+
+                        if state["assistant_content"].strip():
+                            course_id = ""
+                            if plan.tasks:
+                                course_id = str(
+                                    plan.tasks[0].context.get("course_id", "")
+                                )
+                            extracted: Any = None
+                            try:
+                                extracted = await asyncio.wait_for(
+                                    extract_fn(
+                                        course_id=course_id,
+                                        user_message=message,
+                                        assistant_reply=state["assistant_content"][:2000],
+                                    ),
+                                    timeout=timeout,
+                                )
+                            except asyncio.TimeoutError:
+                                logger.warning(
+                                    "Recommendation extraction timed out after %.1fs",
+                                    timeout,
+                                )
+                            except Exception as exc:  # noqa: BLE001
+                                logger.warning(
+                                    "Recommendation extraction failed: %s", exc
+                                )
+                            if isinstance(extracted, dict):
+                                primary = extracted.get("primary") or []
+                                related = extracted.get("related") or []
+                                broad = extracted.get("broad") or []
+                                if primary and isinstance(primary[0], dict):
+                                    node = primary[0]
+                                    await queue.put(
+                                        recommendation_event(
+                                            knowledge_node_id=str(
+                                                node.get("id", "")
+                                            ),
+                                            node_name=str(node.get("name", "")),
+                                        )
+                                    )
+                                if primary or related or broad:
+                                    await queue.put(
+                                        knowledge_candidates_event(
+                                            {
+                                                "primary": primary,
+                                                "related": related,
+                                                "broad": broad,
+                                            }
+                                        )
+                                    )
+                        await queue.put(event)
+                        return
+
+                    await queue.put(event)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("Chat pipeline failed: %s", exc)
+                state["saw_error"] = True
+                await queue.put(
+                    error_event(
+                        stage="chat",
+                        message=str(exc) or "处理失败，请稍后重试",
+                    )
+                )
+            finally:
+                if not state["saw_done"]:
+                    fd = state["final_data"]
+                    done_error = fd.get("error") if isinstance(fd, dict) else None
+                    if isinstance(done_error, str) and done_error.strip():
+                        await queue.put(
+                            error_event(stage="chat", message=done_error)
+                        )
+                    elif (
+                        not state["saw_error"]
+                        and not state["assistant_content"].strip()
+                        and not self._done_payload_has_content(fd)
+                    ):
+                        await queue.put(
+                            error_event(
+                                stage="chat",
+                                message="模型未返回有效内容，请重试",
+                            )
+                        )
+                    await queue.put(done_event(fd))
+
+        producer_task = asyncio.create_task(_producer())
+        try:
+            while True:
+                event = await queue.get()
+                yield event
+                if event.type is StreamEventType.DONE:
+                    break
+        finally:
+            if not producer_task.done():
+                producer_task.cancel()
+                try:
+                    await producer_task
+                except (asyncio.CancelledError, Exception):
+                    pass
