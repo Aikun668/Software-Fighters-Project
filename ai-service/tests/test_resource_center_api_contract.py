@@ -136,11 +136,11 @@ class TestResourceCenterStreamGenerate:
             events.append(event)
 
         fake_workflow.run.assert_awaited_once()
-        call_kwargs = fake_workflow.run.await_args.kwargs
-        assert call_kwargs["user_id"] == 7
-        assert call_kwargs["topic"] == "反向传播"
-        assert call_kwargs["student_profile"] == {"level": "beginner"}
-        assert call_kwargs["resource_type"] == "document"
+        call_state = fake_workflow.run.await_args.args[0]
+        assert call_state["user_id"] == 7
+        assert call_state["topic"] == "反向传播"
+        assert call_state["student_profile"] == {"level": "beginner"}
+        assert call_state["resource_type"] == "document"
 
     @pytest.mark.asyncio
     async def test_stream_generate_workflow_exception_yields_error_done(self):
