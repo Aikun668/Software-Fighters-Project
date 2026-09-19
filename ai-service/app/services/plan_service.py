@@ -258,6 +258,211 @@ class PlanService:
 
         return sorted(schedule, key=lambda s: s["days_until_review"])
 
+    # ── 计划端点纯算法（从 internal_api 收口迁入） ──────────────
+
+    @staticmethod
+    def compute_next_milestone(plan: dict, completed_steps: int) -> dict | None:
+        """下一个里程碑信息。兼容字符串格式 milestone（无法定位顺序 → None）。"""
+        milestones = plan.get("milestones") or []
+        if not milestones:
+            return None
+        if isinstance(milestones[0], str):
+            return None
+        for m in sorted(
+            milestones,
+            key=lambda x: x.get("after_step", 999) if isinstance(x, dict) else 999,
+        ):
+            if not isinstance(m, dict):
+                continue
+            if m.get("after_step", 0) > completed_steps:
+                return {
+                    "milestone_id": m.get("milestone_id", ""),
+                    "description": m.get("description", ""),
+                    "after_step": m.get("after_step", 0),
+                    "steps_remaining": m.get("after_step", 0) - completed_steps,
+                }
+        return None
+
+    @staticmethod
+    def build_milestone_progress(completed_steps: int, next_milestone: dict | None) -> dict | None:
+        if not next_milestone:
+            return None
+        target = next_milestone["after_step"]
+        return {
+            "current": completed_steps,
+            "target": target,
+            "remaining": next_milestone["steps_remaining"],
+            "pct": round(completed_steps / target * 100) if target > 0 else 100,
+        }
+
+    @staticmethod
+    def _today_step_entry(
+        step: dict, *, estimated_days: int, day_progress: int, day_total: int,
+        masteries: dict,
+    ) -> dict:
+        nid = step.get("knowledge_node_id", "")
+        return {
+            "step_order": step.get("step_order", 0),
+            "topic": step.get("topic", ""),
+            "knowledge_node_id": nid,
+            "status": step.get("status", "pending"),
+            "estimated_days": estimated_days,
+            "topic_difficulty": step.get("topic_difficulty", 3),
+            "suggested_resource_types": step.get("suggested_resource_types", ["document", "exercise"]),
+            "day_progress": day_progress,
+            "day_total": day_total,
+            "current_mastery": masteries.get(nid) if nid else None,
+        }
+
+    @staticmethod
+    def select_today_steps(
+        steps: list[dict], *, day_index: int, completed_steps: int, total_steps: int,
+        masteries: dict,
+    ) -> list[dict]:
+        """按累计 estimated_days 划分每日步骤，返回 day_index 当天应做的步骤。
+
+        无命中且计划未完成时兜底返回下一个待完成步骤（带 note 标记）。
+        """
+        cumulative = 0
+        today_steps: list[dict] = []
+        for s in sorted(steps, key=lambda x: x.get("step_order", 999)):
+            est = max(s.get("estimated_days", 1), 1)
+            step_start_day = cumulative
+            step_end_day = cumulative + est
+            if step_start_day <= day_index < step_end_day:
+                today_steps.append(PlanService._today_step_entry(
+                    s, estimated_days=est,
+                    day_progress=day_index - step_start_day + 1, day_total=est,
+                    masteries=masteries,
+                ))
+            cumulative = step_end_day
+
+        if not today_steps and completed_steps < total_steps:
+            pending = [s for s in steps if s.get("status") not in ("completed",)]
+            if pending:
+                entry = PlanService._today_step_entry(
+                    pending[0], estimated_days=pending[0].get("estimated_days", 1),
+                    day_progress=1, day_total=1, masteries=masteries,
+                )
+                entry["note"] = "计划进度落后，显示下一个待完成步骤"
+                today_steps.append(entry)
+        return today_steps
+
+    @staticmethod
+    def build_resource_suggestions(today_steps: list[dict]) -> list[dict]:
+        """为今日步骤生成可直接调用的资源生成 prompt。"""
+        return [
+            {
+                "step_order": ts["step_order"],
+                "topic": ts["topic"],
+                "knowledge_node_id": ts.get("knowledge_node_id"),
+                "resource_types": ts.get("suggested_resource_types", []),
+                "gen_prompt": (
+                    f"请为「{ts['topic']}」生成学习资源，"
+                    f"难度等级 {ts.get('topic_difficulty', 3)}/5"
+                ),
+            }
+            for ts in today_steps
+        ]
+
+    @staticmethod
+    def find_step(steps: list[dict], *, step_id: int, step_order: int) -> tuple[dict | None, int]:
+        """定位目标步骤，step_id 优先于 step_order。返回 (step, index)。"""
+        for i, s in enumerate(steps):
+            if step_id and step_id > 0 and s.get("id") == step_id:
+                return s, i
+            if step_order and step_order > 0 and s.get("step_order") == step_order:
+                return s, i
+        return None, -1
+
+    @staticmethod
+    def apply_node_status_change(
+        *, steps: list[dict], node_id: str, new_status: str, old_status: str,
+        masteries: dict, plan_status: str,
+    ) -> dict:
+        """图谱节点状态变化 → 计划步骤联动（4 分支决策表 + 计划完成判定）。"""
+        affected_steps = [s for s in steps if s.get("knowledge_node_id", "") == node_id]
+        plan_actions: list[dict] = []
+        updated_steps = list(steps)
+
+        for s in affected_steps:
+            old_step_status = s.get("status", "")
+            current_mastery = masteries.get(node_id, s.get("mastery_current", 0.5))
+
+            if new_status == "mastered":
+                new_step_status = "completed"
+                action = "mark_completed"
+                action_msg = f"步骤「{s.get('topic')}」对应节点已掌握，建议标记为完成"
+                extra = {}
+            elif new_status == "forgotten":
+                new_step_status = "review"
+                action = "schedule_review"
+                decayed = PlanService.estimate_decay(
+                    current_mastery, days_since_review=14,
+                    topic_difficulty=s.get("topic_difficulty", 3),
+                )
+                action_msg = f"步骤「{s.get('topic')}」对应节点已遗忘（掌握度 {decayed}），建议安排复习"
+                extra = {"decayed_mastery": decayed}
+            elif new_status == "learning" and old_status in ("locked", ""):
+                new_step_status = "pending"
+                action = "unlock_step"
+                action_msg = f"步骤「{s.get('topic')}」前置条件满足，已解锁"
+                extra = {}
+            elif new_status == "locked":
+                new_step_status = "locked"
+                action = "lock_step"
+                action_msg = f"步骤「{s.get('topic')}」前置条件不满足，已重新锁定"
+                extra = {}
+            else:
+                continue
+
+            plan_actions.append({
+                "step_order": s.get("step_order"),
+                "topic": s.get("topic"),
+                "action": action,
+                "old_status": old_step_status,
+                "new_status": new_step_status,
+                **extra,
+                "message": action_msg,
+            })
+
+            for i, us in enumerate(updated_steps):
+                if us.get("step_order") == s.get("step_order"):
+                    updated_steps[i] = {
+                        **us, "status": new_step_status, "mastery_current": current_mastery,
+                    }
+                    break
+
+        completed_count = sum(1 for s in updated_steps if s.get("status") == "completed")
+        total = len(updated_steps)
+        final_status = plan_status
+        if completed_count >= total and plan_status != "completed":
+            final_status = "completed"
+            plan_actions.append({
+                "step_order": 0,
+                "topic": "",
+                "action": "complete_plan",
+                "old_status": plan_status,
+                "new_status": "completed",
+                "message": "所有步骤已完成，建议将计划标记为完成",
+            })
+
+        return {
+            "affected_steps_count": len(affected_steps),
+            "plan_actions": plan_actions,
+            "updated_steps": updated_steps,
+            "plan_status": final_status,
+            "completed_steps": completed_count,
+            "total_steps": total,
+        }
+
+    @staticmethod
+    def summarize_review_schedule(schedule: list[dict]) -> dict:
+        return {
+            "high": sum(1 for s in schedule if s.get("urgency") == "high"),
+            "medium": sum(1 for s in schedule if s.get("urgency") == "medium"),
+        }
+
 
 _plan_service_singleton = None
 _plan_service_lock = threading.Lock()
