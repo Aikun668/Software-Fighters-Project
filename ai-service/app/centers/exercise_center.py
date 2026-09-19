@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 from typing import AsyncIterator, Iterator
 
@@ -13,7 +14,24 @@ from app.events.types import (
     steps_event,
     token_event,
 )
+from app.services.evaluation_service import (
+    generate_report,
+    grade_choice,
+    grade_code,
+    grade_short_answer,
+)
+from app.services.exercise_analytics_service import (
+    analyze_session as analyze_session_service,
+)
+from app.services.exercise_analytics_service import (
+    get_dashboard as get_dashboard_service,
+)
+from app.services.exercise_categorization_service import categorize_exercises
+from app.services.exercise_profile_service import enrich_profile as enrich_profile_service
 from app.services.llm_service import PROFILE_EXERCISE
+from app.utils.json_parser import parse_llm_json
+from app.utils.prompt_guard import sanitize_for_llm
+from app.utils.prompt_loader import interpolate_variables, load_prompt_file
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +71,12 @@ class ExerciseCenter:
             from app.agents.solve_agent import SolveAgent
             self.solve_agent = SolveAgent()
         return self.solve_agent
+
+    def _llm(self):
+        if self.llm_service is None:
+            from app.services.llm_service import get_llm_service
+            self.llm_service = get_llm_service()
+        return self.llm_service
 
     async def execute(self, task: CenterTask) -> CenterResult:
         context = task.context or {}
@@ -163,3 +187,102 @@ class ExerciseCenter:
             logger.error(f"Solve stream failed: {e}")
             yield error_content_event(SOLVE_FAILED_MESSAGE)
             yield flat_done_event()
+
+    async def analyze_errors(self, *, errors: list[dict], level: str) -> dict:
+        """错因分析：prompt 加载 → sanitize → 插值 → LLM → 解析 JSON。
+
+        异常向上传播，由 API 层映射 500（与收口前一致）。
+        """
+        sys_prompt = load_prompt_file("tutor_agent", "error_analysis.yaml", key="system")
+        user_tpl = load_prompt_file("tutor_agent", "error_analysis.yaml", key="user_template")
+        sanitized_errors = [
+            {k: sanitize_for_llm(v) if isinstance(v, str) else v for k, v in e.items()}
+            for e in errors
+        ]
+        user_prompt = interpolate_variables(
+            user_tpl,
+            {"errors": json.dumps(sanitized_errors, ensure_ascii=False), "level": str(level)},
+        )
+
+        raw = await self._llm().chat(
+            [{"role": "user", "content": user_prompt}],
+            system_prompt=sys_prompt,
+        )
+        return parse_llm_json(raw, fallback={})
+
+    async def grade(
+        self,
+        *,
+        question_type: str,
+        user_answer: str | None = None,
+        correct_answer: str | None = None,
+        choices: list | None = None,
+        multi: bool = False,
+        points: int = 1,
+        reference_answer: str = "",
+        rubric: str = "",
+    ) -> dict:
+        """批改：按题型转调 evaluation_service 的对应规则。"""
+        if question_type == "choice":
+            return grade_choice(
+                user_answer, correct_answer, choices, multi=multi, points=points,
+            )
+        if question_type == "code":
+            return await grade_code(user_answer, reference_answer, rubric)
+        return await grade_short_answer(user_answer, reference_answer, rubric)
+
+    async def evaluation_report(self, *, evaluation_results: dict) -> dict:
+        """练习评估报告。"""
+        return generate_report(evaluation_results)
+
+    async def categorize(
+        self, *, exercises: list[dict], knowledge_nodes: list[dict], course_id: str,
+    ) -> dict:
+        """练习题 → 知识图谱节点匹配。"""
+        results = await categorize_exercises(exercises, knowledge_nodes, course_id)
+        return {"results": results}
+
+    async def analyze_session(
+        self, *, records: list[dict], masteries: dict, course_id: str,
+    ) -> dict:
+        """单次练习会话分析。"""
+        return analyze_session_service(records, masteries, course_id)
+
+    async def dashboard(
+        self,
+        *,
+        user_id: int,
+        masteries: dict,
+        recent_records: list[dict],
+        course_id: str,
+    ) -> dict:
+        """练习仪表盘。"""
+        return get_dashboard_service(user_id, masteries, recent_records, course_id)
+
+    async def enrich_profile(
+        self,
+        *,
+        user_id: int,
+        student_profile: dict | None,
+        recent_records: list[dict] | None,
+        session_analysis: dict | None,
+    ) -> dict:
+        """练习数据反哺学生画像。"""
+        return enrich_profile_service(
+            user_id, student_profile, recent_records, session_analysis,
+        )
+
+    async def generate_consolidation(
+        self, *, topic: str, knowledge_node_id: str | None, is_near_end: bool,
+    ) -> dict:
+        """完成学习步骤后的巩固题：review 策略、count 2/3、purpose=consolidation。"""
+        state = await self._exercise_agent().run({
+            "topic": topic,
+            "knowledge_node_id": knowledge_node_id or None,
+            "strategy": "review",
+            "count": 3 if is_near_end else 2,
+            "difficulty": "medium",
+            "student_profile": {},
+            "purpose": "consolidation",
+        })
+        return {"questions": state.get("questions", [])}
