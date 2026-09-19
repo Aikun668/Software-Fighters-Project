@@ -1,13 +1,18 @@
 import logging
-from typing import Any, Awaitable, Callable, Optional
+from datetime import date, datetime, timezone
 
 from app.centers.schemas import CenterResult, CenterTask
+from app.services.plan_service import PlanService
 
 logger = logging.getLogger(__name__)
 
 
 class PlanGenerationError(Exception):
     """计划生成完成但没有有效步骤，供 API 映射为现有 400 错误。"""
+
+
+class PlanNotFoundError(Exception):
+    """计划或步骤数据缺失，供 API 映射为 404（消息原样透出）。"""
 
 
 class PlanCenter:
@@ -19,6 +24,8 @@ class PlanCenter:
         adjustment_agent=None,
         graph_service=None,
         step_classifier=None,
+        plan_service=None,
+        exercise_center=None,
     ):
         self.goal_agent = goal_agent
         self.decompose_agent = decompose_agent
@@ -26,6 +33,8 @@ class PlanCenter:
         self.adjustment_agent = adjustment_agent
         self.graph_service = graph_service
         self.step_classifier = step_classifier
+        self.plan_service = plan_service or PlanService
+        self.exercise_center = exercise_center
 
     async def execute(self, task: CenterTask) -> CenterResult:
         context = task.context or {}
@@ -314,6 +323,144 @@ class PlanCenter:
             "daily_capacity": payload["daily_capacity"],
             "concept_graph": payload["concept_graph"],
             "summary": payload["summary"],
+        }
+
+    # ── 计划端点业务入口（从 internal_api 收口迁入） ──────────
+
+    async def today_tasks(
+        self,
+        *,
+        plan_id: int,
+        plan: dict,
+        steps: list[dict],
+        start_date: str | None,
+        masteries: dict,
+    ) -> dict:
+        """今日任务 payload：按累计 estimated_days 定位当天步骤 + 资源建议。"""
+        if not plan:
+            raise PlanNotFoundError("计划不存在")
+
+        today = date.today()
+        day_index = self._day_index(start_date, plan, today)
+        completed_steps = plan.get("completed_steps") or 0
+        total_steps = len(steps) if steps else plan.get("total_steps", 0)
+
+        today_steps = self.plan_service.select_today_steps(
+            steps, day_index=day_index, completed_steps=completed_steps,
+            total_steps=total_steps, masteries=masteries or {},
+        )
+
+        return {
+            "plan_id": plan_id,
+            "today": today.isoformat(),
+            "day_index": day_index,
+            "total_days_elapsed": day_index + 1,
+            "steps_due_today": today_steps,
+            "resource_suggestions": self.plan_service.build_resource_suggestions(today_steps),
+            "next_milestone": self.plan_service.compute_next_milestone(plan, completed_steps),
+            "summary": (
+                f"今日有 {len(today_steps)} 个学习步骤"
+                if today_steps
+                else "今日无待完成步骤，继续保持！"
+            ),
+        }
+
+    @staticmethod
+    def _day_index(start_date: str | None, plan: dict, today: date) -> int:
+        start_str = start_date or plan.get("start_date") or plan.get("created_at")
+        start = today
+        if isinstance(start_str, str):
+            try:
+                start = datetime.fromisoformat(start_str.replace("Z", "+00:00")).date()
+            except (ValueError, TypeError):
+                start = today
+        return max((today - start).days, 0)
+
+    async def plan_status(self, *, plan: dict, steps: list[dict]) -> dict:
+        """计划状态 payload：软着陆检测 + 步骤衰减 + 里程碑进度。"""
+        if not plan:
+            raise PlanNotFoundError("计划不存在")
+
+        days_idle = self._days_idle(plan)
+        paused_steps = [s for s in steps if s.get("status") in ("paused", "in_progress")]
+
+        soft_landing = None
+        if plan.get("status") == "paused" and days_idle > 0:
+            soft_landing = self.plan_service.soft_landing(
+                [self._decay_input(s) for s in paused_steps], days_idle,
+            )
+            soft_landing["days_idle"] = days_idle
+
+        completed_steps = plan.get("completed_steps") or 0
+        next_milestone = self.plan_service.compute_next_milestone(plan, completed_steps)
+
+        return {
+            "plan_id": plan.get("id"),
+            "user_id": plan.get("user_id"),
+            "status": plan.get("status"),
+            "total_steps": plan.get("total_steps"),
+            "completed_steps": completed_steps,
+            "days_idle": days_idle,
+            "soft_landing": soft_landing,
+            "steps": [
+                self._status_step_entry(s, days_idle) for s in steps
+            ],
+            "next_milestone": next_milestone,
+            "milestone_progress": self.plan_service.build_milestone_progress(
+                completed_steps, next_milestone,
+            ),
+        }
+
+    @staticmethod
+    def _days_idle(plan: dict) -> int:
+        last_activity = plan.get("last_activity_at")
+        if not last_activity:
+            return 0
+        try:
+            dt = datetime.fromisoformat(last_activity.replace("Z", "+00:00"))
+        except (ValueError, TypeError, AttributeError):
+            return 0
+        return (datetime.now(timezone.utc) - dt).days
+
+    @staticmethod
+    def _decay_input(step: dict) -> dict:
+        return {
+            "topic": step.get("topic"),
+            "mastery_current": step.get("mastery_current") or 0,
+            "topic_difficulty": step.get("topic_difficulty") or 3,
+            "review_count": step.get("review_count") or 0,
+        }
+
+    def _status_step_entry(self, step: dict, days_idle: int) -> dict:
+        entry = {
+            "id": step.get("id"),
+            "step_order": step.get("step_order"),
+            "topic": step.get("topic"),
+            "knowledge_node_id": step.get("knowledge_node_id"),
+            "status": step.get("status"),
+            "topic_difficulty": step.get("topic_difficulty"),
+            "mastery_current": step.get("mastery_current"),
+        }
+        if step.get("status") in ("paused", "in_progress") and days_idle > 0:
+            entry["decayed_mastery"] = self.plan_service.estimate_decay(
+                step.get("mastery_current") or 0, days_idle,
+                step.get("topic_difficulty") or 3, step.get("review_count") or 0,
+            )
+        return entry
+
+    async def review_schedule(
+        self, *, plan_id: int, steps: list[dict], days_ahead: int,
+    ) -> dict:
+        """复习日程 payload：直接以 dict 传入 PlanService（步骤字段缺省在 Service 内兜底）。"""
+        schedule = self.plan_service.get_review_schedule(steps, days_ahead)
+        counts = self.plan_service.summarize_review_schedule(schedule)
+        return {
+            "plan_id": plan_id,
+            "days_ahead": days_ahead,
+            "total_reviews": len(schedule),
+            "high_urgency": counts["high"],
+            "medium_urgency": counts["medium"],
+            "schedule": schedule,
         }
 
     async def _run_adjustment(self, task: CenterTask, student_profile: dict) -> CenterResult:
