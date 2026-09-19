@@ -67,7 +67,6 @@ from app.api.models import (
 )
 from app.services.plan_service import get_plan_service
 from app.services.knowledge_extraction import extract_knowledge_nodes
-from app.services.plan_constants import RETURN_MESSAGES
 from app.services.intent_extractor import IntentExtractor
 from app.centers.chat_center import ChatCenter
 from app.centers.plan_center import PlanCenter, PlanGenerationError, PlanNotFoundError
@@ -270,6 +269,7 @@ def _get_plan_center():
                     goal_agent=GoalAgent(use_mock_llm=mock),
                     decompose_agent=DecomposeAgent(use_mock_llm=mock),
                     schedule_agent=ScheduleAgent(use_mock_llm=mock),
+                    exercise_center=_get_exercise_center(),
                 )
     return _plan_center_singleton
 
@@ -1058,35 +1058,10 @@ async def complete_plan_step(plan_id: int, body: CompleteStepRequest):
     Java 拿到 questions 后存入练习库（带 knowledge_node_id），用户作答后走 exercise 闭环。
     """
     try:
-        step = body.step
-        step_topic = step.get("topic", "")
-        knowledge_node_id = step.get("knowledge_node_id", "")
-        plan = body.plan
-        all_steps = body.steps
-
-        # 判断是否最后一两步 → 生成综合性复习题
-        completed = plan.get("completed_steps", 0)
-        total = plan.get("total_steps", len(all_steps))
-        is_near_end = total > 0 and (completed / total) >= 0.8
-
-        generated = await _get_exercise_center().generate_consolidation(
-            topic=step_topic,
-            knowledge_node_id=knowledge_node_id,
-            is_near_end=is_near_end,
+        result = await _get_plan_center().complete_step(
+            step=body.step, plan=body.plan, steps=body.steps,
         )
-        questions = generated.get("questions", [])
-
-        return api_success({
-            "step_order": step.get("step_order"),
-            "step_completed": True,
-            "recommended_action": "comprehensive_review" if is_near_end else "consolidation",
-            "questions": questions,
-            "message": (
-                "你已经接近计划尾声，来做几道综合题检验整体掌握情况！"
-                if is_near_end
-                else f"完成「{step_topic}」的学习，来做 {len(questions)} 道题巩固一下吧"
-            ),
-        })
+        return api_success(result)
     except Exception as e:
         logger.error(f"Failed to complete step: {e}", exc_info=True)
         return api_error(ErrorCode.INTERNAL_ERROR, "生成巩固练习失败", status_code=500)
@@ -1217,142 +1192,16 @@ async def get_plan_status_legacy(body: PlanStatusRequest):
 async def regression_check(plan_id: int, body: RegressionCheckRequest):
     """回归检测管线：出题 → 判分 → 重排。纯算法，不写 DB。"""
     try:
-        plan_service = get_plan_service()
-        plan = body.plan
-        steps = body.steps
-        days_idle = body.days_idle
-
-        if not plan:
-            return api_error(ErrorCode.NOT_FOUND, "计划不存在", status_code=404)
-
-        paused_steps = [s for s in steps if s.get("status") in ("paused", "in_progress")]
-
-        # ── 阶段 1: 无 answers → 出题 ──
-        if not body.answers:
-            if not paused_steps:
-                return api_success({
-                    "plan_id": plan_id,
-                    "strategy": "continue",
-                    "message": RETURN_MESSAGES["short"],
-                    "questions": [],
-                })
-
-            paused_dicts = [
-                {
-                    "topic": s.get("topic"),
-                    "mastery_current": s.get("mastery_current") or 0,
-                    "topic_difficulty": s.get("topic_difficulty") or 3,
-                    "review_count": s.get("review_count") or 0,
-                }
-                for s in paused_steps
-            ]
-            landing = plan_service.soft_landing(paused_dicts, days_idle)
-
-            if landing["strategy"] == "continue":
-                return api_success({
-                    "plan_id": plan_id,
-                    "strategy": landing["strategy"],
-                    "message": landing["message"],
-                    "questions": [],
-                })
-
-            exercise_agent = _get_exercise_agent()
-            questions = []
-            for node_name in landing["review_nodes"]:
-                try:
-                    ex_state = {"topic": node_name, "count": 1, "difficulty": "easy", "purpose": "warmup_not_exam"}
-                    ex_result = await exercise_agent.run(ex_state)
-                    qs = ex_result.get("questions", [])
-                    for q in qs:
-                        q["review_node"] = node_name
-                    questions.extend(qs)
-                except Exception as e:
-                    logger.warning(f"Failed to generate warmup question for '{node_name}': {e}")
-
-            return api_success({
-                "plan_id": plan_id,
-                "strategy": landing["strategy"],
-                "message": landing["message"],
-                "questions": questions,
-            })
-
-        # ── 阶段 2: 有 answers → 判分 + 重排 ──
-        from app.services.evaluation_service import grade_choice, grade_short_answer
-
-        decay_results = {}
-        for step in steps:
-            if step.get("status") in ("paused", "in_progress"):
-                decayed = plan_service.estimate_decay(
-                    step.get("mastery_current") or 0, days_idle,
-                    step.get("topic_difficulty") or 3, step.get("review_count") or 0,
-                )
-                if decayed < 0.6:
-                    decay_results[step.get("topic")] = "review" if decayed < 0.3 else "review_light"
-
-        answers_by_topic = {}
-        for ans in body.answers:
-            topic = ans.get("topic", "")
-            answers_by_topic.setdefault(topic, []).append(ans)
-
-        # 计算每个 topic 的 mastery 更新
-        mastery_updates = {}
-        for topic, topic_answers in answers_by_topic.items():
-            total_score = 0
-            for ans in topic_answers:
-                q_type = ans.get("question_type", "choice")
-                user_answer = ans.get("user_answer", "")
-                correct_answer = ans.get("correct_answer", "")
-                if q_type == "choice":
-                    grade_result = grade_choice(user_answer, correct_answer, ans.get("choices", []))
-                else:
-                    grade_result = await grade_short_answer(user_answer, correct_answer)
-                total_score += grade_result.get("earned", 0)
-
-            avg_score = total_score / len(topic_answers) if topic_answers else 0
-            for step in steps:
-                if step.get("topic") == topic:
-                    prev_mastery = step.get("mastery_current") or 0
-                    if avg_score >= 0.6:
-                        new_m = plan_service.update_mastery(prev_mastery, "exercise_done", avg_score)
-                    else:
-                        new_m = plan_service.update_mastery(prev_mastery, "exercise_failed")
-                    mastery_updates[topic] = {
-                        "previous_mastery": prev_mastery,
-                        "new_mastery": new_m,
-                        "review_count": (step.get("review_count") or 0) + 1,
-                        "step_id": step.get("id"),
-                    }
-
-        # 重排
-        reordered_steps = None
-        if decay_results:
-            current_node = steps[0].get("knowledge_node_id", "") if steps else ""
-            goal_node = steps[-1].get("knowledge_node_id", "") if steps else ""
-            step_dicts = [
-                {"topic": s.get("topic"), "status": s.get("status"), "step_order": s.get("step_order"),
-                 "knowledge_node_id": s.get("knowledge_node_id") or "",
-                 "mastery_current": s.get("mastery_current"), "topic_difficulty": s.get("topic_difficulty")}
-                for s in steps
-            ]
-            reordered = plan_service.reorder_plan(
-                step_dicts, decay_results, days_idle,
-                current_topic=current_node, goal_topic=goal_node,
-            )
-            reordered_steps = [
-                {"step_order": i + 1, "topic": r.get("topic"), "status": r.get("status"),
-                 "mastery_current": r.get("mastery_current")}
-                for i, r in enumerate(reordered)
-            ]
-
-        return api_success({
-            "plan_id": plan_id,
-            "strategy": "regression_check",
-            "message": RETURN_MESSAGES["after_pass"] if not decay_results else RETURN_MESSAGES["after_fail"],
-            "questions": [],
-            "mastery_updates": mastery_updates,
-            "reordered_steps": reordered_steps,
-        })
-
+        result = await _get_plan_center().regression_check(
+            plan_id=plan_id,
+            plan=body.plan,
+            steps=body.steps,
+            days_idle=body.days_idle,
+            answers=body.answers,
+        )
+        return api_success(result)
+    except PlanNotFoundError as e:
+        return api_error(ErrorCode.NOT_FOUND, str(e), status_code=404)
     except Exception as e:
         logger.error(f"Failed regression check: {e}", exc_info=True)
         return api_error(ErrorCode.INTERNAL_ERROR, "回归检测失败，请稍后重试", status_code=500)
