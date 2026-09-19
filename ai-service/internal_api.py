@@ -70,7 +70,7 @@ from app.services.knowledge_extraction import extract_knowledge_nodes
 from app.services.plan_constants import RETURN_MESSAGES
 from app.services.intent_extractor import IntentExtractor
 from app.centers.chat_center import ChatCenter
-from app.centers.plan_center import PlanCenter, PlanGenerationError
+from app.centers.plan_center import PlanCenter, PlanGenerationError, PlanNotFoundError
 from app.centers.resource_center import ResourceCenter
 
 logger = logging.getLogger(__name__)
@@ -1098,139 +1098,21 @@ async def complete_plan_step(plan_id: int, body: CompleteStepRequest):
 
 @router.post("/plans/{plan_id}/today")
 async def get_today_tasks(plan_id: int, body: TodayTasksRequest):
-    """返回今日应完成的步骤 + 每个步骤的资源建议。
-
-    计算逻辑：
-    1. 根据 plan.start_date + 累计 estimated_days 推算出「今天」对应的步骤区间
-    2. 返回这些步骤的详情（含 knowledge_node_id + suggested_resource_types）
-    3. 若 Java 传入 masteries，附带各节点的掌握度信息
-    """
-    from datetime import date, datetime as dt
-
+    """返回今日应完成的步骤 + 每个步骤的资源建议。"""
     try:
-        plan = body.plan
-        steps = body.steps
-
-        if not plan:
-            return api_error(ErrorCode.NOT_FOUND, "计划不存在", status_code=404)
-
-        # 确定起点日期
-        start_str = body.start_date or plan.get("start_date") or plan.get("created_at")
-        if start_str:
-            try:
-                if isinstance(start_str, str):
-                    start_date = dt.fromisoformat(start_str.replace("Z", "+00:00")).date()
-                else:
-                    start_date = date.today()
-            except (ValueError, TypeError):
-                start_date = date.today()
-        else:
-            start_date = date.today()
-
-        today = date.today()
-        day_index = (today - start_date).days
-        if day_index < 0:
-            day_index = 0
-
-        # 按累计 estimated_days 划分每天的步骤
-        cumulative = 0
-        today_steps: list[dict] = []
-        completed_steps = plan.get("completed_steps") or 0
-        total_steps = len(steps) if steps else plan.get("total_steps", 0)
-
-        for s in sorted(steps, key=lambda x: x.get("step_order", 999)):
-            step_order = s.get("step_order", 0)
-            est = max(s.get("estimated_days", 1), 1)
-
-            # 判断该 step 是否属于今天
-            step_start_day = cumulative
-            step_end_day = cumulative + est
-
-            if step_start_day <= day_index < step_end_day:
-                nid = s.get("knowledge_node_id", "")
-                today_steps.append({
-                    "step_order": step_order,
-                    "topic": s.get("topic", ""),
-                    "knowledge_node_id": nid,
-                    "status": s.get("status", "pending"),
-                    "estimated_days": est,
-                    "topic_difficulty": s.get("topic_difficulty", 3),
-                    "suggested_resource_types": s.get("suggested_resource_types", ["document", "exercise"]),
-                    "day_progress": day_index - step_start_day + 1,
-                    "day_total": est,
-                    "current_mastery": body.masteries.get(nid) if nid else None,
-                })
-
-            cumulative = step_end_day
-
-        # 若 today_steps 为空（计划已完成 / 超出范围），返回最近的未完成步骤
-        if not today_steps and completed_steps < total_steps:
-            pending = [s for s in steps if s.get("status") not in ("completed",)]
-            if pending:
-                s = pending[0]
-                nid = s.get("knowledge_node_id", "")
-                today_steps.append({
-                    "step_order": s.get("step_order", 0),
-                    "topic": s.get("topic", ""),
-                    "knowledge_node_id": nid,
-                    "status": s.get("status", "pending"),
-                    "estimated_days": s.get("estimated_days", 1),
-                    "topic_difficulty": s.get("topic_difficulty", 3),
-                    "suggested_resource_types": s.get("suggested_resource_types", ["document", "exercise"]),
-                    "day_progress": 1,
-                    "day_total": 1,
-                    "current_mastery": body.masteries.get(nid) if nid else None,
-                    "note": "计划进度落后，显示下一个待完成步骤",
-                })
-
-        # 资源生成建议 — 为每个今日步骤提供可直接调用的 resource prompt
-        resource_suggestions = []
-        for ts in today_steps:
-            resource_suggestions.append({
-                "step_order": ts["step_order"],
-                "topic": ts["topic"],
-                "knowledge_node_id": ts.get("knowledge_node_id"),
-                "resource_types": ts.get("suggested_resource_types", []),
-                "gen_prompt": f"请为「{ts['topic']}」生成学习资源，难度等级 {ts.get('topic_difficulty', 3)}/5",
-            })
-
-        return api_success({
-            "plan_id": plan_id,
-            "today": today.isoformat(),
-            "day_index": day_index,
-            "total_days_elapsed": day_index + 1,
-            "steps_due_today": today_steps,
-            "resource_suggestions": resource_suggestions,
-            "next_milestone": _compute_next_milestone(plan, completed_steps),
-            "summary": (
-                f"今日有 {len(today_steps)} 个学习步骤"
-                if today_steps
-                else "今日无待完成步骤，继续保持！"
-            ),
-        })
+        result = await _get_plan_center().today_tasks(
+            plan_id=plan_id,
+            plan=body.plan,
+            steps=body.steps,
+            start_date=body.start_date,
+            masteries=body.masteries or {},
+        )
+        return api_success(result)
+    except PlanNotFoundError as e:
+        return api_error(ErrorCode.NOT_FOUND, str(e), status_code=404)
     except Exception as e:
         logger.error(f"Failed to get today tasks: {e}", exc_info=True)
         return api_error(ErrorCode.INTERNAL_ERROR, "获取今日任务失败", status_code=500)
-
-
-def _compute_next_milestone(plan: dict, completed_steps: int) -> dict | None:
-    """计算下一个里程碑信息。兼容字符串格式 milestone。"""
-    milestones = plan.get("milestones") or []
-    if not milestones:
-        return None
-    if isinstance(milestones[0], str):
-        return None
-    for m in sorted(milestones, key=lambda x: x.get("after_step", 999) if isinstance(x, dict) else 999):
-        if not isinstance(m, dict):
-            continue
-        if m.get("after_step", 0) > completed_steps:
-            return {
-                "milestone_id": m.get("milestone_id", ""),
-                "description": m.get("description", ""),
-                "after_step": m.get("after_step", 0),
-                "steps_remaining": m.get("after_step", 0) - completed_steps,
-            }
-    return None
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1239,91 +1121,23 @@ def _compute_next_milestone(plan: dict, completed_steps: int) -> dict | None:
 
 @router.post("/plans/{plan_id}/progress")
 async def update_plan_progress(plan_id: int, body: ProgressUpdateRequest):
-    """Java 在用户完成步骤学习/练习后调用。Python 计算掌握度变化并返回更新后的步骤列表。
-
-    匹配前端对接文档 3.5 节规范。
-    """
+    """Java 在用户完成步骤学习/练习后调用，返回掌握度变化与更新后的步骤列表。"""
     try:
-        plan = body.plan
-        steps = body.steps
-        masteries = body.masteries or {}
-
-        if not plan:
-            return api_error(ErrorCode.NOT_FOUND, "计划不存在", status_code=404)
-
-        plan_service = get_plan_service()
-
-        # ── 定位目标步骤 ─────────────────────────────
-        target_step = None
-        step_idx = -1
-        for i, s in enumerate(steps):
-            if body.step_id is not None and body.step_id > 0 and s.get("id") == body.step_id:
-                target_step = s
-                step_idx = i
-                break
-            if body.step_order is not None and body.step_order > 0 and s.get("step_order") == body.step_order:
-                target_step = s
-                step_idx = i
-                break
-
-        if target_step is None:
-            return api_error(ErrorCode.NOT_FOUND, f"步骤 step_id={body.step_id} step_order={body.step_order} 不存在", status_code=404)
-
-        # ── 计算掌握度变化 ───────────────────────────
-        knowledge_node_id = target_step.get("knowledge_node_id", "")
-        old_mastery = masteries.get(knowledge_node_id, target_step.get("mastery_current", 0.5)) if knowledge_node_id else 0.5
-
-        event_type = "exercise_done" if body.activity_type in ("exercise", "quiz") else "resource_viewed"
-        new_mastery = plan_service.update_mastery(
-            old_mastery,
-            event_type,
-            score=body.score
+        result = await _get_plan_center().update_progress(
+            plan_id=plan_id,
+            plan=body.plan,
+            steps=body.steps,
+            masteries=body.masteries or {},
+            step_id=body.step_id,
+            step_order=body.step_order,
+            status=body.status,
+            score=body.score,
+            activity_type=body.activity_type,
+            duration_minutes=body.duration_minutes,
         )
-
-        mastery_updates: dict[str, dict] = {}
-        if knowledge_node_id:
-            mastery_updates[knowledge_node_id] = {
-                "old_mastery": old_mastery,
-                "new_mastery": new_mastery,
-                "delta": round(new_mastery - old_mastery, 2),
-                "event_type": event_type,
-            }
-
-        # ── 更新步骤状态 ─────────────────────────────
-        updated_steps = list(steps)  # shallow copy
-        updated_target = dict(target_step)
-        updated_target["status"] = body.status
-        if body.score is not None:
-            updated_target["score"] = body.score
-        updated_target["mastery_current"] = new_mastery
-        updated_target["activity_type"] = body.activity_type
-        updated_target["duration_minutes"] = body.duration_minutes
-        if step_idx >= 0:
-            updated_steps[step_idx] = updated_target
-
-        # ── 里程碑进度 ─────────────────────────────
-        completed_count = sum(1 for s in updated_steps if s.get("status") == "completed")
-        next_milestone = _compute_next_milestone(plan, completed_count)
-
-        return api_success({
-            "plan_id": plan_id,
-            "updated_step": {
-                "step_order": updated_target.get("step_order"),
-                "topic": updated_target.get("topic"),
-                "knowledge_node_id": knowledge_node_id,
-                "status": body.status,
-                "score": body.score,
-                "mastery_current": new_mastery,
-                "activity_type": body.activity_type,
-                "duration_minutes": body.duration_minutes,
-            },
-            "mastery_updates": mastery_updates,
-            "completed_steps": completed_count,
-            "total_steps": plan.get("total_steps", len(steps)),
-            "progress_pct": round(completed_count / max(plan.get("total_steps", len(steps)), 1) * 100),
-            "next_milestone": next_milestone,
-            "updated_steps": updated_steps,
-        })
+        return api_success(result)
+    except PlanNotFoundError as e:
+        return api_error(ErrorCode.NOT_FOUND, str(e), status_code=404)
     except Exception as e:
         logger.error(f"Failed to update progress: {e}", exc_info=True)
         return api_error(ErrorCode.INTERNAL_ERROR, "更新进度失败", status_code=500)
@@ -1335,7 +1149,7 @@ async def update_plan_progress(plan_id: int, body: ProgressUpdateRequest):
 
 @router.post("/plans/{plan_id}/node-status-change")
 async def on_node_status_change(plan_id: int, body: NodeStatusChangeRequest):
-    """图谱节点状态变化时同步计划。Java 调此端点获取计划的调整建议。
+    """图谱节点状态变化时同步计划，返回步骤联动建议。
 
     场景：
     - 节点被掌握（mastered）→ 计划中对应步骤可标记为 completed
@@ -1343,132 +1157,18 @@ async def on_node_status_change(plan_id: int, body: NodeStatusChangeRequest):
     - 节点被解锁（learning）→ 计划中对应步骤可从 locked 变为 pending
     """
     try:
-        plan = body.plan
-        steps = body.steps
-        node_id = body.node_id
-        new_status = body.new_status
-        old_status = body.old_status
-        masteries = body.masteries or {}
-
-        if not plan or not steps:
-            return api_error(ErrorCode.NOT_FOUND, "计划或步骤数据缺失", status_code=404)
-
-        plan_service = get_plan_service()
-
-        # ── 找到 node_id 对应的计划步骤 ─────────────
-        affected_steps: list[dict] = []
-        unaffected_steps: list[dict] = []
-        for s in steps:
-            sid = s.get("knowledge_node_id", "")
-            if sid == node_id:
-                affected_steps.append(s)
-            else:
-                unaffected_steps.append(s)
-
-        plan_actions: list[dict] = []
-        updated_steps = list(steps)
-
-        for s in affected_steps:
-            old_step_status = s.get("status", "")
-            current_mastery = masteries.get(node_id, s.get("mastery_current", 0.5))
-
-            if new_status == "mastered":
-                new_step_status = "completed"
-                action_msg = f"步骤「{s.get('topic')}」对应节点已掌握，建议标记为完成"
-                plan_actions.append({
-                    "step_order": s.get("step_order"),
-                    "topic": s.get("topic"),
-                    "action": "mark_completed",
-                    "old_status": old_step_status,
-                    "new_status": new_step_status,
-                    "message": action_msg,
-                })
-
-            elif new_status == "forgotten":
-                new_step_status = "review"
-                # 计算衰减后的掌握度
-                decayed = plan_service.estimate_decay(
-                    current_mastery, days_since_review=14,
-                    topic_difficulty=s.get("topic_difficulty", 3),
-                )
-                action_msg = f"步骤「{s.get('topic')}」对应节点已遗忘（掌握度 {decayed}），建议安排复习"
-                plan_actions.append({
-                    "step_order": s.get("step_order"),
-                    "topic": s.get("topic"),
-                    "action": "schedule_review",
-                    "old_status": old_step_status,
-                    "new_status": new_step_status,
-                    "decayed_mastery": decayed,
-                    "message": action_msg,
-                })
-
-            elif new_status == "learning" and old_status in ("locked", ""):
-                new_step_status = "pending"
-                action_msg = f"步骤「{s.get('topic')}」前置条件满足，已解锁"
-                plan_actions.append({
-                    "step_order": s.get("step_order"),
-                    "topic": s.get("topic"),
-                    "action": "unlock_step",
-                    "old_status": old_step_status,
-                    "new_status": new_step_status,
-                    "message": action_msg,
-                })
-
-            elif new_status == "locked":
-                new_step_status = "locked"
-                action_msg = f"步骤「{s.get('topic')}」前置条件不满足，已重新锁定"
-                plan_actions.append({
-                    "step_order": s.get("step_order"),
-                    "topic": s.get("topic"),
-                    "action": "lock_step",
-                    "old_status": old_step_status,
-                    "new_status": new_step_status,
-                    "message": action_msg,
-                })
-            else:
-                continue
-
-            # 更新步骤
-            for i, us in enumerate(updated_steps):
-                if us.get("step_order") == s.get("step_order"):
-                    updated_steps[i] = {**us, "status": new_step_status, "mastery_current": current_mastery}
-                    break
-
-        # ── 检查是否所有步骤已完成 → 计划可关闭 ────
-        completed_count = sum(1 for s in updated_steps if s.get("status") == "completed")
-        total = len(updated_steps)
-        plan_status = plan.get("status", "active")
-        if completed_count >= total and plan_status != "completed":
-            plan_status = "completed"
-            plan_actions.append({
-                "step_order": 0,
-                "topic": "",
-                "action": "complete_plan",
-                "old_status": plan.get("status"),
-                "new_status": "completed",
-                "message": "所有步骤已完成，建议将计划标记为完成",
-            })
-
-        next_milestone = _compute_next_milestone(plan, completed_count)
-
-        return api_success({
-            "plan_id": plan_id,
-            "node_id": node_id,
-            "new_status": new_status,
-            "affected_steps_count": len(affected_steps),
-            "plan_actions": plan_actions,
-            "updated_steps": updated_steps,
-            "plan_status": plan_status,
-            "completed_steps": completed_count,
-            "total_steps": total,
-            "progress_pct": round(completed_count / max(total, 1) * 100),
-            "next_milestone": next_milestone,
-            "summary": (
-                f"节点状态变更影响 {len(affected_steps)} 个计划步骤"
-                if affected_steps
-                else "此节点状态变更不影响当前计划的步骤"
-            ),
-        })
+        result = await _get_plan_center().node_status_change(
+            plan_id=plan_id,
+            plan=body.plan,
+            steps=body.steps,
+            masteries=body.masteries or {},
+            node_id=body.node_id,
+            old_status=body.old_status,
+            new_status=body.new_status,
+        )
+        return api_success(result)
+    except PlanNotFoundError as e:
+        return api_error(ErrorCode.NOT_FOUND, str(e), status_code=404)
     except Exception as e:
         logger.error(f"Failed to handle node status change: {e}", exc_info=True)
         return api_error(ErrorCode.INTERNAL_ERROR, "节点状态联动失败", status_code=500)
@@ -1481,104 +1181,29 @@ async def on_node_status_change(plan_id: int, body: NodeStatusChangeRequest):
 @router.post("/plans/{plan_id}/status")
 async def get_plan_status(plan_id: int, body: PlanStatusRequest):
     """查询计划状态（含软着陆触发检测）。Java 传入 plan + steps 数据。"""
-    return await _get_plan_status_core(plan_id, body)
+    try:
+        return api_success(await _get_plan_center().plan_status(
+            plan=body.plan, steps=body.steps,
+        ))
+    except PlanNotFoundError as e:
+        return api_error(ErrorCode.NOT_FOUND, str(e), status_code=404)
+    except Exception as e:
+        logger.error(f"Failed to get plan status: {e}")
+        return api_error(ErrorCode.INTERNAL_ERROR, "查询计划状态失败", status_code=500)
 
 
 @router.post("/plans/status")
 async def get_plan_status_legacy(body: PlanStatusRequest):
     """兼容旧路径：/internal/plans/status（无 path 参数 plan_id）。
 
-    从 body.plan.id 中提取 plan_id 后复用核心逻辑。
+    路径不携带 plan_id，响应中的 plan_id 取 body.plan.id。
     """
-    plan_id = 0
-    if body.plan and isinstance(body.plan.get("id"), int):
-        plan_id = body.plan["id"]
-    return await _get_plan_status_core(plan_id, body)
-
-
-async def _get_plan_status_core(plan_id: int, body: PlanStatusRequest):
-    """查询计划状态核心逻辑。"""
-    from datetime import datetime, timezone
-
     try:
-        plan = body.plan
-        steps = body.steps
-
-        if not plan:
-            return api_error(ErrorCode.NOT_FOUND, "计划不存在", status_code=404)
-
-        days_idle = 0
-        last_activity = plan.get("last_activity_at")
-        if last_activity:
-            now = datetime.now(timezone.utc)
-            try:
-                if isinstance(last_activity, str):
-                    dt = datetime.fromisoformat(last_activity.replace("Z", "+00:00"))
-                    delta = now - dt
-                    days_idle = delta.days
-            except (ValueError, TypeError):
-                pass
-
-        plan_service = get_plan_service()
-
-        paused_steps = [s for s in steps if s.get("status") in ("paused", "in_progress")]
-        soft_landing = None
-        if plan.get("status") == "paused" and days_idle > 0:
-            paused_dicts = [
-                {
-                    "topic": s.get("topic"),
-                    "mastery_current": s.get("mastery_current") or 0,
-                    "topic_difficulty": s.get("topic_difficulty") or 3,
-                    "review_count": s.get("review_count") or 0,
-                }
-                for s in paused_steps
-            ]
-            soft_landing = plan_service.soft_landing(paused_dicts, days_idle)
-            soft_landing["days_idle"] = days_idle
-
-        steps_data = []
-        for s in steps:
-            step_dict = {
-                "id": s.get("id"),
-                "step_order": s.get("step_order"),
-                "topic": s.get("topic"),
-                "knowledge_node_id": s.get("knowledge_node_id"),
-                "status": s.get("status"),
-                "topic_difficulty": s.get("topic_difficulty"),
-                "mastery_current": s.get("mastery_current"),
-            }
-            if s.get("status") in ("paused", "in_progress") and days_idle > 0:
-                decayed = plan_service.estimate_decay(
-                    s.get("mastery_current") or 0, days_idle,
-                    s.get("topic_difficulty") or 3, s.get("review_count") or 0,
-                )
-                step_dict["decayed_mastery"] = decayed
-            steps_data.append(step_dict)
-
-        # ── Milestone progress ─────────────────────────────
-        completed_steps = plan.get("completed_steps") or 0
-        next_milestone = _compute_next_milestone(plan, completed_steps)
-        milestone_progress = None
-        if next_milestone:
-            milestone_progress = {
-                "current": completed_steps,
-                "target": next_milestone["after_step"],
-                "remaining": next_milestone["steps_remaining"],
-                "pct": round(completed_steps / next_milestone["after_step"] * 100) if next_milestone["after_step"] > 0 else 100,
-            }
-
-        return api_success({
-            "plan_id": plan.get("id"),
-            "user_id": plan.get("user_id"),
-            "status": plan.get("status"),
-            "total_steps": plan.get("total_steps"),
-            "completed_steps": completed_steps,
-            "days_idle": days_idle,
-            "soft_landing": soft_landing,
-            "steps": steps_data,
-            "next_milestone": next_milestone,
-            "milestone_progress": milestone_progress,
-        })
+        return api_success(await _get_plan_center().plan_status(
+            plan=body.plan, steps=body.steps,
+        ))
+    except PlanNotFoundError as e:
+        return api_error(ErrorCode.NOT_FOUND, str(e), status_code=404)
     except Exception as e:
         logger.error(f"Failed to get plan status: {e}")
         return api_error(ErrorCode.INTERNAL_ERROR, "查询计划状态失败", status_code=500)
@@ -1740,46 +1365,11 @@ async def regression_check(plan_id: int, body: RegressionCheckRequest):
 @router.post("/plans/{plan_id}/review-schedule")
 async def get_review_schedule(plan_id: int, body: ReviewScheduleRequest):
     """获取未来 N 天的复习日程。Java 传入 steps 数据。"""
-
     try:
-        steps = body.steps
-        days_ahead = body.days_ahead
-
-        from dataclasses import dataclass
-
-        @dataclass
-        class StepProxy:
-            id: int; status: str; topic: str; topic_difficulty: int
-            review_count: int; mastery_current: float; last_review_at: str | None
-            knowledge_node_id: str
-
-        step_proxies = []
-        for s in steps:
-            step_proxies.append(StepProxy(
-                id=s.get("id", 0),
-                status=s.get("status", ""),
-                topic=s.get("topic", ""),
-                topic_difficulty=s.get("topic_difficulty") or 3,
-                review_count=s.get("review_count") or 0,
-                mastery_current=s.get("mastery_current") or 0,
-                last_review_at=s.get("last_review_at"),
-                knowledge_node_id=s.get("knowledge_node_id", ""),
-            ))
-
-        plan_service = get_plan_service()
-        schedule = plan_service.get_review_schedule(step_proxies, days_ahead)
-
-        high_count = sum(1 for s in schedule if s["urgency"] == "high")
-        medium_count = sum(1 for s in schedule if s["urgency"] == "medium")
-
-        return api_success({
-            "plan_id": plan_id,
-            "days_ahead": days_ahead,
-            "total_reviews": len(schedule),
-            "high_urgency": high_count,
-            "medium_urgency": medium_count,
-            "schedule": schedule,
-        })
+        result = await _get_plan_center().review_schedule(
+            plan_id=plan_id, steps=body.steps, days_ahead=body.days_ahead,
+        )
+        return api_success(result)
     except Exception as e:
         logger.error(f"Failed to get review schedule: {e}")
         return api_error(ErrorCode.INTERNAL_ERROR, "获取复习日程失败", status_code=500)

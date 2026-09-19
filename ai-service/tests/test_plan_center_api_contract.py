@@ -732,5 +732,5 @@ class TestApiNoLongerReimplementsPipeline:
 
         assert not hasattr(internal_api, "_enrich_steps_with_nodes"), "API 仍持有 _enrich_steps_with_nodes"
         assert not hasattr(internal_api, "_normalize_milestones"), "API 仍持有 _normalize_milestones"
-        # 但 _compute_next_milestone 必须保留（计划状态端点还在用）
-        assert hasattr(internal_api, "_compute_next_milestone"), "_compute_next_milestone 被误删"
+        # 里程碑计算已迁入 PlanService.compute_next_milestone
+        assert not hasattr(internal_api, "_compute_next_milestone"), "API 仍持有 _compute_next_milestone"
