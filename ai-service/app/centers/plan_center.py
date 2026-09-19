@@ -2,6 +2,7 @@ import logging
 from datetime import date, datetime, timezone
 
 from app.centers.schemas import CenterResult, CenterTask
+from app.services.plan_constants import RETURN_MESSAGES
 from app.services.plan_service import PlanService
 
 logger = logging.getLogger(__name__)
@@ -579,6 +580,178 @@ class PlanCenter:
                 else "此节点状态变更不影响当前计划的步骤"
             ),
         }
+
+    async def complete_step(self, *, step: dict, plan: dict, steps: list[dict]) -> dict:
+        """完成步骤后的巩固题 payload（跨域：经 ExerciseCenter 出题）。"""
+        step_topic = step.get("topic", "")
+        completed = plan.get("completed_steps", 0)
+        total = plan.get("total_steps", len(steps))
+        is_near_end = total > 0 and (completed / total) >= 0.8
+
+        generated = await self._exercise_center().generate_consolidation(
+            topic=step_topic,
+            knowledge_node_id=step.get("knowledge_node_id", ""),
+            is_near_end=is_near_end,
+        )
+        questions = generated.get("questions", [])
+
+        return {
+            "step_order": step.get("step_order"),
+            "step_completed": True,
+            "recommended_action": "comprehensive_review" if is_near_end else "consolidation",
+            "questions": questions,
+            "message": (
+                "你已经接近计划尾声，来做几道综合题检验整体掌握情况！"
+                if is_near_end
+                else f"完成「{step_topic}」的学习，来做 {len(questions)} 道题巩固一下吧"
+            ),
+        }
+
+    def _exercise_center(self):
+        if self.exercise_center is None:
+            from app.centers.exercise_center import ExerciseCenter
+            self.exercise_center = ExerciseCenter()
+        return self.exercise_center
+
+    async def regression_check(
+        self,
+        *,
+        plan_id: int,
+        plan: dict,
+        steps: list[dict],
+        days_idle: int,
+        answers: list[dict] | None,
+    ) -> dict:
+        """回归检测管线：出题（跨域 warmup）→ 判分 → 重排。"""
+        if not plan:
+            raise PlanNotFoundError("计划不存在")
+
+        if not answers:
+            return await self._regression_warmup(plan_id, steps, days_idle)
+        return await self._regression_grade(plan_id, steps, days_idle, answers)
+
+    async def _regression_warmup(
+        self, plan_id: int, steps: list[dict], days_idle: int,
+    ) -> dict:
+        paused_steps = [s for s in steps if s.get("status") in ("paused", "in_progress")]
+        if not paused_steps:
+            return {
+                "plan_id": plan_id, "strategy": "continue",
+                "message": RETURN_MESSAGES["short"], "questions": [],
+            }
+
+        landing = self.plan_service.soft_landing(
+            [self._decay_input(s) for s in paused_steps], days_idle,
+        )
+        questions = []
+        if landing["strategy"] != "continue":
+            warmup = await self._exercise_center().generate_warmup(
+                node_names=landing["review_nodes"],
+            )
+            questions = warmup.get("questions", [])
+
+        return {
+            "plan_id": plan_id,
+            "strategy": landing["strategy"],
+            "message": landing["message"],
+            "questions": questions,
+        }
+
+    async def _regression_grade(
+        self, plan_id: int, steps: list[dict], days_idle: int, answers: list[dict],
+    ) -> dict:
+        from app.services.evaluation_service import grade_choice, grade_short_answer
+
+        decay_results = self._decay_results(steps, days_idle)
+
+        answers_by_topic: dict[str, list[dict]] = {}
+        for ans in answers:
+            answers_by_topic.setdefault(ans.get("topic", ""), []).append(ans)
+
+        mastery_updates = {}
+        for topic, topic_answers in answers_by_topic.items():
+            scores = []
+            for ans in topic_answers:
+                if ans.get("question_type", "choice") == "choice":
+                    graded = grade_choice(
+                        ans.get("user_answer", ""), ans.get("correct_answer", ""),
+                        ans.get("choices", []),
+                    )
+                else:
+                    graded = await grade_short_answer(
+                        ans.get("user_answer", ""), ans.get("correct_answer", ""),
+                    )
+                scores.append(graded.get("earned", 0))
+
+            avg_score = sum(scores) / len(scores) if scores else 0
+            for step in steps:
+                if step.get("topic") == topic:
+                    mastery_updates[topic] = self._grade_mastery_update(step, avg_score)
+
+        return {
+            "plan_id": plan_id,
+            "strategy": "regression_check",
+            "message": (
+                RETURN_MESSAGES["after_pass"] if not decay_results
+                else RETURN_MESSAGES["after_fail"]
+            ),
+            "questions": [],
+            "mastery_updates": mastery_updates,
+            "reordered_steps": self._reorder(steps, decay_results, days_idle),
+        }
+
+    def _decay_results(self, steps: list[dict], days_idle: int) -> dict:
+        decay_results = {}
+        for step in steps:
+            if step.get("status") not in ("paused", "in_progress"):
+                continue
+            data = self._decay_input(step)
+            decayed = self.plan_service.estimate_decay(
+                data["mastery_current"], days_idle,
+                data["topic_difficulty"], data["review_count"],
+            )
+            if decayed < 0.6:
+                decay_results[data["topic"]] = "review" if decayed < 0.3 else "review_light"
+        return decay_results
+
+    def _grade_mastery_update(self, step: dict, avg_score: float) -> dict:
+        previous = step.get("mastery_current") or 0
+        if avg_score >= 0.6:
+            new_mastery = self.plan_service.update_mastery(previous, "exercise_done", avg_score)
+        else:
+            new_mastery = self.plan_service.update_mastery(previous, "exercise_failed")
+        return {
+            "previous_mastery": previous,
+            "new_mastery": new_mastery,
+            "review_count": (step.get("review_count") or 0) + 1,
+            "step_id": step.get("id"),
+        }
+
+    def _reorder(self, steps: list[dict], decay_results: dict, days_idle: int) -> list[dict] | None:
+        if not decay_results:
+            return None
+        step_dicts = [
+            {
+                "topic": s.get("topic"), "status": s.get("status"),
+                "step_order": s.get("step_order"),
+                "knowledge_node_id": s.get("knowledge_node_id") or "",
+                "mastery_current": s.get("mastery_current"),
+                "topic_difficulty": s.get("topic_difficulty"),
+            }
+            for s in steps
+        ]
+        reordered = self.plan_service.reorder_plan(
+            step_dicts, decay_results, days_idle,
+            current_topic=steps[0].get("knowledge_node_id", "") if steps else "",
+            goal_topic=steps[-1].get("knowledge_node_id", "") if steps else "",
+        )
+        return [
+            {
+                "step_order": i + 1, "topic": r.get("topic"), "status": r.get("status"),
+                "mastery_current": r.get("mastery_current"),
+            }
+            for i, r in enumerate(reordered)
+        ]
 
     async def _run_adjustment(self, task: CenterTask, student_profile: dict) -> CenterResult:
         try:

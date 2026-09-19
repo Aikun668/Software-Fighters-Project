@@ -286,3 +286,22 @@ class ExerciseCenter:
             "purpose": "consolidation",
         })
         return {"questions": state.get("questions", [])}
+
+    async def generate_warmup(self, *, node_names: list[str]) -> dict:
+        """回归检测热身题：每个节点 1 道 easy 题，逐节点降级（单节点失败不拖垮其余）。"""
+        questions: list[dict] = []
+        for node_name in node_names:
+            try:
+                state = await self._exercise_agent().run({
+                    "topic": node_name,
+                    "count": 1,
+                    "difficulty": "easy",
+                    "purpose": "warmup_not_exam",
+                })
+            except Exception as e:
+                logger.warning(f"Failed to generate warmup question for '{node_name}': {e}")
+                continue
+            questions.extend(
+                {**q, "review_node": node_name} for q in state.get("questions", [])
+            )
+        return {"questions": questions}
