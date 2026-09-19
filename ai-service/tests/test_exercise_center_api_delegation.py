@@ -329,6 +329,7 @@ class TestJsonEndpointDelegation:
 # EX-A06: 路由源码结构断言
 # ═══════════════════════════════════════════════════════════════
 
+# complete_plan_step 归属计划域，见 test_plan_endpoints_api_delegation.py
 _EXERCISE_ROUTES = [
     "exercise_generate",
     "solve_question",
@@ -339,7 +340,6 @@ _EXERCISE_ROUTES = [
     "analyze_session",
     "exercise_dashboard",
     "enrich_profile",
-    "complete_plan_step",
 ]
 
 _FORBIDDEN_SYMBOLS = [
