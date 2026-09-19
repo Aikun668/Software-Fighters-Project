@@ -17,9 +17,9 @@ import time
 from typing import Any
 
 from fastapi import APIRouter, Query
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.responses import FileResponse
 
-from app.utils.sse_heartbeat import sse_heartbeat_generator
+from app.utils.sse_response import sse_response
 from app.utils.prompt_guard import sanitize_model
 from app.api.errors import ErrorCode, api_error, api_success
 from app.api.models import (
@@ -401,7 +401,7 @@ async def profile_chat(body: ProfileChatRequest):
             yield f"data: {json.dumps({'type': 'error', 'content': '画像对话失败，请稍后重试'}, ensure_ascii=False)}\n\n"
             yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
 
-    return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
+    return sse_response(event_stream())
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -426,7 +426,7 @@ async def resources_generate(body: ResourceGenRequest):
         ):
             yield event.to_sse()
 
-    return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
+    return sse_response(event_stream())
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -446,7 +446,7 @@ async def tutor_chat(body: TutorChatRequest):
         ):
             yield event.to_sse()
 
-    return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
+    return sse_response(event_stream())
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -474,7 +474,7 @@ async def exercise_generate(body: ExerciseGenRequest):
         ):
             yield event.to_sse()
 
-    return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
+    return sse_response(event_stream())
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -666,7 +666,7 @@ async def solve_question(body: SolveRequest):
         async for event in center.solve_stream(question=question, context=context):
             yield event.to_sse()
 
-    return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
+    return sse_response(event_stream())
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1252,7 +1252,7 @@ async def _unified_chat(body: UnifiedChatRequest):
     1. sanitize_model + 基础输入处理；
     2. 调用 _get_chat_center().stream_chat(...)；
     3. 将 StreamEvent 转成 SSE 文本；
-    4. 返回 StreamingResponse(sse_heartbeat_generator(...))。
+    4. 返回 sse_response(...)（媒体类型与心跳包装由该工厂负责）。
 
     正文聚合、推荐抽取、多 done 收敛、缺 done 兜底、错误补发等
     聊天级终态策略已移入 ChatCenter.stream_chat()，API 不再重复实现。
@@ -1284,7 +1284,7 @@ async def _unified_chat(body: UnifiedChatRequest):
         async for event in gen:
             yield event.to_sse()
 
-    return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
+    return sse_response(event_stream())
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1329,7 +1329,7 @@ async def inquiry_resolve(body: InquiryResolveRequest):
         ):
             yield event.to_sse()
 
-    return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
+    return sse_response(event_stream())
 
 
 @router.post("/inquiry/resolve/plan")
@@ -1394,7 +1394,7 @@ async def inquiry_resolve_plan(body: InquiryResolveRequest):
             yield f"data: {json.dumps({'type': 'error', 'content': '学习路径生成失败，请稍后重试'}, ensure_ascii=False)}\n\n"
             yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
 
-    return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
+    return sse_response(event_stream())
 
 
 # ═══════════════════════════════════════════════════════════════════
