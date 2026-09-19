@@ -1,6 +1,7 @@
-"""安全中间件：速率限制 + 安全响应头 + 服务间认证"""
+"""安全中间件：速率限制 + 安全响应头 + 服务间认证 + 路径/URL 守卫"""
 
 import os
+import re
 import time
 import logging
 from collections import defaultdict
@@ -10,6 +11,61 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
+
+# ── SSRF 判定 ────────────────────────────────────────────────
+
+_SSRF_BLOCKED_NETWORKS = re.compile(
+    r"://(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|"
+    r"0\.0\.0\.0|169\.254\.\d+\.\d+|\[::1\]|\[fe80:)",
+    re.IGNORECASE,
+)
+
+_SSRF_DECIMAL_IP = re.compile(r"://(\d{8,10})(?:/|$|:)", re.IGNORECASE)
+_SSRF_HEX_IP = re.compile(r"://0x[0-9a-f]{6,8}(?:/|$|:)", re.IGNORECASE)
+_SSRF_OCTAL_IP = re.compile(r"://0[0-7]{9,11}(?:/|$|:)", re.IGNORECASE)
+
+
+def is_internal_url(url: str) -> bool:
+    """判断 URL 是否指向内网/本机/云元数据地址（SSRF 防护）。"""
+    if _SSRF_BLOCKED_NETWORKS.search(url):
+        return True
+    dec_match = _SSRF_DECIMAL_IP.search(url)
+    if dec_match:
+        try:
+            ip_int = int(dec_match.group(1))
+            octets = [(ip_int >> 24) & 0xFF, (ip_int >> 16) & 0xFF, (ip_int >> 8) & 0xFF, ip_int & 0xFF]
+            ip_str = ".".join(str(o) for o in octets)
+            if _SSRF_BLOCKED_NETWORKS.search(f"://{ip_str}"):
+                return True
+        except (ValueError, OverflowError):
+            pass
+    if _SSRF_HEX_IP.search(url) or _SSRF_OCTAL_IP.search(url):
+        return True
+    return False
+
+
+# ── 导出文件下载守卫 ─────────────────────────────────────────
+
+def safe_export_path(filename: str, *, allowed_ext: str, exports_dir: str) -> str:
+    """校验下载请求并返回可安全读取的绝对路径。
+
+    `basename` 抹平一切目录成分后，再确认 realpath 未逃出导出目录——后者是
+    针对符号链接的纵深防御（纯文本穿越已被 basename 挡住）。
+
+    Raises:
+        ValueError: 扩展名不符或路径逃出导出目录（调用方映射为 400）
+        FileNotFoundError: 文件不存在或已过期（调用方映射为 404）
+    """
+    safe_name = os.path.basename(filename)
+    if os.path.splitext(safe_name)[1].lower() != allowed_ext:
+        raise ValueError("不支持的文件类型")
+    file_path = os.path.join(exports_dir, safe_name)
+    if not os.path.realpath(file_path).startswith(os.path.realpath(exports_dir)):
+        raise ValueError("非法文件路径")
+    if not os.path.exists(file_path):
+        raise FileNotFoundError("文件不存在或已过期")
+    return file_path
+
 
 # ── 速率限制 ─────────────────────────────────────────────────
 

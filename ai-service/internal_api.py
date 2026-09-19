@@ -11,7 +11,6 @@ import asyncio
 import json
 import logging
 import os
-import re
 import threading
 import time
 from typing import Any
@@ -20,6 +19,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import FileResponse
 
 from app.utils.sse_response import sse_response
+from app.utils.security_middleware import is_internal_url, safe_export_path
 from app.utils.prompt_guard import sanitize_model
 from app.api.errors import ErrorCode, api_error, api_success
 from app.api.models import (
@@ -296,35 +296,6 @@ def _extract_text_from_multimodal(content) -> str:
     return ""
 
 
-_SSRF_BLOCKED_NETWORKS = re.compile(
-    r"://(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|"
-    r"0\.0\.0\.0|169\.254\.\d+\.\d+|\[::1\]|\[fe80:)",
-    re.IGNORECASE,
-)
-
-_SSRF_DECIMAL_IP = re.compile(r"://(\d{8,10})(?:/|$|:)", re.IGNORECASE)
-_SSRF_HEX_IP = re.compile(r"://0x[0-9a-f]{6,8}(?:/|$|:)", re.IGNORECASE)
-_SSRF_OCTAL_IP = re.compile(r"://0[0-7]{9,11}(?:/|$|:)", re.IGNORECASE)
-
-
-def _is_internal_url(url: str) -> bool:
-    if _SSRF_BLOCKED_NETWORKS.search(url):
-        return True
-    dec_match = _SSRF_DECIMAL_IP.search(url)
-    if dec_match:
-        try:
-            ip_int = int(dec_match.group(1))
-            octets = [(ip_int >> 24) & 0xFF, (ip_int >> 16) & 0xFF, (ip_int >> 8) & 0xFF, ip_int & 0xFF]
-            ip_str = ".".join(str(o) for o in octets)
-            if _SSRF_BLOCKED_NETWORKS.search(f"://{ip_str}"):
-                return True
-        except (ValueError, OverflowError):
-            pass
-    if _SSRF_HEX_IP.search(url) or _SSRF_OCTAL_IP.search(url):
-        return True
-    return False
-
-
 def _build_multimodal_message(text: str, images: list[str] | None) -> dict:
     if not images:
         return {"role": "user", "content": text}
@@ -345,7 +316,7 @@ def _build_multimodal_message(text: str, images: list[str] | None) -> dict:
                     continue
             url = img
         elif img.startswith("http://") or img.startswith("https://"):
-            if _is_internal_url(img):
+            if is_internal_url(img):
                 logger.warning(f"Rejected internal/infra URL for SSRF prevention: {img[:80]}")
                 continue
             url = img
@@ -549,24 +520,20 @@ async def export_pptx(body: ExportPptxRequest):
 
 
 _EXPORTS_DIR = os.path.join(os.path.dirname(__file__), "exports")
-_ALLOWED_EXTENSIONS = frozenset({".pptx", ".pdf", ".docx"})
 
 
 @router.get("/resources/download-pptx")
 async def download_pptx(filename: str = Query(...)):
-    safe_name = os.path.basename(filename)
-    ext = os.path.splitext(safe_name)[1].lower()
-    if ext != ".pptx":
-        return api_error(ErrorCode.INVALID_REQUEST, "不支持的文件类型", status_code=400)
-    file_path = os.path.join(_EXPORTS_DIR, safe_name)
-    if not os.path.realpath(file_path).startswith(os.path.realpath(_EXPORTS_DIR)):
-        return api_error(ErrorCode.INVALID_REQUEST, "非法文件路径", status_code=400)
-    if not os.path.exists(file_path):
-        return api_error(ErrorCode.NOT_FOUND, "文件不存在或已过期", status_code=404)
+    try:
+        file_path = safe_export_path(filename, allowed_ext=".pptx", exports_dir=_EXPORTS_DIR)
+    except ValueError as e:
+        return api_error(ErrorCode.INVALID_REQUEST, str(e), status_code=400)
+    except FileNotFoundError as e:
+        return api_error(ErrorCode.NOT_FOUND, str(e), status_code=404)
     return FileResponse(
         file_path,
         media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        filename=safe_name,
+        filename=os.path.basename(file_path),
     )
 
 
@@ -595,19 +562,16 @@ async def export_docx(body: ExportDocxRequest):
 
 @router.get("/resources/download-docx")
 async def download_docx(filename: str = Query(...)):
-    safe_name = os.path.basename(filename)
-    ext = os.path.splitext(safe_name)[1].lower()
-    if ext != ".docx":
-        return api_error(ErrorCode.INVALID_REQUEST, "不支持的文件类型", status_code=400)
-    file_path = os.path.join(_EXPORTS_DIR, safe_name)
-    if not os.path.realpath(file_path).startswith(os.path.realpath(_EXPORTS_DIR)):
-        return api_error(ErrorCode.INVALID_REQUEST, "非法文件路径", status_code=400)
-    if not os.path.exists(file_path):
-        return api_error(ErrorCode.NOT_FOUND, "文件不存在或已过期", status_code=404)
+    try:
+        file_path = safe_export_path(filename, allowed_ext=".docx", exports_dir=_EXPORTS_DIR)
+    except ValueError as e:
+        return api_error(ErrorCode.INVALID_REQUEST, str(e), status_code=400)
+    except FileNotFoundError as e:
+        return api_error(ErrorCode.NOT_FOUND, str(e), status_code=404)
     return FileResponse(
         file_path,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        filename=safe_name,
+        filename=os.path.basename(file_path),
     )
 
 
@@ -635,19 +599,16 @@ async def export_pdf(body: ExportPdfRequest):
 
 @router.get("/resources/download-pdf")
 async def download_pdf(filename: str = Query(...)):
-    safe_name = os.path.basename(filename)
-    ext = os.path.splitext(safe_name)[1].lower()
-    if ext != ".pdf":
-        return api_error(ErrorCode.INVALID_REQUEST, "不支持的文件类型", status_code=400)
-    file_path = os.path.join(_EXPORTS_DIR, safe_name)
-    if not os.path.realpath(file_path).startswith(os.path.realpath(_EXPORTS_DIR)):
-        return api_error(ErrorCode.INVALID_REQUEST, "非法文件路径", status_code=400)
-    if not os.path.exists(file_path):
-        return api_error(ErrorCode.NOT_FOUND, "文件不存在或已过期", status_code=404)
+    try:
+        file_path = safe_export_path(filename, allowed_ext=".pdf", exports_dir=_EXPORTS_DIR)
+    except ValueError as e:
+        return api_error(ErrorCode.INVALID_REQUEST, str(e), status_code=400)
+    except FileNotFoundError as e:
+        return api_error(ErrorCode.NOT_FOUND, str(e), status_code=404)
     return FileResponse(
         file_path,
         media_type="application/pdf",
-        filename=safe_name,
+        filename=os.path.basename(file_path),
     )
 
 
