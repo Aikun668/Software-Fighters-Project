@@ -463,6 +463,123 @@ class PlanCenter:
             "schedule": schedule,
         }
 
+    async def update_progress(
+        self,
+        *,
+        plan_id: int,
+        plan: dict,
+        steps: list[dict],
+        masteries: dict,
+        step_id: int | None,
+        step_order: int | None,
+        status: str,
+        score: float | None,
+        activity_type: str,
+        duration_minutes: int,
+    ) -> dict:
+        """掌握度更新 payload：定位步骤 → 算掌握度 → 返回更新后步骤 + 里程碑进度。"""
+        if not plan:
+            raise PlanNotFoundError("计划不存在")
+
+        target_step, step_idx = self.plan_service.find_step(
+            steps, step_id=step_id, step_order=step_order,
+        )
+        if target_step is None:
+            raise PlanNotFoundError(
+                f"步骤 step_id={step_id} step_order={step_order} 不存在"
+            )
+
+        masteries = masteries or {}
+        knowledge_node_id = target_step.get("knowledge_node_id", "")
+        old_mastery = self._old_mastery(masteries, target_step, knowledge_node_id)
+        event_type = "exercise_done" if activity_type in ("exercise", "quiz") else "resource_viewed"
+        new_mastery = self.plan_service.update_mastery(old_mastery, event_type, score=score)
+
+        mastery_updates = {}
+        if knowledge_node_id:
+            mastery_updates[knowledge_node_id] = {
+                "old_mastery": old_mastery,
+                "new_mastery": new_mastery,
+                "delta": round(new_mastery - old_mastery, 2),
+                "event_type": event_type,
+            }
+
+        updated_steps = list(steps)
+        if step_idx >= 0:
+            updated_steps[step_idx] = {
+                **target_step,
+                "status": status,
+                **({"score": score} if score is not None else {}),
+                "mastery_current": new_mastery,
+                "activity_type": activity_type,
+                "duration_minutes": duration_minutes,
+            }
+
+        completed_count = sum(1 for s in updated_steps if s.get("status") == "completed")
+        total_steps = plan.get("total_steps", len(steps))
+
+        return {
+            "plan_id": plan_id,
+            "updated_step": {
+                "step_order": target_step.get("step_order"),
+                "topic": target_step.get("topic"),
+                "knowledge_node_id": knowledge_node_id,
+                "status": status,
+                "score": score,
+                "mastery_current": new_mastery,
+                "activity_type": activity_type,
+                "duration_minutes": duration_minutes,
+            },
+            "mastery_updates": mastery_updates,
+            "completed_steps": completed_count,
+            "total_steps": total_steps,
+            "progress_pct": round(completed_count / max(total_steps, 1) * 100),
+            "next_milestone": self.plan_service.compute_next_milestone(plan, completed_count),
+            "updated_steps": updated_steps,
+        }
+
+    @staticmethod
+    def _old_mastery(masteries: dict, step: dict, knowledge_node_id: str) -> float:
+        if not knowledge_node_id:
+            return 0.5
+        return masteries.get(knowledge_node_id, step.get("mastery_current", 0.5))
+
+    async def node_status_change(
+        self,
+        *,
+        plan_id: int,
+        plan: dict,
+        steps: list[dict],
+        masteries: dict,
+        node_id: str,
+        old_status: str,
+        new_status: str,
+    ) -> dict:
+        """图谱节点状态变化 → 计划步骤联动 payload。"""
+        if not plan or not steps:
+            raise PlanNotFoundError("计划或步骤数据缺失")
+
+        outcome = self.plan_service.apply_node_status_change(
+            steps=steps, node_id=node_id, new_status=new_status, old_status=old_status,
+            masteries=masteries or {}, plan_status=plan.get("status", "active"),
+        )
+        completed = outcome["completed_steps"]
+        total = outcome["total_steps"]
+
+        return {
+            "plan_id": plan_id,
+            "node_id": node_id,
+            "new_status": new_status,
+            **outcome,
+            "progress_pct": round(completed / max(total, 1) * 100),
+            "next_milestone": self.plan_service.compute_next_milestone(plan, completed),
+            "summary": (
+                f"节点状态变更影响 {outcome['affected_steps_count']} 个计划步骤"
+                if outcome["affected_steps_count"]
+                else "此节点状态变更不影响当前计划的步骤"
+            ),
+        }
+
     async def _run_adjustment(self, task: CenterTask, student_profile: dict) -> CenterResult:
         try:
             state = await self.adjustment_agent.run({
