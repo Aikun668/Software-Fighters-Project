@@ -68,7 +68,6 @@ from app.api.models import (
 from app.services.plan_service import get_plan_service
 from app.services.knowledge_extraction import extract_knowledge_nodes
 from app.services.plan_constants import RETURN_MESSAGES
-from app.events.types import StreamEvent, done_event
 from app.services.intent_extractor import IntentExtractor
 from app.centers.chat_center import ChatCenter
 from app.centers.plan_center import PlanCenter, PlanGenerationError
@@ -1888,130 +1887,44 @@ async def unified_chat(body: UnifiedChatRequest):
     return await _unified_chat(body)
 
 
-# 推荐抽取（LLM 调用）在 done 之前进行的超时预算，防止终止事件被阻塞
-RECOMMENDATION_EXTRACTION_TIMEOUT_SEC = 10.0
-
-
-def _done_payload_has_content(done_data: Any) -> bool:
-    """done 载荷本身是否携带合法的"无需流式正文"的成功产物。
-
-    资源/习题/路径/画像等模式正文不走 token 流，而是随 done 载荷下发；
-    追问（inquiry）以问题文本作为本轮产出。这些都不算"空正文失败"。
-    summary/results 是终止事件的描述性元数据，不参与判定。
-    """
-    if not isinstance(done_data, dict):
-        return False
-    if done_data.get("is_clear") is False or done_data.get("type") == "inquiry":
-        return True
-    for key in ("content_blocks", "questions", "plan", "_path_steps", "steps", "profile_delta"):
-        value = done_data.get(key)
-        if isinstance(value, list) and value:
-            return True
-        if isinstance(value, dict) and value:
-            return True
-    for key in ("response", "content", "solution"):
-        value = done_data.get(key)
-        if isinstance(value, str) and value.strip():
-            return True
-    return False
-
-
 async def _unified_chat(body: UnifiedChatRequest):
+    """统一聊天路由：只做协议适配，业务编排全部在 ChatCenter.stream_chat()。
+
+    职责（Task 3 收口）：
+    1. sanitize_model + 基础输入处理；
+    2. 调用 _get_chat_center().stream_chat(...)；
+    3. 将 StreamEvent 转成 SSE 文本；
+    4. 返回 StreamingResponse(sse_heartbeat_generator(...))。
+
+    正文聚合、推荐抽取、多 done 收敛、缺 done 兜底、错误补发等
+    聊天级终态策略已移入 ChatCenter.stream_chat()，API 不再重复实现。
+    """
     body = sanitize_model(body)
     message = body.message.strip()
-    history = body.messages
-    user_msg = {"role": "user", "content": message}
-    messages = history + [user_msg]
 
     chat_center = _get_chat_center()
-    plan = await chat_center.route(
+    gen = chat_center.stream_chat(
         message=message,
+        history=body.messages,
         mode=body.mode,
         student_profile=body.student_profile,
-        context={
-            "messages": messages,
-            "style": body.style or "standard",
-            "user_id": body.user_id,
-            "conversation_id": body.conversation_id,
-        },
+        user_id=body.user_id,
+        conversation_id=body.conversation_id,
+        style=body.style or "standard",
     )
 
+    # 预取第一个事件：route 阶段异常在 HTTP 响应发送前暴露为 500，
+    # 避免流已经发出 200 后内部再爆炸。
+    try:
+        first_event = await gen.__anext__()
+    except Exception as e:
+        logger.error(f"Chat pipeline failed before first event: {e}")
+        return api_error(ErrorCode.INTERNAL_ERROR, "处理失败，请稍后重试", status_code=500)
+
     async def event_stream():
-        assistant_content = ""
-        pending_done: list[StreamEvent] = []
-        saw_error = False
-
-        try:
-            async for event in chat_center.execute(plan):
-                if event.type == "content" and event.data:
-                    if isinstance(event.data, str):
-                        assistant_content += event.data
-                    elif isinstance(event.data, dict):
-                        # 正文键兼容：TutorAgent 用 response，部分中心用 content
-                        assistant_content += event.data.get("response", "") or event.data.get("content", "")
-                if event.type == "error":
-                    saw_error = True
-                sse = event.to_sse()
-
-                # Defer DONE event so recommendation can be inserted before it
-                if event.type == "done":
-                    pending_done.append(event)
-                    continue
-
-                yield sse
-        except Exception as e:
-            logger.error(f"Center pipeline error: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'content': '处理失败，请稍后重试'}, ensure_ascii=False)}\n\n"
-            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
-            return
-
-        # Check for exercise recommendation (before DONE)
-        # 超时兜底：推荐抽取依赖 LLM，卡住时不得阻塞终止事件（页面会一直转圈）
-        try:
-            if assistant_content.strip():
-                extracted = await asyncio.wait_for(
-                    extract_knowledge_nodes(
-                        course_id="ai_intro",
-                        user_message=message,
-                        assistant_reply=assistant_content[:2000],
-                    ),
-                    timeout=RECOMMENDATION_EXTRACTION_TIMEOUT_SEC,
-                )
-                primary_nodes = extracted.get("primary", [])
-                if primary_nodes:
-                    node = primary_nodes[0]
-                    from app.events.types import recommendation_event
-                    rec = recommendation_event(
-                        knowledge_node_id=node.get("id", ""),
-                        node_name=node.get("name", ""),
-                    )
-                    yield rec.to_sse()
-        except asyncio.TimeoutError:
-            logger.warning(
-                "Recommendation check timed out after %.1fs, skipping",
-                RECOMMENDATION_EXTRACTION_TIMEOUT_SEC,
-            )
-        except Exception as exc:
-            logger.warning(f"Recommendation check skipped: {exc}")
-
-        # Yield deferred DONE event(s)：终止责任唯一，多个内部 done 收敛为一个
-        final_done = pending_done[0] if pending_done else None
-        final_data = final_done.data if final_done is not None else None
-
-        # 终态合同：失败必须有 error。正文与 done 载荷皆无有效内容（思考模式
-        # 吞掉正文、模型异常、空计划等）时，在 done 前补发 error，前端不得
-        # 渲染空白或以本地假答案顶替。
-        done_error = final_data.get("error") if isinstance(final_data, dict) else None
-        if isinstance(done_error, str) and done_error.strip():
-            yield f"data: {json.dumps({'type': 'error', 'content': done_error}, ensure_ascii=False)}\n\n"
-        elif not assistant_content.strip() and not _done_payload_has_content(final_data) and not saw_error:
-            yield f"data: {json.dumps({'type': 'error', 'content': '模型未返回有效内容，请重试'}, ensure_ascii=False)}\n\n"
-
-        if final_done is not None:
-            yield final_done.to_sse()
-        else:
-            # Guarantee a DONE event if none was emitted
-            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
+        yield first_event.to_sse()
+        async for event in gen:
+            yield event.to_sse()
 
     return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
 

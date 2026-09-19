@@ -360,6 +360,29 @@ class ChatCenter:
                         state["saw_done"] = True
                         state["final_data"] = event.data
 
+                        # 终态合同：done 载荷带 error 字段 → 先发可读 error；
+                        # 空正文且 done 载荷无合法产物且未见 error → 补发空正文 error。
+                        done_error = (
+                            event.data.get("error")
+                            if isinstance(event.data, dict)
+                            else None
+                        )
+                        if isinstance(done_error, str) and done_error.strip():
+                            await queue.put(
+                                error_event(stage="chat", message=done_error)
+                            )
+                        elif (
+                            not state["saw_error"]
+                            and not state["assistant_content"].strip()
+                            and not self._done_payload_has_content(event.data)
+                        ):
+                            await queue.put(
+                                error_event(
+                                    stage="chat",
+                                    message="模型未返回有效内容，请重试",
+                                )
+                            )
+
                         if state["assistant_content"].strip():
                             course_id = ""
                             if plan.tasks:

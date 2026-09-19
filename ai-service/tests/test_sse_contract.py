@@ -21,6 +21,7 @@ from httpx import ASGITransport, AsyncClient
 from unittest.mock import AsyncMock
 
 import internal_api
+from app.centers.chat_center import ChatCenter
 from app.events.types import content_event, done_event, error_event, inquiry_event
 from app.utils.sse_heartbeat import sse_heartbeat_generator
 
@@ -54,37 +55,59 @@ async def sse_client():
         yield client
 
 
-class FakeChatCenter:
-    """可编程的 ChatCenter 替身：预置事件序列或异常。"""
+class _StubResultAgent:
+    """预置事件序列或抛错的 ResultAgent 替身。"""
 
-    def __init__(self, events=None, error=None, route_error=None):
-        self._events = events or []
+    def __init__(self, events=None, *, error=None):
+        self._events = list(events or [])
         self._error = error
-        self._route_error = route_error
-        self.route_calls: list[dict] = []
-
-    async def route(self, **kwargs):
-        self.route_calls.append(kwargs)
-        if self._route_error:
-            raise self._route_error
-        from app.centers.schemas import ExecutionPlan
-
-        return ExecutionPlan(tasks=[], is_clear=True, intent_meta={"strategy": "fake"})
 
     async def execute(self, plan):
         for event in self._events:
+            await asyncio.sleep(0)
             yield event
-        if self._error:
+        if self._error is not None:
+            await asyncio.sleep(0)
             raise self._error
+
+
+class FakeChatCenter:
+    """可编程的 ChatCenter 替身：预置事件序列或异常。
+
+    Task 3 后 _unified_chat 委派 ChatCenter.stream_chat()；替身把 stream_chat
+    委托给真实 ChatCenter（stub ResultAgent + stub extract 注入），因此
+    多 done 收敛 / 缺 done 兜底 / 错误补发等终态行为由真实实现承担，
+    本文件只验证 API 边界（委派 + SSE 序列化 + 心跳包装）公开语义不变。
+    """
+
+    def __init__(self, events=None, error=None, route_error=None):
+        import types
+
+        self._events = events or []
+        self._error = error
+        self.route_calls: list[dict] = []
+
+        real = ChatCenter(result_agent=_StubResultAgent(events, error=error))
+        real._extract_knowledge_nodes = AsyncMock(return_value={"primary": []})
+        real.route_calls = self.route_calls
+
+        async def _fake_route(self, **kwargs):
+            self.route_calls.append(kwargs)
+            if route_error is not None:
+                raise route_error
+            from app.centers.schemas import ExecutionPlan
+
+            return ExecutionPlan(tasks=[], is_clear=True, intent_meta={"strategy": "fake"})
+
+        real.route = types.MethodType(_fake_route, real)
+        self._real = real
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
 
 
 def _install(center: FakeChatCenter, monkeypatch) -> None:
     monkeypatch.setattr(internal_api, "_chat_center_singleton", center)
-    # 推荐抽取用空结果替身，避免真实 KB/LLM 调用
-    monkeypatch.setattr(
-        internal_api, "extract_knowledge_nodes",
-        AsyncMock(return_value={"primary": []}),
-    )
 
 
 async def _collect_sse(client, payload: dict) -> list[dict]:
@@ -297,11 +320,9 @@ class TestTerminationNotBlocked:
         async def _hanging_extraction(*args, **kwargs):
             await asyncio.Event().wait()  # 永不完成
 
-        monkeypatch.setattr(internal_api, "extract_knowledge_nodes", _hanging_extraction)
-        # 把超时预算压到测试可接受的范围
-        monkeypatch.setattr(
-            internal_api, "RECOMMENDATION_EXTRACTION_TIMEOUT_SEC", 0.5, raising=False
-        )
+        # Task 3 后抽取与超时预算都在 ChatCenter 内部
+        center._real._extract_knowledge_nodes = _hanging_extraction
+        center._real._recommendation_timeout_sec = 0.5
 
         start = time.monotonic()
         events = await asyncio.wait_for(
