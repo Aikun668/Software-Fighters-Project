@@ -65,8 +65,6 @@ from app.api.models import (
     NodeStatusChangeRequest,
     ResourceLinkRequest,
 )
-from app.services.plan_service import get_plan_service
-from app.services.knowledge_extraction import extract_knowledge_nodes
 from app.services.intent_extractor import IntentExtractor
 from app.centers.chat_center import ChatCenter
 from app.centers.plan_center import PlanCenter, PlanGenerationError, PlanNotFoundError
@@ -793,6 +791,8 @@ async def enrich_profile(body: ProfileEnrichRequest):
 # ═══════════════════════════════════════════════════════════════════
 
 _graph_service_singleton = None
+_graph_center_singleton = None
+_graph_center_lock = threading.Lock()
 
 
 def _get_graph_service():
@@ -803,14 +803,31 @@ def _get_graph_service():
     return _graph_service_singleton
 
 
+def _get_graph_center():
+    """惰性单例工厂：图谱域唯一业务入口装配点。
+
+    graph_service 注入外层包装 `_get_graph_service()`（与本文件收口前的取用
+    来源一致）；plan_service / extraction 留 None，由 GraphCenter 走惰性默认。
+    该工厂是 API 层与 GraphCenter 之间的唯一依赖装配点。
+    """
+    global _graph_center_singleton
+    if _graph_center_singleton is None:
+        with _graph_center_lock:
+            if _graph_center_singleton is None:
+                from app.centers.graph_center import GraphCenter
+                _graph_center_singleton = GraphCenter(
+                    graph_service=_get_graph_service()
+                )
+    return _graph_center_singleton
+
+
 @router.post("/knowledge-graph/{course_id}")
 async def get_knowledge_graph(course_id: str, body: KnowledgeGraphRequest):
     try:
-        graph_service = _get_graph_service()
-        graph = await graph_service.get_graph(
-            course_id=course_id, masteries=body.masteries
+        result = await _get_graph_center().get_graph(
+            course_id=course_id, masteries=body.masteries,
         )
-        return api_success(graph)
+        return api_success(result)
     except Exception as e:
         logger.error(f"Failed to get knowledge graph: {e}")
         return api_error(ErrorCode.INTERNAL_ERROR, "获取知识图谱失败", status_code=500)
@@ -819,15 +836,14 @@ async def get_knowledge_graph(course_id: str, body: KnowledgeGraphRequest):
 @router.post("/knowledge-graph/{course_id}/node/{node_id}")
 async def get_node_card(course_id: str, node_id: str, body: KnowledgeGraphNodeRequest):
     try:
-        graph_service = _get_graph_service()
-        card = await graph_service.get_node_card(
-            node_id=node_id,
+        result = await _get_graph_center().get_node_card(
             course_id=course_id,
+            node_id=node_id,
             masteries=body.masteries,
             total_exercises=body.total_exercises,
             last_practiced=body.last_practiced,
         )
-        return api_success(card)
+        return api_success(result)
     except ValueError:
         return api_error(ErrorCode.NOT_FOUND, "节点不存在", status_code=404)
     except Exception as e:
@@ -838,18 +854,13 @@ async def get_node_card(course_id: str, node_id: str, body: KnowledgeGraphNodeRe
 @router.post("/graph/extract")
 async def graph_extract(body: GraphExtractRequest):
     try:
-        groups = await extract_knowledge_nodes(
+        result = await _get_graph_center().extract_nodes(
             course_id=body.course_id,
             user_message=body.user_message,
             assistant_reply=body.assistant_reply,
             existing_node_ids=body.existing_node_ids,
         )
-        return api_success({
-            "primary": groups.get("primary", []),
-            "related": groups.get("related", []),
-            "broad": groups.get("broad", []),
-            "candidates": groups.get("all", []),
-        })
+        return api_success(result)
     except Exception as e:
         logger.error(f"Failed to extract knowledge nodes: {e}")
         return api_error(ErrorCode.GENERATION_FAILED, "知识节点提取失败", status_code=500)
@@ -858,14 +869,11 @@ async def graph_extract(body: GraphExtractRequest):
 @router.post("/graph/nodes")
 async def graph_nodes(body: GraphNodesRequest):
     try:
-        graph_service = _get_graph_service()
-        for update in body.updates:
-            if update.action == "add_node":
-                graph_service.add_node(body.course_id, update.data)
-            elif update.action == "add_edge":
-                graph_service.add_edge(body.course_id, update.data)
-        graph = await graph_service.get_graph(course_id=body.course_id)
-        return api_success(graph)
+        result = await _get_graph_center().apply_updates(
+            course_id=body.course_id,
+            updates=[u.model_dump() for u in body.updates],
+        )
+        return api_success(result)
     except ValueError as e:
         return api_error(ErrorCode.INVALID_REQUEST, str(e), status_code=400)
     except Exception as e:
@@ -876,33 +884,20 @@ async def graph_nodes(body: GraphNodesRequest):
 @router.post("/graph/masteries")
 async def update_masteries(body: MasteryUpdateRequest):
     """根据学习事件批量更新节点掌握度。Python 只计算，Java 自行持久化结果。"""
-    if not body.events:
-        return api_error(ErrorCode.INVALID_REQUEST, "events 不能为空", status_code=400)
-
-    plan_service = get_plan_service()
-    result = dict(body.masteries)
-
-    for event in body.events:
-        node_id = event.node_id
-        current = result.get(node_id, 0.0)
-        new_mastery = plan_service.update_mastery(current, event.event_type, event.score)
-        result[node_id] = new_mastery
-
-    return api_success({"masteries": result})
+    result = await _get_graph_center().update_masteries(
+        course_id=body.course_id,
+        masteries=body.masteries,
+        events=[e.model_dump() for e in body.events],
+    )
+    return api_success(result)
 
 
 @router.post("/graph/reload")
 async def reload_graph(body: GraphReloadRequest):
     """热更新知识图谱骨架（管理员触发）。"""
-    from app.services.graph_service import get_graph_service
-    graph_service = get_graph_service()
     try:
-        graph = graph_service.load_skeleton(force_reload=True)
-        return api_success({
-            "status": "reloaded",
-            "nodes": len(graph.get("nodes", [])),
-            "edges": len(graph.get("edges", [])),
-        })
+        result = await _get_graph_center().reload_skeleton()
+        return api_success(result)
     except Exception as e:
         logger.error(f"Failed to reload graph skeleton: {e}")
         return api_error(ErrorCode.INTERNAL_ERROR, "图谱热更新失败", status_code=500)
@@ -917,9 +912,10 @@ async def reload_graph(body: GraphReloadRequest):
 async def recommend_next_node(body: GraphProgressRequest):
     """知识缺口分析：根据当前掌握度推荐下一个该学的节点。"""
     try:
-        graph_service = _get_graph_service()
-        candidates = graph_service.recommend_next_node(body.masteries, body.course_id)
-        return api_success({"recommended": candidates})
+        result = await _get_graph_center().recommend_next_node(
+            course_id=body.course_id, masteries=body.masteries,
+        )
+        return api_success(result)
     except Exception as e:
         logger.error(f"Failed to recommend next node: {e}")
         return api_error(ErrorCode.INTERNAL_ERROR, "节点推荐失败", status_code=500)
@@ -929,9 +925,10 @@ async def recommend_next_node(body: GraphProgressRequest):
 async def get_progress_summary(body: GraphProgressRequest):
     """学习进度概要：全局掌握率 + 各分类统计。"""
     try:
-        graph_service = _get_graph_service()
-        summary = graph_service.get_progress_summary(body.masteries, body.course_id)
-        return api_success(summary)
+        result = await _get_graph_center().progress_summary(
+            course_id=body.course_id, masteries=body.masteries,
+        )
+        return api_success(result)
     except Exception as e:
         logger.error(f"Failed to get progress summary: {e}")
         return api_error(ErrorCode.INTERNAL_ERROR, "进度概要获取失败", status_code=500)
@@ -941,9 +938,11 @@ async def get_progress_summary(body: GraphProgressRequest):
 async def check_prerequisites(body: GraphPrerequisiteRequest):
     """前置条件检查：用户是否可以学习指定节点。"""
     try:
-        graph_service = _get_graph_service()
-        result = graph_service.check_prerequisites(
-            body.node_id, body.masteries, body.threshold, body.course_id
+        result = await _get_graph_center().check_prerequisites(
+            course_id=body.course_id,
+            node_id=body.node_id,
+            masteries=body.masteries,
+            threshold=body.threshold,
         )
         return api_success(result)
     except Exception as e:
@@ -960,9 +959,10 @@ async def check_prerequisites(body: GraphPrerequisiteRequest):
 async def delete_node(node_id: str, body: NodeDeleteRequest):
     """删除动态节点（骨架节点不可删）。"""
     try:
-        graph_service = _get_graph_service()
-        deleted = graph_service.delete_node(body.course_id, node_id)
-        return api_success({"deleted": deleted, "node_id": node_id})
+        result = await _get_graph_center().delete_node(
+            course_id=body.course_id, node_id=node_id,
+        )
+        return api_success(result)
     except ValueError as e:
         return api_error(ErrorCode.INVALID_REQUEST, str(e), status_code=400)
     except Exception as e:
@@ -974,9 +974,10 @@ async def delete_node(node_id: str, body: NodeDeleteRequest):
 async def update_node(node_id: str, body: NodeUpdateRequest):
     """更新节点元数据。骨架节点仅可改 difficulty/category，动态节点全字段可改。"""
     try:
-        graph_service = _get_graph_service()
-        updated = graph_service.update_node(body.course_id, node_id, body.updates)
-        return api_success({"node": updated})
+        result = await _get_graph_center().update_node(
+            course_id=body.course_id, node_id=node_id, updates=body.updates,
+        )
+        return api_success(result)
     except ValueError as e:
         return api_error(ErrorCode.INVALID_REQUEST, str(e), status_code=400)
     except Exception as e:
@@ -988,9 +989,8 @@ async def update_node(node_id: str, body: NodeUpdateRequest):
 async def suggest_edges(body: GraphSuggestEdgesRequest):
     """LLM 自动补边：分析未连通节点对，建议遗漏的图谱关系。"""
     try:
-        graph_service = _get_graph_service()
-        suggestions = await graph_service.suggest_edges(body.course_id)
-        return api_success({"suggestions": suggestions})
+        result = await _get_graph_center().suggest_edges(course_id=body.course_id)
+        return api_success(result)
     except Exception as e:
         logger.error(f"Failed to suggest edges: {e}")
         return api_error(ErrorCode.GENERATION_FAILED, "补边建议生成失败", status_code=500)
@@ -1005,9 +1005,10 @@ async def suggest_edges(body: GraphSuggestEdgesRequest):
 async def export_mermaid(body: GraphMermaidRequest):
     """导出知识图谱为 Mermaid 流程图语法。"""
     try:
-        graph_service = _get_graph_service()
-        mermaid = graph_service.export_mermaid(body.course_id, body.masteries)
-        return api_success({"mermaid": mermaid})
+        result = await _get_graph_center().export_mermaid(
+            course_id=body.course_id, masteries=body.masteries,
+        )
+        return api_success(result)
     except Exception as e:
         logger.error(f"Failed to export mermaid: {e}")
         return api_error(ErrorCode.INTERNAL_ERROR, "Mermaid 导出失败", status_code=500)
@@ -1017,9 +1018,10 @@ async def export_mermaid(body: GraphMermaidRequest):
 async def get_layered_graph(body: GraphLayeredRequest):
     """返回带层级信息的图谱（前端分层布局）。"""
     try:
-        graph_service = _get_graph_service()
-        graph = graph_service.get_layered_graph(body.masteries, body.course_id)
-        return api_success(graph)
+        result = await _get_graph_center().layered_graph(
+            course_id=body.course_id, masteries=body.masteries,
+        )
+        return api_success(result)
     except Exception as e:
         logger.error(f"Failed to get layered graph: {e}")
         return api_error(ErrorCode.INTERNAL_ERROR, "分层图谱获取失败", status_code=500)

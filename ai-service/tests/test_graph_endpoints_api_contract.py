@@ -33,6 +33,7 @@ from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 
 import app.services.graph_service as graph_service_module
+import app.services.knowledge_extraction as knowledge_extraction_module
 import internal_api
 from app.services.graph_service import GraphService
 from app.services.plan_service import PlanService
@@ -93,31 +94,48 @@ def client():
 
 @contextlib.contextmanager
 def _fresh_graph_service():
-    """把两条单例路径都指向同一个全新 GraphService，退出时还原。
+    """把三条单例路径都指向同一个全新 GraphService，退出时还原。
 
     见模块 docstring：`/graph/reload` 走内层工厂，其余 13 个路由走外层包装，
-    只 patch 一处会漏。
+    只 patch 一处会漏。第三条是 GraphCenter 单例——它在构造时就抓住了当时的
+    GraphService 实例（`_get_graph_center()` 装配 `_get_graph_service()`），
+    不复位就会拿着上一个用例的服务，导致内存变异跨用例泄漏。
     """
     fresh = GraphService()
     outer_before = internal_api._graph_service_singleton
     inner_before = graph_service_module._graph_service
+    center_before = getattr(internal_api, "_graph_center_singleton", None)
     internal_api._graph_service_singleton = fresh
     graph_service_module._graph_service = fresh
+    internal_api._graph_center_singleton = None
     try:
         yield fresh
     finally:
         internal_api._graph_service_singleton = outer_before
         graph_service_module._graph_service = inner_before
+        internal_api._graph_center_singleton = center_before
+
+
+_MISSING = object()
 
 
 @contextlib.contextmanager
 def _patch_attr(name: str, value):
-    original = getattr(internal_api, name)
+    """替换 `internal_api` 的模块属性，退出时还原。
+
+    该属性可能在收口后被删除（如 `extract_knowledge_nodes` 的模块级 import
+    随调用点迁进 GraphCenter 而删除），故「原本不存在」时退出即删除，而不是
+    还原成一个凭空的属性。
+    """
+    original = getattr(internal_api, name, _MISSING)
     setattr(internal_api, name, value)
     try:
         yield
     finally:
-        setattr(internal_api, name, original)
+        if original is _MISSING:
+            delattr(internal_api, name)
+        else:
+            setattr(internal_api, name, original)
 
 
 @contextlib.contextmanager
@@ -160,12 +178,27 @@ def _boom_success():
 
 
 @contextlib.contextmanager
-def _stub_extraction(groups: dict):
-    """替身知识抽取：收口前注入点在 `internal_api`（模块级 import 绑定）。
+def _patch_extraction(fake):
+    """同时替换两条抽取注入点，让同一条用例在收口前后都成立。
 
-    收口后该调用点会移进 GraphCenter，Task 4 会同步把注入点改为
-    `app.centers.graph_center.extract_knowledge_nodes`（断言本体不变）。
+    收口前路由体用 `internal_api.extract_knowledge_nodes`（模块级 import 绑定
+    的函数对象）；收口后调用点移进 `GraphCenter.extract_nodes`，走的是
+    `knowledge_extraction` 的模块属性（惰性 import，每次调用现取）。只打一处
+    的话，同一断言会因收口而翻红。两处都打，Part A 的字节锁才是真正的
+    「前后同一份断言」。
     """
+    before = knowledge_extraction_module.extract_knowledge_nodes
+    knowledge_extraction_module.extract_knowledge_nodes = fake
+    try:
+        with _patch_attr("extract_knowledge_nodes", fake):
+            yield
+    finally:
+        knowledge_extraction_module.extract_knowledge_nodes = before
+
+
+@contextlib.contextmanager
+def _stub_extraction(groups: dict):
+    """替身知识抽取，返回固定分组并记录调用参数。"""
     calls: list[dict] = []
 
     async def _fake(*, course_id, user_message, assistant_reply, existing_node_ids=None):
@@ -177,7 +210,7 @@ def _stub_extraction(groups: dict):
         })
         return groups
 
-    with _patch_attr("extract_knowledge_nodes", _fake):
+    with _patch_extraction(_fake):
         yield calls
 
 
@@ -360,7 +393,7 @@ class TestGraphExtract:
         async def _raise(**kwargs):
             raise RuntimeError("llm down")
 
-        with _fresh_graph_service(), _patch_attr("extract_knowledge_nodes", _raise):
+        with _fresh_graph_service(), _patch_extraction(_raise):
             r = client.post("/internal/graph/extract", json={
                 "course_id": "ai_intro", "user_message": "q", "assistant_reply": "a",
             })
@@ -1024,7 +1057,7 @@ class TestGraphCenterWriteEntries:
         ])
         assert list(out.keys()) == GET_GRAPH_DATA_KEYS
         assert "dyn_c" in [n["id"] for n in out["nodes"]]
-        assert len(out["edges"]) == GRAPH_EDGE_COUNT_WITH_PARALLEL + 1
+        assert len(out["edges"]) == GRAPH_EDGE_COUNT_AFTER_ONE_ADD
 
     @pytest.mark.asyncio
     async def test_b11_apply_updates_propagates_value_error(self):
@@ -1057,7 +1090,8 @@ class TestGraphCenterWriteEntries:
             ],
         )
 
-        assert out == {"masteries": {"a": 0.2, "b": 0.1}}
+        # 替身返回 current + 0.1：a 0.5→0.6→0.7，b 0.0→0.1
+        assert out == {"masteries": {"a": 0.7, "b": 0.1}}
         assert calls == [
             (0.5, "exercise_done", 0.8),
             (0.6, "resource_viewed", None),
