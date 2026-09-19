@@ -13,9 +13,9 @@
 - TU-C11: TutorCenter 结构契约（async generator；不 import fastapi）
 - TU-C12: token / error / done 三类帧 to_sse() 字节形状回归样本
 
-Part A（TU-C01..C09）现在就是绿的：锁的是现状 API 行为。
-Task 3 收窄后只允许改 patch 目标（`_get_tutor_agent` → `_get_tutor_center`），
-断言一律不动 —— 这就是"字节零变化"的证明。
+Part A（TU-C01..C09）锁的是收口前的 API 字节行为，收口后保持全绿。
+Task 3 收窄时只改了 patch 目标（`_get_tutor_agent` → `_get_tutor_center`），
+断言一字未动 —— 这就是"字节零变化"的证明。
 """
 
 import contextlib
@@ -110,15 +110,18 @@ class _StubProfileAgent:
 
 @contextlib.contextmanager
 def _stub_agents(tutor_agent, profile_agent=None):
-    """替换 API 层 agent 工厂。
+    """替换 API 层 TutorCenter 工厂，注入真实 Center + 同一组 stub。
 
-    Task 3 收窄后这里改为 patch `_get_tutor_center`（注入真实 TutorCenter +
-    同一组 stub），上层断言不变。
+    这是 Task 3 收窄后唯一允许变动的部分：patch 目标从 `_get_tutor_agent` /
+    `_get_profile_agent` 切到 `_get_tutor_center`；上层断言一字未改。
     """
     profile_agent = profile_agent if profile_agent is not None else _StubProfileAgent()
-    with contextlib.ExitStack() as stack:
-        stack.enter_context(_patch_attr("_get_tutor_agent", lambda: tutor_agent))
-        stack.enter_context(_patch_attr("_get_profile_agent", lambda: profile_agent))
+    from app.centers.tutor_center import TutorCenter
+
+    center = TutorCenter(tutor_agent=tutor_agent, profile_agent=profile_agent)
+    center.token_delay = 0.0
+    center.chunk_size = 4
+    with _patch_attr("_get_tutor_center", lambda: center):
         yield tutor_agent, profile_agent
 
 

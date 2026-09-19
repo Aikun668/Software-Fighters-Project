@@ -94,6 +94,8 @@ _resource_center_singleton = None
 _resource_center_lock = threading.Lock()
 _path_workflow_singleton = None
 _inquiry_service_singleton = None
+_tutor_center_singleton = None
+_tutor_center_lock = threading.Lock()
 
 
 def _get_chat_center():
@@ -123,6 +125,24 @@ def _get_tutor_agent():
         from app.agents.tutor_agent import TutorAgent
         _tutor_agent_singleton = TutorAgent(use_mock_llm=_get_mock_flag())
     return _tutor_agent_singleton
+
+
+def _get_tutor_center():
+    """惰性单例工厂：答疑域唯一业务入口装配点。
+
+    注入 API 层既有的 TutorAgent / ProfileAgent 单例，与收口前 /tutor/chat
+    的构造一致；测试 patch 目标为 internal_api._get_tutor_center。
+    """
+    global _tutor_center_singleton
+    if _tutor_center_singleton is None:
+        with _tutor_center_lock:
+            if _tutor_center_singleton is None:
+                from app.centers.tutor_center import TutorCenter
+                _tutor_center_singleton = TutorCenter(
+                    tutor_agent=_get_tutor_agent(),
+                    profile_agent=_get_profile_agent(),
+                )
+    return _tutor_center_singleton
 
 
 def _get_content_agent():
@@ -424,43 +444,12 @@ async def tutor_chat(body: TutorChatRequest):
     messages = body.messages
     student_profile = body.student_profile
 
-    agent = _get_tutor_agent()
-
     async def event_stream():
-        try:
-            state = await agent.run({
-                "messages": messages,
-                "student_profile": student_profile,
-            })
-
-            response = state.get("response", "")
-            domain = state.get("domain", "")
-
-            if response:
-                for chunk in _sse_stream_chunks(response):
-                    await asyncio.sleep(0.03)
-                    yield f"data: {json.dumps({'type': 'token', 'content': chunk}, ensure_ascii=False)}\n\n"
-
-            # 后台增量画像提取，结果放进 done event
-            profile_delta = None
-            if response and messages:
-                try:
-                    p_agent = _get_profile_agent()
-                    result = await p_agent.extract_and_merge(student_profile, messages)
-                    if result.get("changed"):
-                        profile_delta = result.get("profile")
-                        logger.info("Background profile updated during tutor chat")
-                except Exception as exc:
-                    logger.warning("Background profile extract failed: %s", exc)
-
-            done_payload: dict = {"type": "done", "domain": domain}
-            if profile_delta:
-                done_payload["profile_delta"] = profile_delta
-            yield f"data: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
-        except Exception as e:
-            logger.error(f"Tutor chat SSE error: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'content': '答疑失败，请稍后重试'}, ensure_ascii=False)}\n\n"
-            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
+        async for event in _get_tutor_center().stream_chat(
+            messages=messages,
+            student_profile=student_profile,
+        ):
+            yield event.to_sse()
 
     return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
 

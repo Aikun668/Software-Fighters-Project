@@ -127,16 +127,27 @@ class TestStreamingEndpoints:
 
     @pytest.mark.asyncio
     async def test_tutor_stream(self, async_client):
-        with patch("internal_api._get_tutor_agent") as mock_get:
-            mock_agent = AsyncMock()
-            mock_agent.run = AsyncMock(return_value={"response": "Answer"})
-            mock_get.return_value = mock_agent
-            
+        # Task 3 迁移：patch 切到 TutorCenter 工厂，stub 注入真实 Center
+        from app.centers.tutor_center import TutorCenter
+
+        center = TutorCenter()
+        center.token_delay = 0.0
+        fake_tutor = AsyncMock()
+        fake_tutor.run = AsyncMock(return_value={"response": "Answer"})
+        center.tutor_agent = fake_tutor
+        fake_profile = AsyncMock()
+        fake_profile.extract_and_merge = AsyncMock(return_value={"changed": False})
+        center.profile_agent = fake_profile
+
+        with patch("internal_api._get_tutor_center", return_value=center):
             response = await async_client.post(
                 "/internal/tutor/chat",
                 json={"user_id": 1, "messages": [{"role": "user", "content": "Q?"}]},
             )
             assert response.status_code == 200
+            assert response.text.endswith(
+                'data: {"type": "done", "domain": ""}\n\n'
+            )
 
     @pytest.mark.asyncio
     async def test_exercise_stream(self, async_client):
