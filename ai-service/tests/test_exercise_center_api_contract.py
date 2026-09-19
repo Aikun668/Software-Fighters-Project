@@ -142,6 +142,7 @@ def _make_center(
 # ═══════════════════════════════════════════════════════════════
 
 class TestGenerateStream:
+    @pytest.mark.asyncio
     async def test_c01_progress_plan_generate_done_and_agent_state(self):
         """EX-C01：progress(plan) → progress(generate) → done，agent 入参与现状一致。"""
         questions = [{"question": "1+1=?", "type": "choice"}]
@@ -178,6 +179,7 @@ class TestGenerateStream:
             "content": "已生成 1 道题目",
         }
 
+    @pytest.mark.asyncio
     async def test_c01b_display_topic_prefers_knowledge_node_id(self):
         """EX-C01 补充：有 knowledge_node_id 时 progress 文案用它，agent 入参 topic 不变。"""
         stub = _StubExerciseAgent({"questions": []})
@@ -198,6 +200,7 @@ class TestGenerateStream:
         assert stub.calls[0]["topic"] == ""
         assert stub.calls[0]["knowledge_node_id"] == "kn_tcp"
 
+    @pytest.mark.asyncio
     async def test_c02_done_carries_questions_at_top_level(self):
         """EX-C02：done 顶层携带 questions（Java saveExercisesToDb 兼容字段）。"""
         questions = [{"question": "1+1=?", "type": "choice"}, {"question": "2+2=?"}]
@@ -214,6 +217,7 @@ class TestGenerateStream:
         assert "data" not in done_payload
         assert "questions" in done_payload
 
+    @pytest.mark.asyncio
     async def test_c03_agent_exception_yields_progress_error_done(self):
         """EX-C03：agent 抛错 → progress(plan) → error(content) → done（与现状一致）。"""
         stub = _StubExerciseAgent(error=RuntimeError("boom"))
@@ -235,6 +239,7 @@ class TestGenerateStream:
 # ═══════════════════════════════════════════════════════════════
 
 class TestSolveStream:
+    @pytest.mark.asyncio
     async def test_c04_steps_tokens_confidence_done(self):
         """EX-C04：steps → token* → confidence → done，agent 入参与现状一致。"""
         state = {
@@ -257,6 +262,7 @@ class TestSolveStream:
             {"type": "done"},
         ]
 
+    @pytest.mark.asyncio
     async def test_c05_token_chunks_match_four_char_split(self):
         """EX-C05：token 按 4 字分片，顺序拼接等于完整 solution。"""
         solution = "先移项，再合并同类项，最后求解。"
@@ -273,6 +279,7 @@ class TestSolveStream:
         assert tokens == [solution[i:i + 4] for i in range(0, len(solution), 4)]
         assert "".join(tokens) == solution
 
+    @pytest.mark.asyncio
     async def test_c04b_empty_optional_fields_yield_only_done(self):
         """EX-C04 补充：steps/solution/confidence 都缺失时只发 done。"""
         stub = _StubSolveAgent({})
@@ -283,6 +290,7 @@ class TestSolveStream:
         assert _type_names(events) == ["done"]
         assert _sse_payloads(events) == [{"type": "done"}]
 
+    @pytest.mark.asyncio
     async def test_c06_agent_exception_yields_error_done(self):
         """EX-C06：solve 失败只有 error → done（现状无前置事件）。"""
         stub = _StubSolveAgent(error=RuntimeError("boom"))
@@ -302,6 +310,7 @@ class TestSolveStream:
 # ═══════════════════════════════════════════════════════════════
 
 class TestAnalyzeErrors:
+    @pytest.mark.asyncio
     async def test_c07_loads_prompt_interpolates_and_parses_json(self):
         """EX-C07：真实 prompt 加载 + 插值 + LLM 调用 + JSON 解析，返回 dict。"""
         reply = json.dumps(
@@ -328,6 +337,7 @@ class TestAnalyzeErrors:
         assert "beginner" in user_content
         assert llm.calls[0]["system_prompt"]
 
+    @pytest.mark.asyncio
     async def test_c07b_error_fields_are_sanitized(self):
         """EX-C07 补充：字符串字段经 sanitize_for_llm 后才进 prompt（注入串被过滤）。"""
         llm = _StubLLM("{}")
@@ -343,6 +353,7 @@ class TestAnalyzeErrors:
         assert "ignore previous instructions" not in prompt
         assert "正常题干" in prompt
 
+    @pytest.mark.asyncio
     async def test_c08_llm_exception_propagates(self):
         """EX-C08：LLM 异常向上传播（API 层映射 500）。"""
         llm = _StubLLM(error=RuntimeError("llm down"))
@@ -357,6 +368,7 @@ class TestAnalyzeErrors:
 # ═══════════════════════════════════════════════════════════════
 
 class TestPassthroughMethods:
+    @pytest.mark.asyncio
     async def test_c09a_grade_choice_delegates(self):
         center = _make_center()
         with patch("app.centers.exercise_center.grade_choice",
@@ -369,6 +381,7 @@ class TestPassthroughMethods:
         assert result == {"type": "choice", "correct": True}
         service.assert_called_once_with("A", "A", ["A", "B"], multi=False, points=1)
 
+    @pytest.mark.asyncio
     async def test_c09b_grade_code_delegates(self):
         center = _make_center()
         with patch("app.centers.exercise_center.grade_code",
@@ -381,6 +394,7 @@ class TestPassthroughMethods:
         assert result == {"type": "code", "score": 8}
         service.assert_awaited_once_with("print(1)", "print(1)", "看语法")
 
+    @pytest.mark.asyncio
     async def test_c09c_grade_short_answer_delegates(self):
         center = _make_center()
         with patch("app.centers.exercise_center.grade_short_answer",
@@ -393,6 +407,7 @@ class TestPassthroughMethods:
         assert result == {"type": "short_answer", "score": 6}
         service.assert_awaited_once_with("我的回答", "标准答案", "")
 
+    @pytest.mark.asyncio
     async def test_c09d_evaluation_report_delegates(self):
         center = _make_center()
         results = {"total": 10, "correct": 8}
@@ -403,6 +418,7 @@ class TestPassthroughMethods:
         assert result == {"score": 80}
         service.assert_called_once_with(results)
 
+    @pytest.mark.asyncio
     async def test_c09e_categorize_delegates(self):
         center = _make_center()
         exercises = [{"question": "q1"}]
@@ -416,6 +432,7 @@ class TestPassthroughMethods:
         assert result == {"results": [{"question": "q1", "knowledge_node_id": "kn_1"}]}
         service.assert_awaited_once_with(exercises, nodes, "ai_intro")
 
+    @pytest.mark.asyncio
     async def test_c09f_analyze_session_delegates(self):
         center = _make_center()
         records = [{"knowledge_node_id": "kn_1", "is_correct": False}]
@@ -429,6 +446,7 @@ class TestPassthroughMethods:
         assert result == {"overall_score": 60}
         service.assert_called_once_with(records, masteries, "ai_intro")
 
+    @pytest.mark.asyncio
     async def test_c09g_dashboard_delegates(self):
         center = _make_center()
         masteries = {"kn_1": 0.3}
@@ -443,6 +461,7 @@ class TestPassthroughMethods:
         assert result == {"total_questions": 10}
         service.assert_called_once_with(7, masteries, records, "ai_intro")
 
+    @pytest.mark.asyncio
     async def test_c09h_enrich_profile_delegates(self):
         center = _make_center()
         profile = {"weak_points": ["极限"]}
@@ -464,6 +483,7 @@ class TestPassthroughMethods:
 # ═══════════════════════════════════════════════════════════════
 
 class TestGenerateConsolidation:
+    @pytest.mark.asyncio
     async def test_c10a_near_end_asks_for_three_review_questions(self):
         questions = [{"question": f"综合题{i}"} for i in range(3)]
         stub = _StubExerciseAgent({"questions": questions})
@@ -484,6 +504,7 @@ class TestGenerateConsolidation:
             "purpose": "consolidation",
         }]
 
+    @pytest.mark.asyncio
     async def test_c10b_not_near_end_asks_for_two_and_blank_node_becomes_none(self):
         stub = _StubExerciseAgent({"questions": [{"question": "巩固题"}]})
         center = _make_center(exercise_agent=stub)
@@ -509,6 +530,7 @@ class TestGenerateConsolidation:
 # ═══════════════════════════════════════════════════════════════
 
 class TestSseByteContract:
+    @pytest.mark.asyncio
     async def test_c11_generate_stream_bytes(self):
         """EX-C11：generate 三个事件的 SSE 文本与兼容红线逐字节一致。"""
         questions = [{"question": "1+1=?", "type": "choice"}]
@@ -526,6 +548,7 @@ class TestSseByteContract:
             'data: {"type": "done", "questions": [{"question": "1+1=?", "type": "choice"}]}\n\n',
         ]
 
+    @pytest.mark.asyncio
     async def test_c11b_generate_error_bytes(self):
         """EX-C11 补充：generate 失败路径 SSE 文本逐字节一致。"""
         stub = _StubExerciseAgent(error=RuntimeError("boom"))
@@ -542,6 +565,7 @@ class TestSseByteContract:
             'data: {"type": "done"}\n\n',
         ]
 
+    @pytest.mark.asyncio
     async def test_c12_solve_stream_bytes(self):
         """EX-C12：solve 全事件 SSE 文本与兼容红线逐字节一致。"""
         stub = _StubSolveAgent({
@@ -561,6 +585,7 @@ class TestSseByteContract:
             'data: {"type": "done"}\n\n',
         ]
 
+    @pytest.mark.asyncio
     async def test_c12b_solve_error_bytes(self):
         """EX-C12 补充：solve 失败路径 SSE 文本逐字节一致。"""
         stub = _StubSolveAgent(error=RuntimeError("boom"))
