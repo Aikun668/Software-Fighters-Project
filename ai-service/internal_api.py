@@ -84,6 +84,8 @@ _profile_agent_singleton = None
 _tutor_agent_singleton = None
 _content_agent_singleton = None
 _exercise_agent_singleton = None
+_exercise_center_singleton = None
+_exercise_center_lock = threading.Lock()
 _path_agent_singleton = None
 _mindmap_agent_singleton = None
 _code_agent_singleton = None
@@ -139,6 +141,26 @@ def _get_exercise_agent():
     return _exercise_agent_singleton
 
 
+def _get_exercise_center():
+    """惰性单例工厂：练习域唯一业务入口装配点。
+
+    装配的 ExerciseAgent 不带 model_profile，与收口前 /exercise/generate 与
+    complete-step 的构造一致；聊天侧 ExerciseCenter.execute() 的惰性默认
+    （PROFILE_EXERCISE）不受影响。
+    """
+    global _exercise_center_singleton
+    if _exercise_center_singleton is None:
+        with _exercise_center_lock:
+            if _exercise_center_singleton is None:
+                from app.agents.solve_agent import SolveAgent
+                from app.centers.exercise_center import ExerciseCenter
+                _exercise_center_singleton = ExerciseCenter(
+                    exercise_agent=_get_exercise_agent(),
+                    solve_agent=SolveAgent(use_mock_llm=_get_mock_flag()),
+                )
+    return _exercise_center_singleton
+
+
 def _get_path_agent():
     global _path_agent_singleton
     if _path_agent_singleton is None:
@@ -155,18 +177,8 @@ def _get_mindmap_agent():
     return _mindmap_agent_singleton
 
 
-_solve_agent_singleton = None
-
 _plan_center_singleton = None
 _plan_center_lock = threading.Lock()
-
-
-def _get_solve_agent():
-    global _solve_agent_singleton
-    if _solve_agent_singleton is None:
-        from app.agents.solve_agent import SolveAgent
-        _solve_agent_singleton = SolveAgent(use_mock_llm=_get_mock_flag())
-    return _solve_agent_singleton
 
 
 def _get_code_agent():
@@ -464,37 +476,19 @@ async def exercise_generate(body: ExerciseGenRequest):
     knowledge_node_id = body.knowledge_node_id
     if not topic and not knowledge_node_id:
         return api_error(ErrorCode.INVALID_REQUEST, "topic 和 knowledge_node_id 至少提供一个", status_code=400)
-    strategy = body.strategy
-    count = body.count
-    difficulty = body.difficulty
-    student_profile = body.student_profile
 
-    agent = _get_exercise_agent()
-    display_topic = knowledge_node_id or topic
+    center = _get_exercise_center()
 
     async def event_stream():
-        try:
-            await asyncio.sleep(0.3)
-            yield f"data: {json.dumps({'type': 'progress', 'stage': 'plan', 'content': f'正在规划「{display_topic}」的练习题...'}, ensure_ascii=False)}\n\n"
-
-            state = await agent.run({
-                "topic": topic,
-                "knowledge_node_id": knowledge_node_id,
-                "strategy": strategy,
-                "count": count,
-                "difficulty": difficulty,
-                "student_profile": student_profile,
-            })
-
-            await asyncio.sleep(0.5)
-            num_q = len(state.get("questions", []))
-            yield f"data: {json.dumps({'type': 'progress', 'stage': 'generate', 'content': f'已生成 {num_q} 道题目'}, ensure_ascii=False)}\n\n"
-
-            yield f"data: {json.dumps({'type': 'done', 'questions': state.get('questions', [])}, ensure_ascii=False)}\n\n"
-        except Exception as e:
-            logger.error(f"Exercise generate SSE error: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'content': '题目生成失败，请稍后重试'}, ensure_ascii=False)}\n\n"
-            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
+        async for event in center.generate_stream(
+            topic=topic,
+            knowledge_node_id=knowledge_node_id,
+            strategy=body.strategy,
+            count=body.count,
+            difficulty=body.difficulty,
+            student_profile=body.student_profile,
+        ):
+            yield event.to_sse()
 
     return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
 
@@ -682,35 +676,11 @@ async def solve_question(body: SolveRequest):
     body = sanitize_model(body)
     question = body.question.strip()
     context = body.context
-
-    agent = _get_solve_agent()
+    center = _get_exercise_center()
 
     async def event_stream():
-        try:
-            state = await agent.run({
-                "question": question,
-                "context": context,
-            })
-
-            steps = state.get("steps", [])
-            if steps:
-                yield f"data: {json.dumps({'type': 'steps', 'content': steps}, ensure_ascii=False)}\n\n"
-
-            solution = state.get("solution", "")
-            if solution:
-                for chunk in _sse_stream_chunks(solution):
-                    await asyncio.sleep(0.03)
-                    yield f"data: {json.dumps({'type': 'token', 'content': chunk}, ensure_ascii=False)}\n\n"
-
-            confidence = state.get("confidence_score")
-            if confidence is not None:
-                yield f"data: {json.dumps({'type': 'confidence', 'score': confidence}, ensure_ascii=False)}\n\n"
-
-            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
-        except Exception as e:
-            logger.error(f"Solve SSE error: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'content': '解题功能暂时不可用，请稍后重试'}, ensure_ascii=False)}\n\n"
-            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
+        async for event in center.solve_stream(question=question, context=context):
+            yield event.to_sse()
 
     return StreamingResponse(sse_heartbeat_generator(event_stream()), media_type="text/event-stream")
 
@@ -721,34 +691,10 @@ async def solve_question(body: SolveRequest):
 
 @router.post("/exercise/error-analysis")
 async def exercise_error_analysis(body: ErrorAnalysisRequest):
-    from app.utils.prompt_loader import load_prompt_file
-    from app.utils.prompt_guard import sanitize_for_llm
-
-    errors = body.errors
-    level = body.level
-
     try:
-        sys_prompt = load_prompt_file("tutor_agent", "error_analysis.yaml", key="system")
-        user_tpl = load_prompt_file("tutor_agent", "error_analysis.yaml", key="user_template")
-        from app.utils.prompt_loader import interpolate_variables
-
-        sanitized_errors = [
-            {k: sanitize_for_llm(v) if isinstance(v, str) else v for k, v in e.items()}
-            for e in errors
-        ]
-        user_prompt = interpolate_variables(
-            user_tpl,
-            {"errors": json.dumps(sanitized_errors, ensure_ascii=False), "level": str(level)},
+        result = await _get_exercise_center().analyze_errors(
+            errors=body.errors, level=body.level,
         )
-
-        from app.services.llm_service import get_llm_service
-        llm = get_llm_service()
-        raw = await llm.chat(
-            [{"role": "user", "content": user_prompt}],
-            system_prompt=sys_prompt,
-        )
-        from app.utils.json_parser import parse_llm_json
-        result = parse_llm_json(raw, fallback={})
         return api_success(result)
     except Exception as e:
         logger.error(f"Error analysis failed: {e}")
@@ -761,41 +707,27 @@ async def exercise_error_analysis(body: ErrorAnalysisRequest):
 
 @router.post("/exercise/grade")
 async def grade_exercise(body: GradeRequest):
-    from app.services.evaluation_service import grade_choice, grade_short_answer, grade_code
-
     if body.type == "choice":
         if body.user_answer is None or body.correct_answer is None:
             return api_error(
                 ErrorCode.MISSING_REQUIRED_FIELD,
                 "user_answer and correct_answer are required",
             )
-        result = grade_choice(
-            body.user_answer,
-            body.correct_answer,
-            body.choices,
-            multi=body.multi,
-            points=body.points,
+    elif body.user_answer is None:
+        return api_error(
+            ErrorCode.MISSING_REQUIRED_FIELD, "user_answer is required"
         )
-    elif body.type == "code":
-        if body.user_answer is None:
-            return api_error(
-                ErrorCode.MISSING_REQUIRED_FIELD, "user_answer is required"
-            )
-        result = await grade_code(
-            body.user_answer,
-            body.reference_answer,
-            body.rubric,
-        )
-    else:
-        if body.user_answer is None:
-            return api_error(
-                ErrorCode.MISSING_REQUIRED_FIELD, "user_answer is required"
-            )
-        result = await grade_short_answer(
-            body.user_answer,
-            body.reference_answer,
-            body.rubric,
-        )
+
+    result = await _get_exercise_center().grade(
+        question_type=body.type,
+        user_answer=body.user_answer,
+        correct_answer=body.correct_answer,
+        choices=body.choices,
+        multi=body.multi,
+        points=body.points,
+        reference_answer=body.reference_answer,
+        rubric=body.rubric,
+    )
     return api_success(result)
 
 
@@ -805,9 +737,9 @@ async def grade_exercise(body: GradeRequest):
 
 @router.post("/evaluation/report")
 async def get_evaluation_report(body: EvaluationReportRequest):
-    from app.services.evaluation_service import generate_report
-
-    report = generate_report(body.evaluation_results)
+    report = await _get_exercise_center().evaluation_report(
+        evaluation_results=body.evaluation_results,
+    )
     return api_success(report)
 
 
@@ -818,11 +750,13 @@ async def get_evaluation_report(body: EvaluationReportRequest):
 @router.post("/exercise/categorize")
 async def categorize_exercises(body: CategorizeExerciseRequest):
     """将练习题匹配到知识图谱节点。"""
-    from app.services.exercise_categorization_service import categorize_exercises as _categorize
-
     exercises = [ex.model_dump() for ex in body.exercises]
-    results = await _categorize(exercises, body.knowledge_nodes, body.course_id)
-    return api_success({"results": results})
+    result = await _get_exercise_center().categorize(
+        exercises=exercises,
+        knowledge_nodes=body.knowledge_nodes,
+        course_id=body.course_id,
+    )
+    return api_success(result)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -832,30 +766,36 @@ async def categorize_exercises(body: CategorizeExerciseRequest):
 @router.post("/exercise/session/analyze")
 async def analyze_session(body: SessionAnalyzeRequest):
     """分析一次练习会话，返回逐知识点报告 + 掌握度更新建议。"""
-    from app.services.exercise_analytics_service import analyze_session as _analyze
-
     records = [r.model_dump() for r in body.records]
-    result = _analyze(records, body.masteries, body.course_id)
+    result = await _get_exercise_center().analyze_session(
+        records=records, masteries=body.masteries, course_id=body.course_id,
+    )
     return api_success(result)
 
 
 @router.post("/exercise/dashboard")
 async def exercise_dashboard(body: DashboardRequest):
     """练习仪表盘：练习统计 + 薄弱/强项 + 推荐节点。"""
-    from app.services.exercise_analytics_service import get_dashboard as _dashboard
-
     records = [r.model_dump() for r in body.recent_records]
-    result = _dashboard(body.user_id, body.masteries, records, body.course_id)
+    result = await _get_exercise_center().dashboard(
+        user_id=body.user_id,
+        masteries=body.masteries,
+        recent_records=records,
+        course_id=body.course_id,
+    )
     return api_success(result)
 
 
 @router.post("/exercise/profile/enrich")
 async def enrich_profile(body: ProfileEnrichRequest):
     """练习数据反哺学生画像：合并薄弱点、强项、技能等级。"""
-    from app.services.exercise_profile_service import enrich_profile as _enrich
-
     records = [r.model_dump() for r in body.recent_records]
-    result = _enrich(body.user_id, body.student_profile, records, body.session_analysis)
+    result = await _get_exercise_center().enrich_profile(
+        user_id=body.user_id,
+        student_profile=body.student_profile,
+        recent_records=records,
+        session_analysis=body.session_analysis,
+    )
     return api_success(result)
 
 
@@ -1140,21 +1080,12 @@ async def complete_plan_step(plan_id: int, body: CompleteStepRequest):
         total = plan.get("total_steps", len(all_steps))
         is_near_end = total > 0 and (completed / total) >= 0.8
 
-        mock = _get_mock_flag()
-        from app.agents.exercise_agent import ExerciseAgent
-        exercise_agent = ExerciseAgent(use_mock_llm=mock)
-
-        agent_state = await exercise_agent.run({
-            "topic": step_topic,
-            "knowledge_node_id": knowledge_node_id or None,
-            "strategy": "review",
-            "count": 3 if is_near_end else 2,
-            "difficulty": "medium",
-            "student_profile": {},
-            "purpose": "consolidation",  # 触发 warmup 条件 → 轻松语气
-        })
-
-        questions = agent_state.get("questions", [])
+        generated = await _get_exercise_center().generate_consolidation(
+            topic=step_topic,
+            knowledge_node_id=knowledge_node_id,
+            is_near_end=is_near_end,
+        )
+        questions = generated.get("questions", [])
 
         return api_success({
             "step_order": step.get("step_order"),

@@ -8,6 +8,7 @@ from httpx import AsyncClient, ASGITransport
 from unittest.mock import patch, AsyncMock
 
 from internal_api import router
+from app.events.types import flat_done_event
 
 
 def _make_app() -> FastAPI:
@@ -139,16 +140,18 @@ class TestStreamingEndpoints:
 
     @pytest.mark.asyncio
     async def test_exercise_stream(self, async_client):
-        with patch("internal_api._get_exercise_agent") as mock_get:
-            mock_agent = AsyncMock()
-            mock_agent.run = AsyncMock(return_value={"questions": [{"q": "test"}]})
-            mock_get.return_value = mock_agent
-            
+        async def fake_generate_stream(**kwargs):
+            yield flat_done_event({"questions": [{"q": "test"}]})
+
+        with patch("internal_api._get_exercise_center") as mock_get:
+            mock_get.return_value.generate_stream = fake_generate_stream
+
             response = await async_client.post(
                 "/internal/exercise/generate",
                 json={"topic": "Test", "count": 3},
             )
             assert response.status_code == 200
+            assert 'data: {"type": "done", "questions": [{"q": "test"}]}' in response.text
 
 
 class TestPathEndpoint:
