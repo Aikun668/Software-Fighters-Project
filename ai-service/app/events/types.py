@@ -18,6 +18,8 @@ class StreamEventType(str, Enum):
     INQUIRY = "inquiry"
     RECOMMENDATION = "recommendation"
     TOKEN = "token"
+    STEPS = "steps"           # 练习域解题步骤
+    CONFIDENCE = "confidence"  # 练习域解题置信度
 
 
 @dataclass
@@ -38,17 +40,24 @@ class StreamEvent:
             payload["stage"] = self.stage
         if self.message:
             payload["message"] = self.message
-        if self.type is StreamEventType.ERROR:
+        if self.type is StreamEventType.ERROR and not self._metadata.get("sse_flat"):
             # 错误合同：前端 parseSSEStream 与 Java 网关都从 content 键读取
             # 错误信息，只带 message 会让用户看到 "Unknown error"
             payload["content"] = self.message or "处理失败，请稍后重试"
         if self.progress:
             payload["progress"] = round(self.progress, 2)
         if self.data is not None:
-            # B1：token 事件把 data 平铺到顶层（前端 case 'token'
-            # 直接读 data.content，不在 data.data.content 里找），
-            # 其余事件保持原嵌套结构不变。
-            if self.type is StreamEventType.TOKEN and isinstance(self.data, dict):
+            if self._metadata.get("sse_flat") and isinstance(self.data, dict):
+                # 练习域：content / score / questions 等键平铺到顶层
+                # （前端与 Java 都直接读顶层键，见练习域收口实施方案 5.1）
+                for k, v in self.data.items():
+                    payload[k] = v
+            elif self.type is StreamEventType.STEPS:
+                payload["content"] = self.data
+            elif self.type is StreamEventType.TOKEN and isinstance(self.data, dict):
+                # B1：token 事件把 data 平铺到顶层（前端 case 'token'
+                # 直接读 data.content，不在 data.data.content 里找），
+                # 其余事件保持原嵌套结构不变。
                 for k, v in self.data.items():
                     payload[k] = v
             else:
@@ -78,6 +87,9 @@ def content_event(data: Any) -> StreamEvent:
 
 def done_event(data: Any = None) -> StreamEvent:
     return StreamEvent(type=StreamEventType.DONE, data=data)
+
+def token_event(content: str) -> StreamEvent:
+    return StreamEvent(type=StreamEventType.TOKEN, data={"content": content})
 
 
 def center_start_event(center: str, message: str, sequence: int = 0) -> StreamEvent:
@@ -142,4 +154,42 @@ def recommendation_event(
             "node_name": node_name,
             "action": "add_to_practice",
         },
+    )
+
+
+# ── 练习域事件（收口新增，见「练习域收口实施方案」5.1） ────────────────
+# 练习域对外字节形状与标准事件不同：progress 用 content 键而非 message，
+# steps 是数组放 content，done 的 questions 必须在顶层（Java 直读）。
+# 平铺通过 _metadata["sse_flat"] 标记，只影响这些新工厂产出的事件。
+
+def steps_event(steps: list) -> StreamEvent:
+    return StreamEvent(type=StreamEventType.STEPS, data=steps)
+
+
+def confidence_event(score: float) -> StreamEvent:
+    return StreamEvent(
+        type=StreamEventType.CONFIDENCE,
+        data={"score": score},
+        _metadata={"sse_flat": True},
+    )
+
+
+def progress_content_event(stage: str, content: str) -> StreamEvent:
+    return StreamEvent(
+        type=StreamEventType.PROGRESS,
+        stage=stage,
+        data={"content": content},
+        _metadata={"sse_flat": True},
+    )
+
+
+def flat_done_event(data: dict | None = None) -> StreamEvent:
+    return StreamEvent(type=StreamEventType.DONE, data=data, _metadata={"sse_flat": True})
+
+
+def error_content_event(content: str) -> StreamEvent:
+    return StreamEvent(
+        type=StreamEventType.ERROR,
+        data={"content": content},
+        _metadata={"sse_flat": True},
     )
