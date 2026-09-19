@@ -273,10 +273,7 @@ def _get_plan_center():
 
 
 # ── SSE 输出安全 ─────────────────────────────────────────────────
-
-def _sse_sanitize(text: str) -> str:
-    """移除用户文本中的 SSE 控制序列，防止注入攻击。"""
-    return text.replace("\n\n", "  ").replace("\ndata:", " data:").replace("\r", "")
+# `_sse_sanitize` 已迁至 app/utils/sse_response.py 的 sse_sanitize（本轮只归位、未接线）。
 
 
 def _sse_stream_chunks(text: str, size: int = 4):
