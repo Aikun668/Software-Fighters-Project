@@ -32,7 +32,6 @@ from evals.run_stability_regress import (  # noqa: E402
 
 from app.agents.tutor_agent import TutorAgent  # noqa: E402
 from app.centers.auto_center import AutoCenter  # noqa: E402
-from app.centers import result_agent as result_agent_module  # noqa: E402
 from app.centers.chat_center import ChatCenter  # noqa: E402
 from app.centers.result_agent import ResultAgent  # noqa: E402
 from app.events.types import StreamEventType  # noqa: E402
@@ -229,10 +228,6 @@ class _EmptyKB:
         return []
 
 
-async def _no_knowledge_nodes(**kwargs):
-    return {"primary": [], "related": [], "broad": [], "all": []}
-
-
 def _mock_tutor_chat_center() -> ChatCenter:
     return ChatCenter(result_agent=ResultAgent(
         auto_center=AutoCenter(tutor_agent=TutorAgent(use_mock_llm=True),
@@ -249,7 +244,6 @@ class TestNormalChatE2E:
         """
         monkeypatch.setattr("app.agents.tutor_agent.get_kb", lambda: _EmptyKB())
         monkeypatch.setattr("app.services.knowledge_base.get_kb", lambda: _EmptyKB())
-        monkeypatch.setattr(result_agent_module, "extract_knowledge_nodes", _no_knowledge_nodes)
 
         from evals.run_stability_regress import _build_route_context
 

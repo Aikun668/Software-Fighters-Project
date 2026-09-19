@@ -26,7 +26,6 @@ from app.events.types import (
     done_event,
     error_event,
     inquiry_event,
-    knowledge_candidates_event,
 )
 
 
@@ -43,23 +42,18 @@ def _token_event(chunk: str) -> StreamEvent:
 def _finalize_event(payload: dict) -> StreamEvent:
     """最终事件：带 partial=True 标记，前端 case 'content' 据此跳过文本追加
     （token 流阶段已经把字送完了）。payload 仍保留 blocks 等结构化信息，
-    供后续渲染 / 推荐抽取使用。"""
+    供后续渲染使用。"""
     return StreamEvent(
         type=StreamEventType.CONTENT,
         data={**payload, "partial": True},
     )
-from app.services.graph_service import get_graph_service
-from app.services.knowledge_extraction import extract_knowledge_nodes
+
 
 logger = logging.getLogger(__name__)
 
 
 class ResultAgent:
     CENTER_DELAY_SECONDS = 0.0
-
-    _KG_EXTRACTION_SKIP_INTENTS: frozenset[str] = frozenset(
-        {"profile_building", "exercise_gen", "solve_problem", "inquiry", "unknown"}
-    )
 
     def __init__(
         self,
@@ -183,10 +177,6 @@ class ResultAgent:
         summary = self._build_summary(aggregated)
         aggregated.summary = summary
         aggregated.next_steps = self._build_next_steps(aggregated)
-
-        kg_event = await self._maybe_emit_knowledge_candidates(plan, aggregated)
-        if kg_event is not None:
-            yield kg_event
 
         yield done_event({
             "type": "done",
@@ -348,95 +338,3 @@ class ResultAgent:
             "error": result.error,
             "payload_keys": list(result.payload.keys()),
         }
-
-    async def _maybe_emit_knowledge_candidates(
-        self,
-        plan: ExecutionPlan,
-        aggregated: AggregatedResult,
-    ) -> StreamEvent | None:
-        if not aggregated.results:
-            return None
-
-        eligible_results = [
-            r for r in aggregated.results
-            if not r.error and r.intent not in self._KG_EXTRACTION_SKIP_INTENTS
-        ]
-        if not eligible_results:
-            return None
-
-        user_message = plan.intent_meta.get("raw_message") or (
-            plan.tasks[0].input if plan.tasks else ""
-        )
-        assistant_reply = self._build_assistant_reply(aggregated.results)
-        if not user_message.strip() or not assistant_reply.strip():
-            return None
-
-        course_id: str = ""
-        if plan.tasks:
-            course_id = str(plan.tasks[0].context.get("course_id", ""))
-        existing_node_ids = self._load_existing_node_ids()
-        extract_task = asyncio.create_task(
-            extract_knowledge_nodes(
-                course_id=course_id,
-                user_message=user_message,
-                assistant_reply=assistant_reply,
-                existing_node_ids=existing_node_ids,
-            )
-        )
-
-        try:
-            groups = await asyncio.wait_for(extract_task, timeout=15.0)
-        except Exception as exc:
-            logger.warning("Knowledge node extraction failed: %s", exc)
-            return None
-
-        if groups and any(groups.get(k) for k in ("primary", "related", "broad")):
-            return knowledge_candidates_event(groups)
-        return None
-
-    def _build_assistant_reply(self, results: list[CenterResult]) -> str:
-        parts = []
-        for result in results:
-            if result.error:
-                continue
-            text = self._extract_reply_text(result)
-            if text:
-                parts.append(text)
-        return "\n\n".join(parts)
-
-    @staticmethod
-    def _extract_reply_text(result: CenterResult) -> str:
-        payload = result.payload or {}
-        for key in ("response", "solution", "summary"):
-            value = payload.get(key)
-            if isinstance(value, str) and value.strip():
-                return value.strip()
-
-        blocks = payload.get("blocks") or payload.get("content_blocks") or []
-        if isinstance(blocks, list):
-            texts: list[str] = []
-            for block in blocks:
-                if not isinstance(block, dict):
-                    continue
-                for field in ("content", "text", "title", "heading"):
-                    value = block.get(field)
-                    if isinstance(value, str) and value.strip():
-                        texts.append(value.strip())
-            if texts:
-                return "\n".join(texts)
-
-        return ""
-
-    @staticmethod
-    def _load_existing_node_ids() -> set[str]:
-        try:
-            graph_service = get_graph_service()
-            skeleton = graph_service.load_skeleton()
-            return {
-                str(node.get("id", "")).strip()
-                for node in skeleton.get("nodes", [])
-                if node.get("id")
-            }
-        except Exception as exc:
-            logger.warning("Failed to load existing graph node ids: %s", exc)
-            return set()
