@@ -261,7 +261,7 @@ class TestChatApiStructuralAssertions:
         assert "_get_chat_center" in source, "_unified_chat 未取 ChatCenter"
         assert "stream_chat" in source, "_unified_chat 未委派 stream_chat"
         assert "to_sse" in source, "_unified_chat 未做 SSE 序列化"
-        assert "sse_heartbeat_generator" in source, "_unified_chat 未用心跳包装"
+        assert "sse_response(" in source, "_unified_chat 未走共享 SSE 工厂（心跳包装在其中）"
 
     def test_unified_chat_has_no_business_orchestration(self):
         source = self._route_source()
