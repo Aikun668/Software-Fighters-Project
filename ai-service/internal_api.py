@@ -78,19 +78,41 @@ _chat_center_singleton = None
 _chat_center_lock = threading.Lock()
 
 _profile_agent_singleton = None
+_profile_agent_lock = threading.Lock()
+
 _tutor_agent_singleton = None
+_tutor_agent_lock = threading.Lock()
+
 _content_agent_singleton = None
+_content_agent_lock = threading.Lock()
+
 _exercise_agent_singleton = None
+_exercise_agent_lock = threading.Lock()
+
 _exercise_center_singleton = None
 _exercise_center_lock = threading.Lock()
+
 _path_agent_singleton = None
+_path_agent_lock = threading.Lock()
+
 _mindmap_agent_singleton = None
+_mindmap_agent_lock = threading.Lock()
+
 _code_agent_singleton = None
+_code_agent_lock = threading.Lock()
+
 _profile_workflow_singleton = None
+_profile_workflow_lock = threading.Lock()
+
 _resource_center_singleton = None
 _resource_center_lock = threading.Lock()
+
 _path_workflow_singleton = None
+_path_workflow_lock = threading.Lock()
+
 _inquiry_service_singleton = None
+_inquiry_service_lock = threading.Lock()
+
 _tutor_center_singleton = None
 _tutor_center_lock = threading.Lock()
 
@@ -111,16 +133,20 @@ def _get_mock_flag() -> bool:
 def _get_profile_agent():
     global _profile_agent_singleton
     if _profile_agent_singleton is None:
-        from app.agents.profile_agent import ProfileAgent
-        _profile_agent_singleton = ProfileAgent(use_mock_llm=_get_mock_flag())
+        with _profile_agent_lock:
+            if _profile_agent_singleton is None:
+                from app.agents.profile_agent import ProfileAgent
+                _profile_agent_singleton = ProfileAgent(use_mock_llm=_get_mock_flag())
     return _profile_agent_singleton
 
 
 def _get_tutor_agent():
     global _tutor_agent_singleton
     if _tutor_agent_singleton is None:
-        from app.agents.tutor_agent import TutorAgent
-        _tutor_agent_singleton = TutorAgent(use_mock_llm=_get_mock_flag())
+        with _tutor_agent_lock:
+            if _tutor_agent_singleton is None:
+                from app.agents.tutor_agent import TutorAgent
+                _tutor_agent_singleton = TutorAgent(use_mock_llm=_get_mock_flag())
     return _tutor_agent_singleton
 
 
@@ -145,16 +171,20 @@ def _get_tutor_center():
 def _get_content_agent():
     global _content_agent_singleton
     if _content_agent_singleton is None:
-        from app.agents.content_agent import ContentAgent
-        _content_agent_singleton = ContentAgent(use_mock_llm=_get_mock_flag())
+        with _content_agent_lock:
+            if _content_agent_singleton is None:
+                from app.agents.content_agent import ContentAgent
+                _content_agent_singleton = ContentAgent(use_mock_llm=_get_mock_flag())
     return _content_agent_singleton
 
 
 def _get_exercise_agent():
     global _exercise_agent_singleton
     if _exercise_agent_singleton is None:
-        from app.agents.exercise_agent import ExerciseAgent
-        _exercise_agent_singleton = ExerciseAgent(use_mock_llm=_get_mock_flag())
+        with _exercise_agent_lock:
+            if _exercise_agent_singleton is None:
+                from app.agents.exercise_agent import ExerciseAgent
+                _exercise_agent_singleton = ExerciseAgent(use_mock_llm=_get_mock_flag())
     return _exercise_agent_singleton
 
 
@@ -181,16 +211,20 @@ def _get_exercise_center():
 def _get_path_agent():
     global _path_agent_singleton
     if _path_agent_singleton is None:
-        from app.agents.path_agent import PathAgent
-        _path_agent_singleton = PathAgent(use_mock_llm=_get_mock_flag())
+        with _path_agent_lock:
+            if _path_agent_singleton is None:
+                from app.agents.path_agent import PathAgent
+                _path_agent_singleton = PathAgent(use_mock_llm=_get_mock_flag())
     return _path_agent_singleton
 
 
 def _get_mindmap_agent():
     global _mindmap_agent_singleton
     if _mindmap_agent_singleton is None:
-        from app.agents.mindmap_agent import MindMapAgent
-        _mindmap_agent_singleton = MindMapAgent(use_mock_llm=_get_mock_flag())
+        with _mindmap_agent_lock:
+            if _mindmap_agent_singleton is None:
+                from app.agents.mindmap_agent import MindMapAgent
+                _mindmap_agent_singleton = MindMapAgent(use_mock_llm=_get_mock_flag())
     return _mindmap_agent_singleton
 
 
@@ -201,16 +235,20 @@ _plan_center_lock = threading.Lock()
 def _get_code_agent():
     global _code_agent_singleton
     if _code_agent_singleton is None:
-        from app.agents.code_agent import CodeAgent
-        _code_agent_singleton = CodeAgent(use_mock_llm=_get_mock_flag())
+        with _code_agent_lock:
+            if _code_agent_singleton is None:
+                from app.agents.code_agent import CodeAgent
+                _code_agent_singleton = CodeAgent(use_mock_llm=_get_mock_flag())
     return _code_agent_singleton
 
 
 def _get_profile_workflow():
     global _profile_workflow_singleton
     if _profile_workflow_singleton is None:
-        from app.workflows.profile_workflow import ProfileWorkflow
-        _profile_workflow_singleton = ProfileWorkflow(use_mock=_get_mock_flag())
+        with _profile_workflow_lock:
+            if _profile_workflow_singleton is None:
+                from app.workflows.profile_workflow import ProfileWorkflow
+                _profile_workflow_singleton = ProfileWorkflow(use_mock=_get_mock_flag())
     return _profile_workflow_singleton
 
 
@@ -234,16 +272,20 @@ def _get_resource_center() -> ResourceCenter:
 def _get_path_workflow():
     global _path_workflow_singleton
     if _path_workflow_singleton is None:
-        from app.workflows.learning_path import LearningPathWorkflow
-        _path_workflow_singleton = LearningPathWorkflow(use_mock=_get_mock_flag())
+        with _path_workflow_lock:
+            if _path_workflow_singleton is None:
+                from app.workflows.learning_path import LearningPathWorkflow
+                _path_workflow_singleton = LearningPathWorkflow(use_mock=_get_mock_flag())
     return _path_workflow_singleton
 
 
 def _get_inquiry_service():
     global _inquiry_service_singleton
     if _inquiry_service_singleton is None:
-        from app.services.inquiry_service import InquiryService
-        _inquiry_service_singleton = InquiryService()
+        with _inquiry_service_lock:
+            if _inquiry_service_singleton is None:
+                from app.services.inquiry_service import InquiryService
+                _inquiry_service_singleton = InquiryService()
     return _inquiry_service_singleton
 
 
@@ -749,6 +791,7 @@ async def enrich_profile(body: ProfileEnrichRequest):
 # ═══════════════════════════════════════════════════════════════════
 
 _graph_service_singleton = None
+_graph_service_lock = threading.Lock()
 _graph_center_singleton = None
 _graph_center_lock = threading.Lock()
 
@@ -756,8 +799,10 @@ _graph_center_lock = threading.Lock()
 def _get_graph_service():
     global _graph_service_singleton
     if _graph_service_singleton is None:
-        from app.services.graph_service import get_graph_service
-        _graph_service_singleton = get_graph_service()
+        with _graph_service_lock:
+            if _graph_service_singleton is None:
+                from app.services.graph_service import get_graph_service
+                _graph_service_singleton = get_graph_service()
     return _graph_service_singleton
 
 
