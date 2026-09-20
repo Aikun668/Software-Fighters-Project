@@ -74,6 +74,21 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/internal")
 
+# ═══════════════════════════════════════════════════════════════
+# 依赖装配（惰性单例）
+#
+# 全文件唯一允许构造 Center / Agent / Workflow / Service 的位置是下方各
+# `_get_xxx()` 工厂；48 个端点无一例外经由它们取依赖，端点体内 0 处直连构造。
+#
+# ⚠️ 注入点冻结（GUIDE P2 第 5 步拆包落地前不得漂移）：
+#   ① `internal_api._get_xxx`       —— 既有测试的 monkeypatch 目标（8 个名字）
+#   ② `internal_api._xxx_singleton` —— 既有测试直改的状态变量（3 个变量）
+#   ③ `inspect.getsource` 内的 `_get_xxx()` 字面文本（5 个测试文件）
+#   三者都要求这些名字在本模块可见；搬到别的模块会让注入点静默失效。
+#
+# 状态集中声明于此，按 (singleton, lock) 成对排列；工厂本体见各 _get_xxx。
+# ═══════════════════════════════════════════════════════════════
+
 _chat_center_singleton = None
 _chat_center_lock = threading.Lock()
 
@@ -116,8 +131,21 @@ _inquiry_service_lock = threading.Lock()
 _tutor_center_singleton = None
 _tutor_center_lock = threading.Lock()
 
+_plan_center_singleton = None
+_plan_center_lock = threading.Lock()
+
+_graph_service_singleton = None
+_graph_service_lock = threading.Lock()
+
+_graph_center_singleton = None
+_graph_center_lock = threading.Lock()
+
+_intent_extractor: IntentExtractor | None = None
+_intent_extractor_lock = threading.Lock()
+
 
 def _get_chat_center():
+    """API 层 ChatCenter 装配点；测试 patch 目标为 internal_api._get_chat_center。"""
     global _chat_center_singleton
     if _chat_center_singleton is None:
         with _chat_center_lock:
@@ -127,10 +155,17 @@ def _get_chat_center():
 
 
 def _get_mock_flag() -> bool:
+    """恒返回 False：走真实 LLM，不构造 mock 替身。
+
+    它同时是 13 个 `_get_xxx` 工厂能否在离线环境构造的开关——硬编码 False 时
+    这些工厂会因缺 API key 抛 ValueError。离线测试需自行 patch 本函数；
+    本轮（GUIDE P2 第 4 步）不改其取值，属第 3 步「模型参数清洗」范畴。
+    """
     return False
 
 
 def _get_profile_agent():
+    """API 层 ProfileAgent 装配点；测试 patch 目标为 internal_api._get_profile_agent。"""
     global _profile_agent_singleton
     if _profile_agent_singleton is None:
         with _profile_agent_lock:
@@ -141,6 +176,7 @@ def _get_profile_agent():
 
 
 def _get_tutor_agent():
+    """API 层 TutorAgent 装配点；测试 patch 目标为 internal_api._get_tutor_agent。"""
     global _tutor_agent_singleton
     if _tutor_agent_singleton is None:
         with _tutor_agent_lock:
@@ -169,6 +205,7 @@ def _get_tutor_center():
 
 
 def _get_content_agent():
+    """API 层 ContentAgent 装配点；测试 patch 目标为 internal_api._get_content_agent。"""
     global _content_agent_singleton
     if _content_agent_singleton is None:
         with _content_agent_lock:
@@ -179,6 +216,7 @@ def _get_content_agent():
 
 
 def _get_exercise_agent():
+    """API 层 ExerciseAgent 装配点；测试 patch 目标为 internal_api._get_exercise_agent。"""
     global _exercise_agent_singleton
     if _exercise_agent_singleton is None:
         with _exercise_agent_lock:
@@ -194,6 +232,7 @@ def _get_exercise_center():
     装配的 ExerciseAgent 不带 model_profile，与收口前 /exercise/generate 与
     complete-step 的构造一致；聊天侧 ExerciseCenter.execute() 的惰性默认
     （PROFILE_EXERCISE）不受影响。
+    测试 patch 目标为 internal_api._get_exercise_center。
     """
     global _exercise_center_singleton
     if _exercise_center_singleton is None:
@@ -209,6 +248,7 @@ def _get_exercise_center():
 
 
 def _get_path_agent():
+    """API 层 PathAgent 装配点；测试 patch 目标为 internal_api._get_path_agent。"""
     global _path_agent_singleton
     if _path_agent_singleton is None:
         with _path_agent_lock:
@@ -219,6 +259,7 @@ def _get_path_agent():
 
 
 def _get_mindmap_agent():
+    """API 层 MindMapAgent 装配点；测试 patch 目标为 internal_api._get_mindmap_agent。"""
     global _mindmap_agent_singleton
     if _mindmap_agent_singleton is None:
         with _mindmap_agent_lock:
@@ -228,11 +269,8 @@ def _get_mindmap_agent():
     return _mindmap_agent_singleton
 
 
-_plan_center_singleton = None
-_plan_center_lock = threading.Lock()
-
-
 def _get_code_agent():
+    """API 层 CodeAgent 装配点；测试 patch 目标为 internal_api._get_code_agent。"""
     global _code_agent_singleton
     if _code_agent_singleton is None:
         with _code_agent_lock:
@@ -243,6 +281,7 @@ def _get_code_agent():
 
 
 def _get_profile_workflow():
+    """API 层 ProfileWorkflow 装配点；测试 patch 目标为 internal_api._get_profile_workflow。"""
     global _profile_workflow_singleton
     if _profile_workflow_singleton is None:
         with _profile_workflow_lock:
@@ -270,6 +309,7 @@ def _get_resource_center() -> ResourceCenter:
 
 
 def _get_path_workflow():
+    """API 层 LearningPathWorkflow 装配点；测试 patch 目标为 internal_api._get_path_workflow。"""
     global _path_workflow_singleton
     if _path_workflow_singleton is None:
         with _path_workflow_lock:
@@ -280,6 +320,7 @@ def _get_path_workflow():
 
 
 def _get_inquiry_service():
+    """API 层 InquiryService 装配点；测试 patch 目标为 internal_api._get_inquiry_service。"""
     global _inquiry_service_singleton
     if _inquiry_service_singleton is None:
         with _inquiry_service_lock:
@@ -294,6 +335,7 @@ def _get_plan_center():
 
     该工厂是 API 层与 PlanCenter 之间的唯一依赖装配点。
     graph_service / step_classifier 留 None，由 PlanCenter 走现网 fallback。
+    测试 patch 目标为 internal_api._get_plan_center。
     """
     global _plan_center_singleton
     if _plan_center_singleton is None:
@@ -790,13 +832,8 @@ async def enrich_profile(body: ProfileEnrichRequest):
 # Knowledge Graph (changed from GET to POST)
 # ═══════════════════════════════════════════════════════════════════
 
-_graph_service_singleton = None
-_graph_service_lock = threading.Lock()
-_graph_center_singleton = None
-_graph_center_lock = threading.Lock()
-
-
 def _get_graph_service():
+    """API 层 GraphService 装配点；测试 patch 目标为 internal_api._get_graph_service。"""
     global _graph_service_singleton
     if _graph_service_singleton is None:
         with _graph_service_lock:
@@ -812,6 +849,7 @@ def _get_graph_center():
     graph_service 注入外层包装 `_get_graph_service()`（与本文件收口前的取用
     来源一致）；plan_service / extraction 留 None，由 GraphCenter 走惰性默认。
     该工厂是 API 层与 GraphCenter 之间的唯一依赖装配点。
+    测试 patch 目标为 internal_api._get_graph_center。
     """
     global _graph_center_singleton
     if _graph_center_singleton is None:
@@ -1233,11 +1271,8 @@ async def get_review_schedule(plan_id: int, body: ReviewScheduleRequest):
 # Unified Chat (双层模式策略)
 # ═══════════════════════════════════════════════════════════════════
 
-_intent_extractor: IntentExtractor | None = None
-_intent_extractor_lock = threading.Lock()
-
-
 def _get_intent_extractor() -> IntentExtractor:
+    """API 层 IntentExtractor 装配点；测试 patch 目标为 internal_api._get_intent_extractor。"""
     global _intent_extractor
     if _intent_extractor is None:
         with _intent_extractor_lock:
