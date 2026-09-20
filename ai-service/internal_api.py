@@ -18,6 +18,7 @@ from typing import Any
 from fastapi import APIRouter, Query
 from fastapi.responses import FileResponse
 
+from app.events.types import done_event, error_content_event
 from app.utils.sse_response import sse_response
 from app.utils.security_middleware import safe_export_path
 from app.utils.prompt_guard import sanitize_model
@@ -409,8 +410,11 @@ async def profile_chat(body: ProfileChatRequest):
             yield f"data: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
         except Exception as e:
             logger.error(f"Profile chat SSE error: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'content': '画像对话失败，请稍后重试'}, ensure_ascii=False)}\n\n"
-            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
+            # 错误帧统一走事件工厂。⚠️ 必须用 error_content_event，
+            # 不能用 error_event(stage, message) —— 后者同时写 message 与 content 两个键，
+            # 响应字节会变（实测见 tests/test_error_fallback_contract.py::ERR-A01）。
+            yield error_content_event("画像对话失败，请稍后重试").to_sse()
+            yield done_event().to_sse()
 
     return sse_response(event_stream())
 
@@ -1388,8 +1392,9 @@ async def inquiry_resolve_plan(body: InquiryResolveRequest):
 
         except Exception as e:
             logger.error(f"Inquiry resolve plan error: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'content': '学习路径生成失败，请稍后重试'}, ensure_ascii=False)}\n\n"
-            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
+            # 同上：错误帧统一走事件工厂，不得换用 error_event（会多出 message 键）。
+            yield error_content_event("学习路径生成失败，请稍后重试").to_sse()
+            yield done_event().to_sse()
 
     return sse_response(event_stream())
 
