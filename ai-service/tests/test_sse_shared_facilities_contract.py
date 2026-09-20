@@ -9,6 +9,11 @@
 「抽取前后都存在」的符号上（`internal_api._get_xxx()` 工厂、`internal_api._EXPORTS_DIR`、
 `internal_api._build_multimodal_message`），因此抽取时断言一字不改。
 
+> 后续修订（多模态归位轮）：上句对 `_build_multimodal_message` 的承诺已到期 ——
+> 该函数已迁至 `app.utils.multimodal.build_multimodal_message`（旧名从 `internal_api`
+> 删除），本文件的引用点随之从 `internal_api._build_multimodal_message` 改为新模块，
+> **断言一字未改**。迁移由 `tests/test_multimodal_utils_contract.py::MM-B03` 锁定。
+
 **Part B（红，Task 2 / Task 4 落地后转绿）**：锁新共享模块自身的契约。
 
 之所以先写这个文件：`AI_SERVICE_ARCHITECTURE_GUIDE.md` line 148 明确
@@ -32,6 +37,7 @@ from httpx import ASGITransport, AsyncClient
 
 import internal_api
 from app.events.types import content_event, done_event, error_event
+from app.utils.multimodal import build_multimodal_message
 from app.utils.sse_heartbeat import sse_heartbeat_generator
 
 
@@ -452,12 +458,16 @@ class TestPartADownloadGuards:
 
 
 class TestPartASsrfGuard:
-    """A10..A11：SSRF 判定行为（经 `_build_multimodal_message` 锁定）。"""
+    """A10..A11：SSRF 判定行为（经 `build_multimodal_message` 锁定）。
+
+    本类构造时该函数还在 `internal_api._build_multimodal_message`；后一轮的
+    「多模态归位」把它搬到了 `app.utils.multimodal`，注入点随迁，**断言一字未改**。
+    """
 
     SAMPLE = b"ZmFrZQ=="
 
     def _images_of(self, images):
-        message = internal_api._build_multimodal_message("描述", images)
+        message = build_multimodal_message("描述", images)
         parts = message["content"]
         if isinstance(parts, str):
             return []

@@ -19,7 +19,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import FileResponse
 
 from app.utils.sse_response import sse_response
-from app.utils.security_middleware import is_internal_url, safe_export_path
+from app.utils.security_middleware import safe_export_path
 from app.utils.prompt_guard import sanitize_model
 from app.api.errors import ErrorCode, api_error, api_success
 from app.api.models import (
@@ -367,52 +367,8 @@ def _sse_stream_chunks(text: str, size: int = 4):
 
 
 # ── 多模态消息构建 ──────────────────────────────────────────────
-
-ALLOWED_IMAGE_MIMES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
-
-
-def _extract_text_from_multimodal(content) -> str:
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        parts = [p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text"]
-        return " ".join(parts)
-    return ""
-
-
-def _build_multimodal_message(text: str, images: list[str] | None) -> dict:
-    if not images:
-        return {"role": "user", "content": text}
-
-    content_parts: list[dict] = []
-    if text:
-        content_parts.append({"type": "text", "text": text})
-
-    for img in images:
-        if not img or not img.strip():
-            continue
-        if img.startswith("data:image/"):
-            mime_end = img.find(";")
-            if mime_end > 0:
-                mime = img[len("data:"):mime_end]
-                if mime not in ALLOWED_IMAGE_MIMES:
-                    logger.warning(f"Rejected image with unsupported MIME: {mime}")
-                    continue
-            url = img
-        elif img.startswith("http://") or img.startswith("https://"):
-            if is_internal_url(img):
-                logger.warning(f"Rejected internal/infra URL for SSRF prevention: {img[:80]}")
-                continue
-            url = img
-        else:
-            url = f"data:image/jpeg;base64,{img}"
-        content_parts.append({"type": "image_url", "image_url": {"url": url}})
-
-    if not content_parts:
-        return {"role": "user", "content": text}
-    if len(content_parts) == 1 and content_parts[0].get("type") == "text":
-        return {"role": "user", "content": text}
-    return {"role": "user", "content": content_parts}
+# `build_multimodal_message` / `extract_text_from_multimodal` / `ALLOWED_IMAGE_MIMES`
+# 已迁至 app/utils/multimodal.py（本轮只归位、未接线 —— `body.images` 仍未被读取）。
 
 
 # ═══════════════════════════════════════════════════════════════════

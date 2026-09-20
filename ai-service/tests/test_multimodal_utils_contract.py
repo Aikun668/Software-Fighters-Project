@@ -65,7 +65,10 @@ def _builder_under_test():
         module = importlib.import_module(NEW_MODULE)
     except ImportError:
         return internal_api._build_multimodal_message
-    return getattr(module, "build_multimodal_message", internal_api._build_multimodal_message)
+    # 注意不能用 getattr(mod, name, internal_api._build_...) —— 默认值是急切求值的，
+    # 归位后 internal_api 上已无旧名，取值那一刻就会 AttributeError。
+    build = getattr(module, "build_multimodal_message", None)
+    return build if build is not None else internal_api._build_multimodal_message
 
 
 def _kept_images(message: dict) -> list[str]:
@@ -167,7 +170,12 @@ class TestPartBExtraction:
 
     def test_mm_b01_new_module_exposes_three_public_names(self):
         for name in PUBLIC_NAMES:
+            assert _require(NEW_MODULE, name) is not None, name
+        for name in ("build_multimodal_message", "extract_text_from_multimodal"):
             assert callable(_require(NEW_MODULE, name)), name
+        assert _require(NEW_MODULE, "ALLOWED_IMAGE_MIMES") == {
+            "image/jpeg", "image/png", "image/webp", "image/gif",
+        }
 
     def test_mm_b02_new_module_reproduces_locked_behaviour(self):
         """新模块逐条重放 Part A 的输入，与**字面期望值**完全相等。
