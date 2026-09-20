@@ -409,7 +409,7 @@ async def profile_chat(body: ProfileChatRequest):
                 done_payload["profile_delta"] = state.get("current_profile", {})
             yield f"data: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
         except Exception as e:
-            logger.error(f"Profile chat SSE error: {e}")
+            logger.error(f"Profile chat SSE error: {e}", exc_info=True)
             # 错误帧统一走事件工厂。⚠️ 必须用 error_content_event，
             # 不能用 error_event(stage, message) —— 后者同时写 message 与 content 两个键，
             # 响应字节会变（实测见 tests/test_error_fallback_contract.py::ERR-A01）。
@@ -515,7 +515,7 @@ async def learning_path(student_id: str, body: CreatePlanFromPathRequest):
             "topic": topic,
         })
     except Exception as e:
-        logger.error(f"Path workflow failed: {e}")
+        logger.error(f"Path workflow failed: {e}", exc_info=True)
         return api_error(
             ErrorCode.GENERATION_FAILED, "学习路径生成失败", status_code=500
         )
@@ -556,7 +556,7 @@ async def export_pptx(body: ExportPptxRequest):
     try:
         result_path = export_to_pptx(content_blocks, output_path, title)
     except Exception as e:
-        logger.error(f"PPTX export failed: {e}")
+        logger.error(f"PPTX export failed: {e}", exc_info=True)
         return api_error(
             ErrorCode.GENERATION_FAILED, "导出失败，请稍后重试", status_code=500
         )
@@ -597,7 +597,7 @@ async def export_docx(body: ExportDocxRequest):
     try:
         result_path = export_to_docx(content_blocks, output_path, title, sub_type)
     except Exception as e:
-        logger.error(f"DOCX export failed: {e}")
+        logger.error(f"DOCX export failed: {e}", exc_info=True)
         return api_error(
             ErrorCode.GENERATION_FAILED, "导出失败，请稍后重试", status_code=500
         )
@@ -634,7 +634,7 @@ async def export_pdf(body: ExportPdfRequest):
     try:
         result_path = export_to_pdf(content_blocks, output_path, title)
     except Exception as e:
-        logger.error(f"PDF export failed: {e}")
+        logger.error(f"PDF export failed: {e}", exc_info=True)
         return api_error(
             ErrorCode.GENERATION_FAILED, "导出失败，请稍后重试", status_code=500
         )
@@ -686,7 +686,7 @@ async def exercise_error_analysis(body: ErrorAnalysisRequest):
         )
         return api_success(result)
     except Exception as e:
-        logger.error(f"Error analysis failed: {e}")
+        logger.error(f"Error analysis failed: {e}", exc_info=True)
         return api_error(ErrorCode.GENERATION_FAILED, "错题分析失败，请稍后重试", status_code=500)
 
 
@@ -830,7 +830,7 @@ async def get_knowledge_graph(course_id: str, body: KnowledgeGraphRequest):
         )
         return api_success(result)
     except Exception as e:
-        logger.error(f"Failed to get knowledge graph: {e}")
+        logger.error(f"Failed to get knowledge graph: {e}", exc_info=True)
         return api_error(ErrorCode.INTERNAL_ERROR, "获取知识图谱失败", status_code=500)
 
 
@@ -848,7 +848,7 @@ async def get_node_card(course_id: str, node_id: str, body: KnowledgeGraphNodeRe
     except ValueError:
         return api_error(ErrorCode.NOT_FOUND, "节点不存在", status_code=404)
     except Exception as e:
-        logger.error(f"Failed to get node card: {e}")
+        logger.error(f"Failed to get node card: {e}", exc_info=True)
         return api_error(ErrorCode.INTERNAL_ERROR, "获取节点卡片失败", status_code=500)
 
 
@@ -863,7 +863,7 @@ async def graph_extract(body: GraphExtractRequest):
         )
         return api_success(result)
     except Exception as e:
-        logger.error(f"Failed to extract knowledge nodes: {e}")
+        logger.error(f"Failed to extract knowledge nodes: {e}", exc_info=True)
         return api_error(ErrorCode.GENERATION_FAILED, "知识节点提取失败", status_code=500)
 
 
@@ -878,7 +878,7 @@ async def graph_nodes(body: GraphNodesRequest):
     except ValueError as e:
         return api_error(ErrorCode.INVALID_REQUEST, str(e), status_code=400)
     except Exception as e:
-        logger.error(f"Failed to apply graph updates: {e}")
+        logger.error(f"Failed to apply graph updates: {e}", exc_info=True)
         return api_error(ErrorCode.INTERNAL_ERROR, "图谱更新失败", status_code=500)
 
 
@@ -900,7 +900,7 @@ async def reload_graph(body: GraphReloadRequest):
         result = await _get_graph_center().reload_skeleton()
         return api_success(result)
     except Exception as e:
-        logger.error(f"Failed to reload graph skeleton: {e}")
+        logger.error(f"Failed to reload graph skeleton: {e}", exc_info=True)
         return api_error(ErrorCode.INTERNAL_ERROR, "图谱热更新失败", status_code=500)
 
 
@@ -918,7 +918,7 @@ async def recommend_next_node(body: GraphProgressRequest):
         )
         return api_success(result)
     except Exception as e:
-        logger.error(f"Failed to recommend next node: {e}")
+        logger.error(f"Failed to recommend next node: {e}", exc_info=True)
         return api_error(ErrorCode.INTERNAL_ERROR, "节点推荐失败", status_code=500)
 
 
@@ -931,7 +931,7 @@ async def get_progress_summary(body: GraphProgressRequest):
         )
         return api_success(result)
     except Exception as e:
-        logger.error(f"Failed to get progress summary: {e}")
+        logger.error(f"Failed to get progress summary: {e}", exc_info=True)
         return api_error(ErrorCode.INTERNAL_ERROR, "进度概要获取失败", status_code=500)
 
 
@@ -947,7 +947,7 @@ async def check_prerequisites(body: GraphPrerequisiteRequest):
         )
         return api_success(result)
     except Exception as e:
-        logger.error(f"Failed to check prerequisites: {e}")
+        logger.error(f"Failed to check prerequisites: {e}", exc_info=True)
         return api_error(ErrorCode.INTERNAL_ERROR, "前置条件检查失败", status_code=500)
 
 
@@ -967,7 +967,7 @@ async def delete_node(node_id: str, body: NodeDeleteRequest):
     except ValueError as e:
         return api_error(ErrorCode.INVALID_REQUEST, str(e), status_code=400)
     except Exception as e:
-        logger.error(f"Failed to delete node: {e}")
+        logger.error(f"Failed to delete node: {e}", exc_info=True)
         return api_error(ErrorCode.INTERNAL_ERROR, "节点删除失败", status_code=500)
 
 
@@ -982,7 +982,7 @@ async def update_node(node_id: str, body: NodeUpdateRequest):
     except ValueError as e:
         return api_error(ErrorCode.INVALID_REQUEST, str(e), status_code=400)
     except Exception as e:
-        logger.error(f"Failed to update node: {e}")
+        logger.error(f"Failed to update node: {e}", exc_info=True)
         return api_error(ErrorCode.INTERNAL_ERROR, "节点更新失败", status_code=500)
 
 
@@ -993,7 +993,7 @@ async def suggest_edges(body: GraphSuggestEdgesRequest):
         result = await _get_graph_center().suggest_edges(course_id=body.course_id)
         return api_success(result)
     except Exception as e:
-        logger.error(f"Failed to suggest edges: {e}")
+        logger.error(f"Failed to suggest edges: {e}", exc_info=True)
         return api_error(ErrorCode.GENERATION_FAILED, "补边建议生成失败", status_code=500)
 
 
@@ -1011,7 +1011,7 @@ async def export_mermaid(body: GraphMermaidRequest):
         )
         return api_success(result)
     except Exception as e:
-        logger.error(f"Failed to export mermaid: {e}")
+        logger.error(f"Failed to export mermaid: {e}", exc_info=True)
         return api_error(ErrorCode.INTERNAL_ERROR, "Mermaid 导出失败", status_code=500)
 
 
@@ -1024,7 +1024,7 @@ async def get_layered_graph(body: GraphLayeredRequest):
         )
         return api_success(result)
     except Exception as e:
-        logger.error(f"Failed to get layered graph: {e}")
+        logger.error(f"Failed to get layered graph: {e}", exc_info=True)
         return api_error(ErrorCode.INTERNAL_ERROR, "分层图谱获取失败", status_code=500)
 
 
@@ -1166,7 +1166,7 @@ async def get_plan_status(plan_id: int, body: PlanStatusRequest):
     except PlanNotFoundError as e:
         return api_error(ErrorCode.NOT_FOUND, str(e), status_code=404)
     except Exception as e:
-        logger.error(f"Failed to get plan status: {e}")
+        logger.error(f"Failed to get plan status: {e}", exc_info=True)
         return api_error(ErrorCode.INTERNAL_ERROR, "查询计划状态失败", status_code=500)
 
 
@@ -1183,7 +1183,7 @@ async def get_plan_status_legacy(body: PlanStatusRequest):
     except PlanNotFoundError as e:
         return api_error(ErrorCode.NOT_FOUND, str(e), status_code=404)
     except Exception as e:
-        logger.error(f"Failed to get plan status: {e}")
+        logger.error(f"Failed to get plan status: {e}", exc_info=True)
         return api_error(ErrorCode.INTERNAL_ERROR, "查询计划状态失败", status_code=500)
 
 
@@ -1223,7 +1223,7 @@ async def get_review_schedule(plan_id: int, body: ReviewScheduleRequest):
         )
         return api_success(result)
     except Exception as e:
-        logger.error(f"Failed to get review schedule: {e}")
+        logger.error(f"Failed to get review schedule: {e}", exc_info=True)
         return api_error(ErrorCode.INTERNAL_ERROR, "获取复习日程失败", status_code=500)
 
 
@@ -1277,7 +1277,7 @@ async def _unified_chat(body: UnifiedChatRequest):
     try:
         first_event = await gen.__anext__()
     except Exception as e:
-        logger.error(f"Chat pipeline failed before first event: {e}")
+        logger.error(f"Chat pipeline failed before first event: {e}", exc_info=True)
         return api_error(ErrorCode.INTERNAL_ERROR, "处理失败，请稍后重试", status_code=500)
 
     async def event_stream():
@@ -1391,7 +1391,7 @@ async def inquiry_resolve_plan(body: InquiryResolveRequest):
             yield f"data: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
 
         except Exception as e:
-            logger.error(f"Inquiry resolve plan error: {e}")
+            logger.error(f"Inquiry resolve plan error: {e}", exc_info=True)
             # 同上：错误帧统一走事件工厂，不得换用 error_event（会多出 message 键）。
             yield error_content_event("学习路径生成失败，请稍后重试").to_sse()
             yield done_event().to_sse()
@@ -1417,7 +1417,7 @@ async def get_conversation_summary(conversation_id: int, body: SummaryRequest):
             "summary": summary or "本次对话涵盖了多个学习主题。",
         })
     except Exception as e:
-        logger.error(f"Summary generation failed: {e}")
+        logger.error(f"Summary generation failed: {e}", exc_info=True)
         return api_error(ErrorCode.INTERNAL_ERROR, "生成总结卡片失败", status_code=500)
 
 
@@ -1454,5 +1454,6 @@ async def eval_judge(body: JudgeRequest):
         raw = await llm.chat(messages, system_prompt=body.system_prompt or "")
         return api_success({"response": raw})
     except Exception as e:
-        logger.error(f"Eval judge failed: {e}")
-        return api_error(ErrorCode.INTERNAL_ERROR, f"裁判调用失败: {e}", status_code=500)
+        logger.error(f"Eval judge failed: {e}", exc_info=True)
+        # 不回显异常原文：上游报错里可能带内部路径、key 片段或 prompt 内容。
+        return api_error(ErrorCode.INTERNAL_ERROR, "裁判调用失败，请稍后重试", status_code=500)
