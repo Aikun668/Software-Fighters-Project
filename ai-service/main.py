@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from internal_api import router as internal_router
+from app.api.errors import ErrorCode, api_error
 from app.utils.security_middleware import SecurityMiddleware
 
 logger = logging.getLogger(__name__)
@@ -51,6 +52,23 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         status_code=400,
         content={"success": False, "error": msg, "error_code": "INVALID_REQUEST"},
     )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """全局 500 兜底 —— 没有 try 的端点此前会漏出 FastAPI 默认的
+    `text/plain: Internal Server Error`，前端按 success/errorCode 解析只能拿到空值。
+
+    `Exception` 在 Starlette 里注册到最外层 ServerErrorMiddleware，只在异常
+    逃过内层 ExceptionMiddleware 时才生效，因此 HTTPException 与
+    RequestValidationError 的专属处理器语义不受影响；响应一旦开始发送
+    （SSE 流中途出错）本处理器也不会补发第二个响应。
+    """
+    logger.error(
+        f"Unhandled exception on {request.method} {request.url.path}: {exc}",
+        exc_info=True,
+    )
+    return api_error(ErrorCode.INTERNAL_ERROR, "服务内部错误，请稍后重试")
 
 
 app.add_middleware(
