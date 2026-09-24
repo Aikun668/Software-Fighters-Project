@@ -3,6 +3,11 @@ ResourceWhiteboard — 共享上下文白板
 
 借鉴 OpenMAIC WhiteboardLedger + buildVirtualWhiteboardContext 模式：
 ContentAgent 先跑完 → 提取关键信息写入 whiteboard → 下游 Agent 读取后注入 prompt。
+
+【命名澄清】本类是 `@dataclass` 数据容器，**不是 Workflow**（无 LangGraph 图）。
+  原位于 `app/workflows/`（目录语义不符），**P3-B1 移入 `app/orchestration/`**
+  —— 与本目录的 `AgentTurnSummary` 同域（两者互为桥接，见 `to_agent_turn_summary`）。
+  注：当前仍**无生产代码引用**（仅 `tests/test_resource_whiteboard.py`）。
 """
 
 from dataclasses import dataclass, field

@@ -1,4 +1,4 @@
-"""Director — 意图分类器（单 Agent 路由）
+"""ResourceAgentSelector — 资源 Agent 选择器（单 Agent 路由）
 
 资源工坊核心路由逻辑:
   1. resource_type 显式传入 → 直接映射到 Agent（零延迟）
@@ -7,6 +7,21 @@
 
 设计原则：按输出格式分类，不按内容分类。
 用户说「生成 CNN 代码」→ 只出代码，不出全家桶。
+
+【决策所有权】资源 Agent 选择 —— 本模块是唯一拥有者。
+  - 唯一调用点：`ResourceGenWorkflow._plan_node`（`app/workflows/resource_gen.py`）
+  - 输入：topic / resource_type / student_profile；输出：`RouteDecision`（agent_name）
+  - 作用域：**仅限资源工作流内部**
+  - 禁止：被 Center 层或 API 层 import（不得升格为全局请求路由器）
+  - 约定：`temp_file/9.15工程改造计划/0、产品方向与约束/三类决策与命名约定.md`
+
+【命名澄清】本类原名 `Director`（**P3-B2 已改名** `ResourceAgentSelector`；模块同步由
+  `app/orchestration/director.py` 改为 `resource_selector.py`）。
+  改名原因：`Director` 一词在本仓曾有**三种含义**，导致"同名不同责"：
+  - 本类：资源 Agent 选择器（← 现在叫 `ResourceAgentSelector`）
+  - `app/workflows/profile_workflow.py` 的 `director` 图节点：画像完整度判断
+    （P3-B1 已改名 `completeness_check`）
+  - `app/services/llm_service.py` 的 `PROFILE_DIRECTOR`：模型预设常量（与路由无关）
 """
 
 import logging
@@ -96,7 +111,7 @@ class RouteDecision:
     strategy: str = ""  # "type_direct" | "rule" | "llm"
 
 
-class Director:
+class ResourceAgentSelector:
     """意图路由器 — 将用户输入映射到单个 Agent。
 
     路由策略:

@@ -1,7 +1,7 @@
 """ResourceGenWorkflow — 资源生成工作流（带质量门控）
 
 设计原则：
-  - Director 意图分类 → 路由到**单个** Agent 生成
+  - ResourceAgentSelector 意图分类 → 路由到**单个** Agent 生成
   - 用户说「生成 CNN 代码」→ 只出代码，不出全家桶
   - 显式要求「完整学习资料包」时才走多 Agent（未来扩展）
 
@@ -27,7 +27,7 @@ from app.agents.mindmap_agent import MindMapAgent
 from app.agents.flashcard_agent import FlashCardAgent
 from app.agents.project_agent import ProjectAgent
 from app.agents.interactive_diagram_agent import InteractiveDiagramAgent
-from app.orchestration.director import Director
+from app.orchestration.resource_selector import ResourceAgentSelector
 from app.services.llm_service import (
     PROFILE_CONTENT,
     PROFILE_CODE,
@@ -127,7 +127,7 @@ class ResourceGenWorkflow(BaseWorkflow):
         self.interactive_diagram_agent = InteractiveDiagramAgent(
             use_mock_llm=use_mock, model_profile=PROFILE_INTERACTIVE_DIAGRAM
         )
-        self.director = Director(use_mock=use_mock, model_profile=PROFILE_DIRECTOR)
+        self.selector = ResourceAgentSelector(use_mock=use_mock, model_profile=PROFILE_DIRECTOR)
 
         self._agent_map: dict[str, Any] = {
             "content": self.content_agent,
@@ -202,7 +202,7 @@ class ResourceGenWorkflow(BaseWorkflow):
         resource_type = state.get("resource_type", "")
         student_profile = state.get("student_profile", {})
 
-        decision = await self.director.route(
+        decision = await self.selector.route(
             topic,
             resource_type=resource_type or None,
             student_profile=student_profile,
@@ -215,7 +215,7 @@ class ResourceGenWorkflow(BaseWorkflow):
             f"识别意图：{decision.rationale}，准备生成{label}..."))
 
         logger.info(
-            f"Director routed '{topic}' → {agent_name}"
+            f"ResourceAgentSelector routed '{topic}' → {agent_name}"
             f" (strategy={decision.strategy}, sub_type={sub_type})"
         )
 

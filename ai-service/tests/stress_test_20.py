@@ -4,7 +4,7 @@ Tests Director routing only (no LLM dependency).
 """
 import asyncio, sys
 sys.path.insert(0, ".")
-from app.orchestration.director import Director
+from app.orchestration.resource_selector import ResourceAgentSelector
 
 CASES = [
     # === HARD (5 cases): multi-intent, technical, long ===
@@ -38,7 +38,7 @@ CASES = [
 
 
 async def main():
-    d = Director(use_mock=True)
+    d = ResourceAgentSelector(use_mock=True)
     results = []
 
     for tag, topic in CASES:

@@ -5,7 +5,7 @@ from langgraph.graph import StateGraph
 
 from app.agents.base_agent import BaseAgent
 from app.services.analogy_library import get_analogy_library
-from app.services.domain_router import get_domain_router
+from app.services.domain_classifier import get_domain_classifier
 from app.services.hallucination_guard import HallucinationGuard, kb_verify
 from app.services.knowledge_base import get_kb
 from app.services.llm_service import PROFILE_DIRECTOR, OpenAILLM
@@ -246,13 +246,13 @@ class TutorAgent(BaseAgent):
         style = state.get("style", "standard")
         socratic_round = state.get("socratic_round", 0)
 
-        # ── Layer 1+2: 领域路由 + KB 门控 ──
+        # ── Layer 1+2: 领域分类 + KB 门控 ──
         query = self._build_rag_query(messages)
-        router = get_domain_router()
-        domain = router.classify(query, course_id=course_id, kb_top_score=kb_top_score)
+        classifier = get_domain_classifier()
+        domain = classifier.classify(query, course_id=course_id, kb_top_score=kb_top_score)
 
         # 非 AI 领域 / KB 不相关：清空 KB 上下文，LLM 用自身知识回答
-        if domain == "general" or not router.should_inject_kb(kb_top_score):
+        if domain == "general" or not classifier.should_inject_kb(kb_top_score):
             knowledge_context = ""
 
         # ── 动态 domain_context（Layer 3: 动态 system prompt） ──
@@ -306,7 +306,7 @@ class TutorAgent(BaseAgent):
                 system_with_context += "\n\n" + followup_context
 
             # ── 类比门控：只在 AI 领域注入类比 ──
-            if router.should_inject_analogy(domain):
+            if classifier.should_inject_analogy(domain):
                 try:
                     analogy_text = get_analogy_library().format_for_prompt(
                         query, domain=domain

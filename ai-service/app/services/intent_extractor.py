@@ -1,3 +1,13 @@
+"""意图关键词表与二级意图抽取能力。
+
+【决策所有权】意图关键词表的唯一来源 —— `INTENT_REGISTRY`（10 类 `IntentDef`）。
+  - 该表被 `RouterAgent._keyword_route` 借用做二级分发；`RouterAgent` **不另建表**
+  - ⚠️ `IntentExtractor.extract / extract_multi` 当前**未接入线上管线**
+    （仅测试与 `internal_api._get_intent_extractor` 装配工厂引用）
+  - 禁止：在此选择 Center；禁止决定一级路径（属 `CapabilityGate`）
+  - 约定：`temp_file/9.15工程改造计划/0、产品方向与约束/三类决策与命名约定.md`
+"""
+
 import logging
 import os
 import re

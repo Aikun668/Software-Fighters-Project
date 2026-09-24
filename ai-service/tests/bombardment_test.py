@@ -9,7 +9,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.orchestration.director import Director
+from app.orchestration.resource_selector import ResourceAgentSelector
 from app.workflows.resource_gen import ResourceGenWorkflow
 
 TEST_CASES = [
@@ -50,7 +50,7 @@ def format_blocks(blocks: list) -> str:
 
 
 async def main():
-    director = Director(use_mock=True)
+    director = ResourceAgentSelector(use_mock=True)
     workflow = ResourceGenWorkflow(use_mock=True)
 
     print(f"\n{'='*100}")

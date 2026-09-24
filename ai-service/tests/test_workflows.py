@@ -77,17 +77,17 @@ class TestProfileWorkflowDirectorRouting:
 
     def test_route_incomplete(self):
         state = {"profile_complete": False, "filled_dimensions": 2}
-        route = ProfileWorkflow._route_after_director(state)
+        route = ProfileWorkflow._route_after_completeness_check(state)
         assert route == "response"
 
     def test_route_complete(self):
         state = {"profile_complete": True, "filled_dimensions": 5}
-        route = ProfileWorkflow._route_after_director(state)
+        route = ProfileWorkflow._route_after_completeness_check(state)
         assert route == "complete"
 
     def test_route_falsy_complete(self):
         state = {"profile_complete": False, "filled_dimensions": 0}
-        route = ProfileWorkflow._route_after_director(state)
+        route = ProfileWorkflow._route_after_completeness_check(state)
         assert route == "response"
 
 

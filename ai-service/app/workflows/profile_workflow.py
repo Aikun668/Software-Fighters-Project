@@ -1,14 +1,20 @@
 """
 ProfileWorkflow — 画像构建编排工作流
 
-借鉴 OpenMAIC Director 图循环（START → extract → merge → director → response/complete）：
-  extract:   LLM 从对话中抽取画像片段
-  merge:     纯逻辑增量合并 + DB 持久化
-  director:  纯逻辑判断——6 维度中 ≥4 个有值判定「完整」
-             完整 → complete（触发下游通知）
-             不完整 → response（生成追问，等待下一轮用户输入）
+借鉴 OpenMAIC 的图循环（START → extract → merge → completeness_check → response/complete）：
+  extract:             LLM 从对话中抽取画像片段
+  merge:               纯逻辑增量合并 + DB 持久化
+  completeness_check:  纯逻辑判断——6 维度中 ≥4 个有值判定「完整」
+                       完整 → complete（触发下游通知）
+                       不完整 → response（生成追问，等待下一轮用户输入）
 
-Director 节点是纯逻辑，不调用 LLM（借鉴 OpenMAIC director 纯代码路由策略）。
+completeness_check 节点是纯逻辑，不调用 LLM。
+
+【命名澄清】本工作流的 `completeness_check` **图节点**（`_completeness_check_node`）
+  是纯算术完整度判断（6 维中 ≥4 个有值 → 完整）。
+  ⚠️ 该节点原名 `director`，与 `app/orchestration/resource_selector.py` 的
+  `ResourceAgentSelector`（资源 Agent 选择器）、`llm_service.PROFILE_DIRECTOR`（模型常量）
+  **同名不同责**；P3-B1 已改名（见 `验收记录/P3-B1-结构收敛-*.md`）。
 """
 
 import logging
@@ -48,17 +54,17 @@ class ProfileWorkflow(BaseWorkflow):
 
         graph.add_node("extract", self._extract_node)
         graph.add_node("merge", self._merge_node)
-        graph.add_node("director", self._director_node)
+        graph.add_node("completeness_check", self._completeness_check_node)
         graph.add_node("response", self._response_node)
         graph.add_node("complete", self._complete_node)
 
         graph.set_entry_point("extract")
         graph.add_edge("extract", "merge")
-        graph.add_edge("merge", "director")
+        graph.add_edge("merge", "completeness_check")
 
         graph.add_conditional_edges(
-            "director",
-            self._route_after_director,
+            "completeness_check",
+            self._route_after_completeness_check,
             {
                 "response": "response",
                 "complete": "complete",
@@ -80,13 +86,13 @@ class ProfileWorkflow(BaseWorkflow):
         result = await self.profile_agent._merge_node(state)
         return result
 
-    async def _director_node(self, state: ProfileWorkflowState) -> dict:
-        """纯逻辑：检查画像完整度（借鉴 OpenMAIC director 纯代码路由策略）"""
+    async def _completeness_check_node(self, state: ProfileWorkflowState) -> dict:
+        """纯逻辑：检查画像完整度（纯算术判定，不调用 LLM）"""
         current_profile = state.get("current_profile", {})
         status = self.check_profile_status(current_profile)
 
         logger.info(
-            f"Profile director check: {status['filled_dimensions']}/{status['total_dimensions']} "
+            f"Profile completeness check: {status['filled_dimensions']}/{status['total_dimensions']} "
             f"dimensions filled, complete={status['complete']}"
         )
         return {
@@ -117,7 +123,7 @@ class ProfileWorkflow(BaseWorkflow):
         return {"response": response, "profile_complete": True}
 
     @staticmethod
-    def _route_after_director(state: ProfileWorkflowState) -> str:
+    def _route_after_completeness_check(state: ProfileWorkflowState) -> str:
         if state.get("profile_complete", False):
             return "complete"
         return "response"

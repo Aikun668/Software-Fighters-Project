@@ -1,6 +1,16 @@
-"""领域路由器 — 多信号融合判断用户当前对话领域，决定走 AI 专用管线还是通用管线。
+"""领域分类器 — 多信号融合判断用户当前对话领域，决定 KB 注入策略。
 
 信号优先级: course_id > KB cosine distance > 关键词匹配
+
+【决策所有权】内容领域分类（AI / 通用）—— 本模块是唯一拥有者。
+  - 唯一调用点：`TutorAgent._respond_node`（`app/agents/tutor_agent.py`）
+  - 输出：`"ai"` / `"general"`，仅影响 KB 注入、类比与 system prompt 选择
+  - 禁止：参与 Center / Agent 选择（**分类 ≠ 路由**）
+  - 约定：`temp_file/9.15工程改造计划/0、产品方向与约束/三类决策与命名约定.md`
+
+【命名澄清】本类原名 `DomainRouter`（**P3-B2 已改名** `DomainClassifier`；模块同步由
+  `domain_router.py` 改为 `domain_classifier.py`）。它**不路由任何请求**，实为内容二分类器；
+  与 `CapabilityGate`（一级请求分发）、`RouterAgent`（二级意图分发）职责不同，**不可互换**。
 """
 
 import logging
@@ -19,7 +29,7 @@ AI_KEYWORDS = frozenset({
 })
 
 
-class DomainRouter:
+class DomainClassifier:
     """多信号融合领域分类器，纯规则，零延迟。"""
 
     AI_THRESHOLD = AI_THRESHOLD
@@ -72,8 +82,8 @@ class DomainRouter:
         return domain == "ai"
 
 
-def get_domain_router() -> DomainRouter:
-    return DomainRouter()
+def get_domain_classifier() -> DomainClassifier:
+    return DomainClassifier()
 
 
 def _has_ai_keywords(query: str) -> bool:

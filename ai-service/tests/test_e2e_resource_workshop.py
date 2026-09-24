@@ -235,9 +235,9 @@ class TestL2_Routing:
     ])
     async def test_director_routing(self, async_client, topic, resource_type, expected_agent):
         """每种路由策略验证 Director 正确选择了目标 Agent"""
-        from app.orchestration.director import Director
+        from app.orchestration.resource_selector import ResourceAgentSelector
 
-        director = Director(use_mock=True)
+        director = ResourceAgentSelector(use_mock=True)
         decision = await director.route(topic, resource_type=resource_type)
         assert decision.agent_name == expected_agent, (
             f"路由失败: topic='{topic}', type={resource_type}, "
@@ -572,9 +572,9 @@ class TestL6_EdgeCases:
 
     def test_workflow_direct_router_correctness_all_patterns(self):
         """验证所有路由表 pattern 至少能匹配一个示例输入（无死规则）"""
-        from app.orchestration.director import Director
+        from app.orchestration.resource_selector import ResourceAgentSelector
 
-        director = Director(use_mock=True)
+        director = ResourceAgentSelector(use_mock=True)
 
         # 每个路由 pattern 至少验证一个正例
         test_cases = [

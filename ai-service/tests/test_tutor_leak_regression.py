@@ -94,7 +94,7 @@ class TestRespondNodeNoQaBlock:
             yield _WEAK_CLAIMS_ANSWER
 
         agent.llm.chat_stream = stream
-        monkeypatch.setattr("app.agents.tutor_agent.get_domain_router", lambda: _AiRouter())
+        monkeypatch.setattr("app.agents.tutor_agent.get_domain_classifier", lambda: _AiRouter())
         monkeypatch.setattr(agent, "_classify_clarity", clear_clarity)
         # 空 KB：所有声明 WEAK → 置信度 0.2，命中旧版追加路径
         monkeypatch.setattr("app.agents.tutor_agent.get_kb", lambda: _mock_kb([]))
@@ -246,7 +246,7 @@ class TestProfileRelevanceFiltering:
             yield "TCP 三次握手用于确认双方的收发能力。"
 
         agent.llm.chat_stream = stream
-        monkeypatch.setattr("app.agents.tutor_agent.get_domain_router", lambda: _GeneralRouter())
+        monkeypatch.setattr("app.agents.tutor_agent.get_domain_classifier", lambda: _GeneralRouter())
         monkeypatch.setattr(agent, "_classify_clarity", clear_clarity)
 
         await agent._respond_node({

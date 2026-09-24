@@ -1,3 +1,12 @@
+"""中心结果聚合与跨业务域任务调度。
+
+【命名澄清】名字叫 `ResultAgent`，实际职责是**跨业务域总调度 + SSE 终态编排**
+  （`_execute_task` 分发到 auto / plan / resource / exercise / visualization）：
+  - GUIDE P2 要求其「不再承担跨业务域的默认总调度」，**该项尚未收敛**（P2 遗留，独立轮）
+  - 注：`tests/test_chat_center_api_delegation.py` 锁的是「API 层不得出现本符号」，
+    属**分层断言**，并非对本类名的锁定
+"""
+
 import asyncio
 import logging
 from typing import Any, AsyncGenerator

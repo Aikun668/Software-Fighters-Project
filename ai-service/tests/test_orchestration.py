@@ -4,7 +4,7 @@ import pytest
 
 from app.orchestration.agent_turn_summary import AgentTurnSummary
 from app.orchestration.agent_bus import AgentBus
-from app.orchestration.director import Director, RouteDecision
+from app.orchestration.resource_selector import ResourceAgentSelector, RouteDecision
 
 
 class TestAgentTurnSummary:
@@ -160,7 +160,7 @@ class TestAgentBus:
 class TestDirector:
     @pytest.mark.asyncio
     async def test_route_returns_route_decision(self):
-        director = Director()
+        director = ResourceAgentSelector()
         decision = await director.route("Python基础")
         assert isinstance(decision, RouteDecision)
         assert decision.agent_name in ("content", "code", "mindmap", "project", "flashcard", "interactive_diagram")
@@ -168,76 +168,76 @@ class TestDirector:
 
     @pytest.mark.asyncio
     async def test_rule_route_code_topic(self):
-        director = Director()
+        director = ResourceAgentSelector()
         decision = await director.route("怎么写一个排序算法的代码示例")
         assert decision.strategy == "rule"
         assert decision.agent_name == "code"
 
     @pytest.mark.asyncio
     async def test_rule_route_theory_topic(self):
-        director = Director()
+        director = ResourceAgentSelector()
         decision = await director.route("机器学习理论概述")
         assert decision.agent_name in ("content", "mindmap")
 
     @pytest.mark.asyncio
     async def test_rule_route_ml_topic(self):
-        director = Director()
+        director = ResourceAgentSelector()
         decision = await director.route("深度学习与神经网络代码")
         assert decision.agent_name in ("code", "content")
 
     @pytest.mark.asyncio
     async def test_rule_route_project_topic(self):
-        director = Director()
+        director = ResourceAgentSelector()
         decision = await director.route("从零搭建一个CNN图像分类项目")
         assert decision.agent_name == "project"
 
     @pytest.mark.asyncio
     async def test_rule_route_mindmap_topic(self):
-        director = Director()
+        director = ResourceAgentSelector()
         decision = await director.route("梳理一下机器学习的知识框架")
         assert decision.agent_name == "mindmap"
 
     @pytest.mark.asyncio
     async def test_rule_route_flashcard_topic(self):
-        director = Director()
+        director = ResourceAgentSelector()
         decision = await director.route("背一下反向传播的核心要点")
         assert decision.agent_name == "flashcard"
 
     @pytest.mark.asyncio
     async def test_rule_route_interactive_diagram_topic(self):
-        director = Director()
+        director = ResourceAgentSelector()
         decision = await director.route("CNN架构的动态可视化演示")
         assert decision.agent_name == "interactive_diagram"
 
     @pytest.mark.asyncio
     async def test_resource_type_direct_route(self):
-        director = Director()
+        director = ResourceAgentSelector()
         decision = await director.route("任意主题", resource_type="code")
         assert decision.agent_name == "code"
         assert decision.strategy == "type_direct"
 
     @pytest.mark.asyncio
     async def test_resource_type_direct_route_project(self):
-        director = Director()
+        director = ResourceAgentSelector()
         decision = await director.route("随便什么", resource_type="project")
         assert decision.agent_name == "project"
         assert decision.strategy == "type_direct"
 
     @pytest.mark.asyncio
     async def test_comparison_sub_type_detected(self):
-        director = Director()
+        director = ResourceAgentSelector()
         decision = await director.route("对比一下CNN和RNN的区别")
         assert decision.sub_type == "comparison"
 
     @pytest.mark.asyncio
     async def test_diagnosis_sub_type_detected(self):
-        director = Director()
+        director = ResourceAgentSelector()
         decision = await director.route("这个bug怎么排查和修复")
         assert decision.sub_type == "diagnosis"
 
     @pytest.mark.asyncio
     async def test_default_agent_is_content(self):
-        director = Director()
+        director = ResourceAgentSelector()
         decision = await director.route("xyzzy_unmatched_abc")
         assert decision.agent_name == "content"
 
@@ -274,7 +274,7 @@ class TestDirectorLLMRoute:
     @pytest.mark.asyncio
     async def test_llm_route_triggered_for_unknown_topic(self):
         """无关键词匹配的 topic 触发 LLM 路由"""
-        director = Director()
+        director = ResourceAgentSelector()
         decision = await director.route("量子计算与量子信息")
         assert isinstance(decision, RouteDecision)
         assert decision.agent_name in ("content", "code", "mindmap", "project", "flashcard", "interactive_diagram")
@@ -282,7 +282,7 @@ class TestDirectorLLMRoute:
     @pytest.mark.asyncio
     async def test_llm_route_fallback_on_error(self):
         """LLM 路由失败时回退到默认 Agent"""
-        director = Director()
+        director = ResourceAgentSelector()
         decision = await director.route("xyzzy_unmatched_abc")
         assert isinstance(decision, RouteDecision)
         assert decision.agent_name == "content"
@@ -294,21 +294,21 @@ class TestDirectorLLMRouteEdgeCases:
     @pytest.mark.asyncio
     async def test_llm_route_for_unknown_topic_returns_default(self):
         """未匹配任何关键词时走 LLM 路由"""
-        director = Director()
+        director = ResourceAgentSelector()
         decision = await director.route("xyzzy_unmatched_topic_abc")
         assert decision.agent_name in ("content", "code", "mindmap", "project", "flashcard", "interactive_diagram")
 
     @pytest.mark.asyncio
     async def test_llm_route_with_empty_topic(self):
         """空 topic 的边界情况"""
-        director = Director()
+        director = ResourceAgentSelector()
         decision = await director.route("")
         assert decision.agent_name == "content"
 
     @pytest.mark.asyncio
     async def test_llm_route_non_ascii_topic(self):
         """非 ASCII topic（中文）"""
-        director = Director()
+        director = ResourceAgentSelector()
         decision = await director.route("机器学习")
         assert decision.strategy == "rule"  # 关键词命中
         assert decision.agent_name in ("content", "code")
@@ -367,8 +367,8 @@ class TestDirectorThreshold:
     """Director 基础配置验证"""
 
     def test_supported_agents_exist(self):
-        director = Director()
-        from app.orchestration.director import SUPPORTED_AGENTS
+        director = ResourceAgentSelector()
+        from app.orchestration.resource_selector import SUPPORTED_AGENTS
         assert "content" in SUPPORTED_AGENTS
         assert "code" in SUPPORTED_AGENTS
         assert "interactive_diagram" in SUPPORTED_AGENTS
@@ -568,11 +568,11 @@ class TestResourceGenProfiles:
         from app.workflows.resource_gen import ResourceGenWorkflow
 
         wf = ResourceGenWorkflow()
-        assert wf.director._model_profile is not None
+        assert wf.selector._model_profile is not None
 
     def test_workflow_agent_map_covers_all_types(self):
         from app.workflows.resource_gen import ResourceGenWorkflow
-        from app.orchestration.director import SUPPORTED_AGENTS
+        from app.orchestration.resource_selector import SUPPORTED_AGENTS
 
         wf = ResourceGenWorkflow()
         for agent_name in SUPPORTED_AGENTS:

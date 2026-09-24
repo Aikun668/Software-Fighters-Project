@@ -1,3 +1,11 @@
+"""按 intent 分派到 Tutor / Solve / Diagnose / Profile。
+
+【命名澄清】名字叫 `AutoCenter`，但它是**分发器**，不拥有独立业务流程：
+  它只决定「用哪个 Agent」，不拥有跨阶段状态，也不承担业务编排。
+  与 `PlanCenter` / `ResourceCenter` / `ExerciseCenter` 等「业务 Center」性质不同。
+  改名排在 P3-B，本轮只标注。
+"""
+
 import re
 
 import logging
@@ -233,7 +241,7 @@ class AutoCenter:
             profile_complete = False
             filled_dims = 0
 
-            # ── 完备度检测（与 ProfileWorkflow.director 逻辑一致）──
+            # ── 完备度检测（与 ProfileWorkflow.completeness_check 节点逻辑一致）──
             filled_dims = sum(
                 1 for k, v in current_profile.items()
                 if v is not None and v != [] and v != {} and k in DIMENSIONS

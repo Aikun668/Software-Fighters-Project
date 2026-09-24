@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.workflows.resource_whiteboard import ResourceWhiteboard
+from app.orchestration.resource_whiteboard import ResourceWhiteboard
 
 
 class TestResourceWhiteboard:

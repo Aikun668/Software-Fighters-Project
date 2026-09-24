@@ -206,7 +206,10 @@ Software-Fighters-Project/
 │   ├── tests/                          # 77 个测试文件（单元+压测+验证）
 │   ├── data/                           # 知识图谱骨架 + 动态图数据
 │   ├── knowledge_docs/                 # 11 篇课程知识文档
-│   ├── internal_api.py                 # 42 个内部端点（2290 行）
+│   ├── internal_api/                   # 内部 HTTP 入口包（48 路由，按业务域拆分）
+│   │   ├── __init__.py                 #   依赖装配（惰性单例）+ 聚合 router + re-export
+│   │   ├── profile.py / resources.py / tutor.py / chat.py / exercise.py
+│   │   └── graph.py / plans.py / inquiry.py / eval_api.py / _helpers.py
 │   └── main.py                         # FastAPI 启动入口
 │
 ├── backend/                            # Java SpringBoot 业务层 [后端]
@@ -313,6 +316,25 @@ curl -X POST http://127.0.0.1:8001/internal/knowledge-graph/ai_course \
 | **队长** | Python 多智能体核心 · LangGraph 编排 · 知识图谱 · 计划引擎 · 安全防护 |
 | **后端** | Java SpringBoot · MyBatis-Plus · Redis · MinIO · PythonClient 通信层 |
 | **前端** | Vue 3 页面 · SSE 流式渲染 · ECharts 知识图谱可视化 · Markdown/Mermaid 渲染 |
+
+---
+
+## 工程改造进展
+
+> 依据 `temp_file/9.15工程改造计划/`（渐进式架构收敛：API 只做协议、每个业务能力只有一个主入口）。当前阶段：**编排解耦（P2 收尾）**。
+
+| 轮次 | 内容 | 状态 | 验收记录 |
+|---|---|---|---|
+| 六域收口 | 计划 / 资源 / 练习 / 答疑 / 聊天 / 图谱 各收敛为唯一 Center 入口 | ✅ | `验收记录/*-2026-09-1x.md` |
+| 公共设施抽取 | 8 个流式端点的 SSE 样板 + SSRF / 导出路径守卫共享化 | ✅ | `公共设施抽取-2026-09-19.md` |
+| 单例装配统一 | 18 个 `_get_xxx` 统一双检锁、声明收拢为单一区块 | ✅ | `单例装配统一-2026-09-20.md` |
+| 错误兜底与多模态归位 | `main.py` 全局 500 信封 + 32 处 `exc_info` + 多模态纯函数归位 | ✅ | `错误兜底与多模态归位-2026-09-20.md` |
+| **内部接口拆包** | `internal_api.py`（1459 行）→ `internal_api/` 包（11 文件 / 48 路由）；67 条 per-case 响应 sha256 与拆包前一致 | ✅ | `内部接口拆包-2026-09-24.md` |
+| **P3-A 路由与命名约定** | 三类决策/命名/状态范围立约定 + 9 模块澄清标注 + 19 例「决策所有权」契约测试（零行为变化，55 条字节存证一致） | ✅ | `P3-A-路由与命名约定-2026-09-24.md` |
+| **P3-B1 结构收敛** | 删 `RouterAgent` 死代码 + 画像图节点改名 `completeness_check` + `ResourceWhiteboard` 移出 `workflows/`（结构变、字节不变，55 条存证一致） | ✅ | `P3-B1-结构收敛-2026-09-24.md` |
+| **P3-B2 重命名** | `Director`→`ResourceAgentSelector`、`DomainRouter`→`DomainClassifier`（含模块文件与实例属性；结构变、字节不变，55 条存证一致） | ✅ | `P3-B2-重命名-2026-09-24.md` |
+
+**下一步**：P3-B3（状态范围收敛 + `ResultAgent` 跨域收敛，**行为变更轮**）→ 模型参数清洗 / `sse_sanitize` 接线 → 「2、后续流式事件化」。
 
 ---
 

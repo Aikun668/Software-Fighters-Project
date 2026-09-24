@@ -227,7 +227,7 @@ class TestConversationFoundationWiring:
         async def clear_clarity(_message):
             return {"has_clear_goal": True, "has_blocker": False, "needs_clarification": False}
 
-        monkeypatch.setattr("app.agents.tutor_agent.get_domain_router", lambda: GeneralRouter())
+        monkeypatch.setattr("app.agents.tutor_agent.get_domain_classifier", lambda: GeneralRouter())
         monkeypatch.setattr(agent, "_classify_clarity", clear_clarity)
 
         result = await agent._respond_node({

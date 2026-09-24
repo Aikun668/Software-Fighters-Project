@@ -1,5 +1,22 @@
+"""二级意图分发（关键词 → `ExecutionPlan`）—— **不是** LLM Agent。
+
+【决策所有权】二级请求级分发 —— 本模块是唯一拥有者。
+  - 唯一调用点：`ChatCenter.route`（`app/centers/chat_center.py`）
+  - 输入：用户消息 + mode；输出：`ExecutionPlan`
+  - 关键词表来源：`app.services.intent_extractor.INTENT_REGISTRY`
+    （本模块只做打分与分发，**不另建关键词表**）
+  - ⚠️ `_QMARKS`（本模块内）与 `INTENT_REGISTRY["tutor_question"].keywords` 语义相近、
+    **有意独立维护**：两者关键词集合不同，合并会改变路由行为（P3 决定：只登记，不合并）
+  - 禁止：决定「是否进入专项能力」（一级属 `CapabilityGate`）；
+    禁止选择资源 Agent（属 `Director`）
+  - 约定：`temp_file/9.15工程改造计划/0、产品方向与约束/三类决策与命名约定.md`
+
+【命名澄清】名字叫 `RouterAgent`，但它 **不是 Center**（却位于 `app/centers/`）、
+  **不是 LLM Agent**（`route()` 全程无 LLM 调用），实为「关键词 → ExecutionPlan」
+  的纯规则规划器。改名排在 P3-B，本轮只标注。
+"""
+
 import logging
-import os
 
 from app.centers.schemas import CenterTask, ExecutionPlan
 from app.services.intent_extractor import (
@@ -32,8 +49,10 @@ class RouterAgent:
     }
 
     def __init__(self, intent_extractor: IntentExtractor | None = None):
-        self.intent_extractor = intent_extractor or IntentExtractor()
-        self._use_llm = os.getenv("INTENT_USE_LLM", "").strip().lower() in ("1", "true", "yes")
+        # `intent_extractor` 参数**保留**以兼容既有测试签名（10 个测试文件构造时传参）；
+        # 当前实现只做关键词路由（`_keyword_route`），不读取该实例 —— 属 P3-B 登记项，
+        # 删除参数会破坏测试契约，故仅保留显式的"未使用"说明。
+        del intent_extractor
 
     async def route(
         self,
@@ -189,28 +208,6 @@ class RouterAgent:
             is_clear=True,
             intent_meta={"manual_mode": mode, "raw_message": message},
         )
-
-    def _intents_to_tasks(
-        self,
-        intents,
-        message: str,
-        student_profile: dict,
-        context: dict,
-    ) -> list[CenterTask]:
-        tasks: list[CenterTask] = []
-        for idx, result in enumerate(intents):
-            center = INTENT_CENTER_MAP.get(result.intent, "auto")
-            task = CenterTask(
-                mode=center,
-                intent=result.intent,
-                input=message,
-                params=result.params,
-                context={**context, "student_profile": student_profile},
-                sequence=idx,
-                confidence=getattr(result, "confidence", 0.0),
-            )
-            tasks.append(task)
-        return tasks
 
     def _sort_by_confidence(self, tasks: list[CenterTask]) -> list[CenterTask]:
         tasks.sort(
