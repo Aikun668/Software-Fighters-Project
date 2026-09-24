@@ -30,10 +30,11 @@ from pathlib import Path
 import pytest
 
 import internal_api
+from tests.test_internal_api_package_contract import ai_service_dir, internal_api_source_text
 from tests.test_sse_shared_facilities_contract import SSE_CASE_NAMES, SSE_CASES, _make_app, _parse_events
 
 
-AI_SERVICE_DIR = Path(internal_api.__file__).resolve().parent
+AI_SERVICE_DIR = ai_service_dir()
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -103,7 +104,32 @@ LOCK_OF = {name: f"_{name[len('_get_'):]}_lock" for name in LAZY_FACTORIES}
 
 
 def _dump_source() -> str:
-    return Path(internal_api.__file__).read_text(encoding="utf-8")
+    """internal_api 的生产源码：拆包前=单文件；拆包后=包内全文件。"""
+    return internal_api_source_text()
+
+
+def _collect_declarations(tree: ast.Module) -> list[tuple[str, int]]:
+    """收集模块级装配声明（`_xxx_singleton` / `_xxx_lock` / `_intent_extractor`）。"""
+    declarations: list[tuple[str, int]] = []
+    for node in tree.body:
+        targets: list[str] = []
+        if isinstance(node, ast.Assign):
+            targets = [t.id for t in node.targets if isinstance(t, ast.Name)]
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            targets = [node.target.id]
+        for name in targets:
+            if name.endswith("_singleton") or name.endswith("_lock") or name == "_intent_extractor":
+                declarations.append((name, node.lineno))
+    return declarations
+
+
+def _route_function_names(tree: ast.Module) -> list[str]:
+    return [
+        node.name
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and any("router." in ast.unparse(d) for d in node.decorator_list)
+    ]
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -273,27 +299,38 @@ class TestAssemblyStructure:
             assert "测试 patch 目标" in doc, f"{name} docstring 未写明测试 patch 目标"
 
     def test_asm_s06_declarations_form_one_block_ahead_of_routes(self):
-        """装配声明必须集中成一个区块，且整体位于路由区之前。"""
-        tree = ast.parse(_dump_source())
+        """装配声明必须集中成一个区块。
 
-        declarations = []
+        - 拆包前（单文件）：声明集中在文件顶部，位于第一个路由函数之前；
+        - 拆包后（包）：声明集中在 `__init__.py`，且 `__init__.py` 内不含路由函数
+          （路由已全部拆到子模块 —— 语义等价且更严）。
+        """
+        mod_path = Path(internal_api.__file__).resolve()
+
+        if mod_path.name == "__init__.py":
+            init_tree = ast.parse(mod_path.read_text(encoding="utf-8"))
+            declarations = _collect_declarations(init_tree)
+            assert declarations, "未找到任何装配声明"
+
+            lines = sorted(ln for _, ln in declarations)
+            gap = max(b - a for a, b in zip(lines, lines[1:]))
+            assert gap <= 40, f"装配声明跨度 {gap} 行，未收拢成单一区块：{declarations}"
+
+            route_fns = _route_function_names(init_tree)
+            assert route_fns == [], f"__init__.py 内仍有路由函数：{route_fns}"
+            return
+
+        tree = ast.parse(_dump_source())
+        declarations = _collect_declarations(tree)
+        assert declarations, "未找到任何装配声明"
+
         first_route = None
         for node in tree.body:
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                decorators = [ast.unparse(d) for d in node.decorator_list]
-                if first_route is None and any("router." in d for d in decorators):
-                    first_route = node.lineno
-                continue
-            targets = []
-            if isinstance(node, ast.Assign):
-                targets = [t.id for t in node.targets if isinstance(t, ast.Name)]
-            elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-                targets = [node.target.id]
-            for name in targets:
-                if name.endswith("_singleton") or name.endswith("_lock") or name == "_intent_extractor":
-                    declarations.append((name, node.lineno))
-
-        assert declarations, "未找到任何装配声明"
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and any(
+                "router." in ast.unparse(d) for d in node.decorator_list
+            ):
+                first_route = node.lineno
+                break
         assert first_route is not None, "未找到路由函数"
 
         late = [(n, ln) for n, ln in declarations if ln > first_route]

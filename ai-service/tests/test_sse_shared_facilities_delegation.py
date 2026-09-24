@@ -21,6 +21,11 @@ from fastapi.responses import StreamingResponse
 from httpx import ASGITransport, AsyncClient
 
 import internal_api
+from tests.test_internal_api_package_contract import (
+    ai_service_dir,
+    internal_api_sources,
+    internal_api_source_text,
+)
 from tests.test_sse_shared_facilities_contract import (
     SSE_CASES,
     SSE_CASE_NAMES,
@@ -29,7 +34,7 @@ from tests.test_sse_shared_facilities_contract import (
     _parse_events,
 )
 
-AI_SERVICE_DIR = Path(internal_api.__file__).resolve().parent
+AI_SERVICE_DIR = ai_service_dir()
 
 
 def _app() -> FastAPI:
@@ -220,7 +225,7 @@ class TestStructuralClosure:
         assert not hasattr(internal_api, "_SSRF_HEX_IP")
         assert not hasattr(internal_api, "_SSRF_OCTAL_IP")
 
-        source = Path(internal_api.__file__).read_text(encoding="utf-8")
+        source = internal_api_source_text()
         assert "_SSRF_" not in source, "SSRF 正则残留在 internal_api"
 
     @pytest.mark.asyncio
@@ -277,7 +282,7 @@ class TestStructuralClosure:
         生产代码（`internal_api.py` + `app/`）里不得出现任何 `sse_sanitize(...)` **调用**。
         将来真的接线时必须显式改掉这条测试——这就是它存在的意义。
         """
-        targets = [Path(internal_api.__file__)]
+        targets = [*internal_api_sources()]
         targets.extend(p for p in (AI_SERVICE_DIR / "app").rglob("*.py"))
 
         callers = []

@@ -26,6 +26,7 @@
 """
 
 import ast
+import inspect
 from pathlib import Path
 
 import pytest
@@ -34,10 +35,10 @@ from httpx import ASGITransport, AsyncClient
 
 import internal_api
 import main
+from tests.test_internal_api_package_contract import ai_service_dir, internal_api_sources
 
 
-AI_SERVICE_DIR = Path(internal_api.__file__).resolve().parent
-SOURCE = AI_SERVICE_DIR / "internal_api.py"
+AI_SERVICE_DIR = ai_service_dir()
 
 
 # 失败路径的**逐字节**期望值，原样抄自改造前的实测响应。
@@ -103,25 +104,30 @@ async def _raw(client, path: str, payload: dict) -> tuple[int, str]:
         return resp.status_code, "".join(chunks)
 
 
-def _except_handlers_without_exc_info() -> list[int]:
-    """返回所有 `except Exception` 缺 `exc_info` 的处理器行号。"""
-    tree = ast.parse(SOURCE.read_text(encoding="utf-8"))
-    offenders: list[int] = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.ExceptHandler):
-            continue
-        if node.type is None or ast.unparse(node.type) != "Exception":
-            continue
-        logged_with_traceback = False
-        for call in ast.walk(node):
-            if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute)):
+def _except_handlers_without_exc_info() -> list[str]:
+    """返回所有 `except Exception` 缺 `exc_info` 的处理器位置（`文件:行`）。
+
+    扫描范围是 `internal_api` 的**全部生产源码**（拆包前=单文件，拆包后=包内全文件），
+    由 `internal_api_sources()` 提供，断言语义不变。
+    """
+    offenders: list[str] = []
+    for path in internal_api_sources():
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ExceptHandler):
                 continue
-            if call.func.attr not in ("error", "exception", "warning"):
+            if node.type is None or ast.unparse(node.type) != "Exception":
                 continue
-            if any(kw.arg == "exc_info" for kw in call.keywords):
-                logged_with_traceback = True
-        if not logged_with_traceback:
-            offenders.append(node.lineno)
+            logged_with_traceback = False
+            for call in ast.walk(node):
+                if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute)):
+                    continue
+                if call.func.attr not in ("error", "exception", "warning"):
+                    continue
+                if any(kw.arg == "exc_info" for kw in call.keywords):
+                    logged_with_traceback = True
+            if not logged_with_traceback:
+                offenders.append(f"{path.name}:{node.lineno}")
     return offenders
 
 
@@ -230,16 +236,8 @@ class TestPartBUnification:
         ⚠️ 不能用 `error_event(stage, message)` —— 它同时写 `message` 和 `content`
         两个键，字节会变。这是本轮最容易踩的坑。
         """
-        source = SOURCE.read_text(encoding="utf-8")
-        tree = ast.parse(source)
         for name in ("profile_chat", "inquiry_resolve_plan"):
-            node = next(
-                (n for n in tree.body
-                 if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == name),
-                None,
-            )
-            assert node is not None, f"找不到路由 {name}"
-            body = ast.unparse(node)
+            body = inspect.getsource(getattr(internal_api, name))
             assert "error_content_event(" in body, f"{name} 的错误帧未走事件工厂"
             assert "done_event()" in body, f"{name} 的 done 帧未走事件工厂"
             assert "json.dumps({'type': 'error'" not in body, f"{name} 仍手写错误帧"
@@ -312,7 +310,7 @@ class TestPartBUnification:
         接线会改变响应字节，必须与「零行为变化」的轮次分开。
         """
         callers: list[str] = []
-        roots = [SOURCE, *sorted((AI_SERVICE_DIR / "app").rglob("*.py"))]
+        roots = [*internal_api_sources(), *sorted((AI_SERVICE_DIR / "app").rglob("*.py"))]
         for path in roots:
             tree = ast.parse(Path(path).read_text(encoding="utf-8"))
             for node in ast.walk(tree):
