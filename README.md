@@ -339,9 +339,11 @@ curl -X POST http://127.0.0.1:8001/internal/knowledge-graph/ai_course \
 
 | **P3-D 模型参数清洗 + 统一事件层** | ①GUIDE P2 第 3 步收官：3 个漏网 LLM 入口接上 `sanitize_model`（图谱抽取 / 建计划 / 出题）+ `_get_mock_flag` **环境化**；②流式**阶段 B**：新增 `app/events/stream.py`（`run_id` + 单调 `seq` + Collector 对账，**零字节变化**）；③补「真实画像管线」存证 harness（此前被 stub 掩盖） | ✅ | `P3-D-模型参数清洗与统一事件层-2026-09-25.md` |
 
-**全量测试**：`1595 passed / 15 skipped / 0 failed`（P3-D 新增 22 例契约后见验收记录）
+| **P3-E 流式阶段 C（C1/C2/C3）** | ①最小实验量清 LangGraph 1.1.2 能给哪些流（**含一个关键意外收获**：手工嵌套 `ainvoke` 的内层节点事件也可见，不必重写嵌套）；②转换层 `ainvoke_with_events`（`ainvoke` 的等价替换 + 分层节点事件）；③Agent 层接入事件源（`current_emitter`，默认关闭）—— 58 条字节/指纹全一致 | ✅ | `P3-E-流式阶段C-2026-09-25.md` |
 
-**下一步**：流式**阶段 C**（接入 LangGraph 原生 streaming，让图执行本身成为事件源）。
+**全量测试**：`1595 passed / 15 skipped / 0 failed`（P3-D 新增 22 例 + P3-E 新增 14 例契约后见验收记录）
+
+**下一步**：阶段 C 的 **C4 一致性验证**（逐链路对比终态/节点数/耗时）→ **C5 扩展 + 开关默认化**。
 
 ---
 

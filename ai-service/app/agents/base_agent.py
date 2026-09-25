@@ -18,6 +18,7 @@ from abc import ABC, abstractmethod
 from contextvars import ContextVar
 from typing import Any, AsyncGenerator
 
+from app.events.graph_stream import ainvoke_with_events
 from app.services.llm_service import create_llm, AgentModelProfile, ModelConfig
 from app.utils.prompt_loader import build_prompt
 from app.orchestration.agent_turn_summary import AgentTurnSummary
@@ -26,6 +27,10 @@ from app.utils.security_logger import SecurityLogger
 # 逐请求回调（SSE token 流）：按**协程**隔离，并发请求不会互相覆盖。
 # 见 `三类决策与命名约定.md` §5「状态范围约定」——逐请求状态不得挂在 Agent 实例上。
 current_on_token: ContextVar = ContextVar("current_on_token", default=None)
+
+# 逐请求事件源（流式阶段 C，P3-E）：由调用方注入（如 `ChatTaskDispatcher` 的 token 泵）。
+# **未设置时走 `ainvoke` 旧路径**，故默认零行为变化 —— 见 `app/events/graph_stream.py`。
+current_emitter: ContextVar = ContextVar("current_emitter", default=None)
 
 SAFETY_SYSTEM_PROMPT = """你是面向高等教育的AI学习助手，运行在人工智能课程教学平台中。
 
@@ -136,9 +141,14 @@ class BaseAgent(ABC):
           ContextVar 按协程隔离，嵌套调用也由 set/reset 配对保证。
         """
         on_token = input_state.pop("_on_token", None)
+        # 事件源：显式传入优先，其次取逐请求 ContextVar（阶段 C 试点接入点）
+        emitter = input_state.pop("_emitter", None) or current_emitter.get()
         token = current_on_token.set(on_token)
         try:
-            result = await self._compiled_graph.ainvoke(input_state)
+            # emitter 为 None 时等价于 ainvoke（零额外开销），见 graph_stream.ainvoke_with_events
+            result = await ainvoke_with_events(
+                self._compiled_graph, input_state, emitter=emitter,
+            )
         finally:
             current_on_token.reset(token)
         return self._postprocess_output(result, input_state)
