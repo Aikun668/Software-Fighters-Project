@@ -1,0 +1,122 @@
+{
+  "cases": {
+    "case4_two_turn_followup": {
+      "case_id": "case4_two_turn_followup",
+      "ts": "2026-09-07T16:57:21",
+      "model": "deepseek-v4-flash",
+      "base_url": "https://api.deepseek.com/v1",
+      "transport": "production_stream",
+      "final_content_empty": false,
+      "fallback_triggered": false,
+      "finish_reason": null,
+      "usage": null,
+      "latency_ms": 465,
+      "error": null,
+      "thinking": "disabled",
+      "max_tokens": 128,
+      "temperature": 0.0,
+      "content_chars": 10,
+      "context_turns": 2,
+      "content_preview": "你叫小明，今年大三。"
+    },
+    "case1_normal_chat": {
+      "case_id": "case1_normal_chat",
+      "ts": "2026-09-07T16:57:12",
+      "model": "deepseek-v4-flash",
+      "base_url": "https://api.deepseek.com/v1",
+      "transport": "raw_http+production_stream",
+      "final_content_empty": false,
+      "fallback_triggered": false,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 13,
+        "completion_tokens": 48,
+        "total_tokens": 61,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 13
+      },
+      "latency_ms": 204,
+      "error": null,
+      "thinking": "disabled",
+      "max_tokens": 256,
+      "temperature": 0.0,
+      "content_chars": 83,
+      "reasoning_chars": 0,
+      "production_stream_latency_ms": 797,
+      "production_stream_chars": 69,
+      "content_preview": "TCP三次握手是客户端与服务器在建立连接前，通过交换三个数据包（SYN、SYN-ACK、ACK）来同步序列号并确认双方收发能力，从而可靠地建立一条双向通信信道的过程。"
+    },
+    "case2_thinking_with_content": {
+      "case_id": "case2_thinking_with_content",
+      "ts": "2026-09-07T16:57:18",
+      "model": "deepseek-v4-flash",
+      "base_url": "https://api.deepseek.com/v1",
+      "transport": "raw_http+production_chat",
+      "final_content_empty": false,
+      "fallback_triggered": false,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 92,
+        "completion_tokens": 234,
+        "total_tokens": 326,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 41
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 92
+      },
+      "latency_ms": 230,
+      "error": null,
+      "thinking": "enabled",
+      "max_tokens": 1024,
+      "temperature": 0.7,
+      "content_chars": 341,
+      "reasoning_chars": 73,
+      "reasoning_present": true,
+      "content_preview": "进程是操作系统资源分配的基本单位，拥有独立的地址空间、文件描述符、堆栈等资源；线程是CPU调度的基本单位，是进程内执行任务的最小单位，同一进程的多个线程共享该进程的地址空间和资源。\n\n主要区别：\n\n- **资源拥有**：进程之间相互独立，各有独立的内存空间和系统资源；线程共享所属进程的资源。\n- **调度与切换**：进程切换开销大，线程切换开销小，因为线程共享地址空间，无需切换内存映射。\n- **"
+    },
+    "case3_thinking_empty_fallback": {
+      "case_id": "case3_thinking_empty_fallback",
+      "ts": "2026-09-07T16:57:21",
+      "model": "deepseek-v4-flash",
+      "base_url": "https://api.deepseek.com/v1",
+      "transport": "raw_probe+production_chat",
+      "final_content_empty": false,
+      "fallback_triggered": true,
+      "finish_reason": null,
+      "usage": {
+        "prompt_tokens": 89,
+        "completion_tokens": 32,
+        "total_tokens": 121,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 32
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 89
+      },
+      "latency_ms": 296,
+      "error": null,
+      "thinking": "enabled->disabled(auto)",
+      "max_tokens": 32,
+      "temperature": 0.7,
+      "degradation_observed": true,
+      "probe_content_empty": true,
+      "probe_finish_reason": "length",
+      "probe_reasoning_chars": 153,
+      "final_content_chars": 60,
+      "final_content_preview": "数据库死锁是关系型数据库中一个非常经典且棘手的问题。为了让你容易理解，我会用一个生活化的例子来引入，然后再剖析其技术本质",
+      "note": "max_tokens=32 诱导思考耗尽预算；真实触发为概率事件，未触发不代表降级分支缺失（离线用例覆盖确定性）"
+    }
+  },
+  "model_under_test": "deepseek-v4-flash",
+  "base_url": "https://api.deepseek.com/v1"
+}
