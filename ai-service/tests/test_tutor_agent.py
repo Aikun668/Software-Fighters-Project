@@ -176,8 +176,15 @@ class TestTutorAgentGraph:
             spy.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_llm_failure_returns_fallback(self, agent, mock_llm):
-        """LLM 调用失败 → 返回兜底文案"""
+    async def test_llm_failure_surfaces_error_not_fake_fallback(self, agent, mock_llm):
+        """LLM 调用失败 → **空正文** + 显式 `sanity_error_code`（**不伪造**「抱歉…」正文）。
+
+        这是刻意设计（见 `tutor_agent._respond_node` 的 except 注释）：
+        把失败伪装成兜底文案，会让上层拿不到 error、把「模型挂了」当正常回答放行。
+        正确路径是上抛 `sanity_error_code`，由 AutoCenter / API 层转成 SSE `error` 事件。
+
+        （P3-C 轮改写：原用例断言 `"抱歉" in response`，锁的是已被**有意移除**的旧行为。）
+        """
 
         async def failing_stream(*args, **kwargs):
             raise RuntimeError("LLM down")
@@ -191,7 +198,9 @@ class TestTutorAgentGraph:
             "knowledge_context": "",
         }
         result = await agent._respond_node(state)
-        assert "抱歉" in result["response"]
+
+        assert result["response"] == "", "失败时不得伪造兜底正文"
+        assert result.get("sanity_error_code"), "失败必须带显式 error code 供上层转 error 事件"
 
 
 class TestConversationFoundationWiring:

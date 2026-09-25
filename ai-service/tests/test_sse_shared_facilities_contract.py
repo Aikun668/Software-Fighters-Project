@@ -610,6 +610,40 @@ class TestPartBSecurityHelpers:
             safe_export_path("ghost.pptx", allowed_ext=".pptx", exports_dir=exports)
 
     @pytest.mark.asyncio
+    async def test_b05c_safe_export_path_rejects_sibling_dir_with_shared_prefix(
+        self, tmp_path, monkeypatch,
+    ):
+        """包含性必须**按路径段**比较：同前缀兄弟目录不得被当作目录内。
+
+        `startswith(root)` 会把 `/x/exports_evil` 误判为在 `/x/exports` 之内 ——
+        这是历轮登记的「导出路径包含性加固」，P3-C 轮已修（改为 `root + os.sep`）。
+
+        跨平台做法：直接改写 `realpath` 的解析结果（而不是造符号链接），
+        把「目录内文件」映射到同前缀兄弟目录，从而稳定触发该分支。
+        `realpath` 被改写后，**修复前**本用例会因未抛错而红。
+        """
+        safe_export_path = _require("app.utils.security_middleware", "safe_export_path")
+        exports = tmp_path / "exports"
+        exports.mkdir()
+        sibling = tmp_path / "exports_evil"
+        sibling.mkdir()
+        (sibling / "leak.pptx").write_bytes(b"secret")
+
+        real_realpath = os.path.realpath
+        exports_root = real_realpath(str(exports))
+
+        def _fake_realpath(path):
+            resolved = real_realpath(path)
+            if resolved.startswith(exports_root + os.sep):
+                return str(sibling / os.path.basename(resolved))
+            return resolved
+
+        monkeypatch.setattr(os.path, "realpath", _fake_realpath)
+
+        with pytest.raises(ValueError, match="非法文件路径"):
+            safe_export_path("leak.pptx", allowed_ext=".pptx", exports_dir=str(exports))
+
+    @pytest.mark.asyncio
     async def test_b05b_safe_export_path_rejects_symlink_escape(self, tmp_path):
         """「非法文件路径」是纵深防御分支，只有符号链接逃逸能触发。
 

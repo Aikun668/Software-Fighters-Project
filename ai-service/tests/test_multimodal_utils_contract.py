@@ -145,20 +145,22 @@ class TestPartABuilderBehaviour:
             ],
         }
 
-    def test_mm_a09_documents_known_mime_allowlist_bypass(self):
-        """⚠️ **已登记的既有缺口，不是本契约认可的期望行为。**
+    def test_mm_a09_semicolonless_svg_data_uri_is_rejected(self):
+        """✅ 缺口已修（P3-C 轮）：不带分号的 SVG data URI 必须被拒绝。
 
-        MIME 白名单的判定条件是 `img.find(";") > 0`。不带分号的 data URI
-        （`data:image/svg+xml,<svg …>`）取不到 `;`，判定整段被跳过，SVG 因此绕过白名单
-        被原样保留。当前该函数**零调用**，缺口尚未暴露；一旦接线（把 `body.images`
-        真正喂进聊天链路）就会变成活的风险。
-
-        本断言锁定的是「归位不可改变行为」这一事实。**修复该缺口时本用例应当翻红**，
-        届时删掉它、改在 `test_mm_a05b` 一类正向用例里锁新行为。
+        原实现以 `img.find(";") > 0` 为**前置条件**，`data:image/svg+xml,<svg …>`
+        取不到分号 → 整段跳过校验被原样保留。现改为「先取 MIME 再判定」，
+        本用例由「锁现状缺口」改写为「锁已修复」。
         """
+        build = _builder_under_test()
         payload = "data:image/svg+xml,<svg onload=alert(1)>"
-        message = _builder_under_test()("描述", [payload])
-        assert _kept_images(message) == [payload]
+        assert build("描述", [payload]) == {"role": "user", "content": "描述"}
+
+    def test_mm_a09b_non_image_data_uri_is_rejected(self):
+        """`data:` 前缀一律进白名单校验（非图片 MIME 也不放行）。"""
+        build = _builder_under_test()
+        payload = "data:text/html,<script>alert(1)</script>"
+        assert build("描述", [payload]) == {"role": "user", "content": "描述"}
 
 
 # ═══════════════════════════════════════════════════════════════════

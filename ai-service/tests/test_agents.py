@@ -56,6 +56,9 @@ class TestContentAgent:
     async def test_initialization(self, agent):
         assert agent.agent_name == "content_agent"
 
+    # P3-C 收口：本用例断言「真实产出 content_blocks」，mock LLM 对 ContentAgent
+    # 返回的 JSON 形状不兼容（mock 给 `updates`，期望 `subsections`），故只能真跑。
+    @pytest.mark.real_llm
     @pytest.mark.asyncio
     async def test_run_generates_content(self, agent):
         state = await agent.run({
@@ -66,6 +69,7 @@ class TestContentAgent:
         assert isinstance(state["content_blocks"], list)
         assert len(state["content_blocks"]) > 0
 
+    @pytest.mark.real_llm
     @pytest.mark.asyncio
     async def test_content_block_structure(self, agent):
         state = await agent.run({
@@ -181,6 +185,7 @@ class TestTutorAgent:
     async def test_initialization(self, agent):
         assert agent.agent_name == "tutor_agent"
 
+    @pytest.mark.real_llm
     @pytest.mark.asyncio
     async def test_run_responds(self, agent):
         with patch("app.agents.tutor_agent.get_kb", return_value=_make_mock_kb()):

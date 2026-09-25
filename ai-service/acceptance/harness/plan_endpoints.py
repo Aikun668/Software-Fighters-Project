@@ -13,6 +13,7 @@ days_idle 漂移；ExerciseAgent.run 被替换为固定输出，绝不触网。
 
 import asyncio
 import hashlib
+import re
 import sys
 from datetime import date, datetime, timedelta, timezone
 
@@ -27,6 +28,9 @@ from internal_api import router
 
 TODAY = date.today()
 NOW = datetime.now(timezone.utc)
+
+# 哈希前把响应体里的一切 ISO 日期替换为 `<DATE>` —— 见主循环里的说明
+_DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 IDLE_ANCHOR = (NOW - timedelta(days=5, hours=1)).isoformat()
 
 FIXED_QUESTIONS = [
@@ -161,7 +165,11 @@ async def main(label: str) -> int:
     ) as client:
         for name, path, body in CASES:
             response = await client.post(path, json=body)
-            raw = response.text
+
+            # 日期归一化：请求用相对锚点构造，但**响应体里带服务端当天日期**
+            # （`"today": "2026-09-25"`），直接对 raw 取 sha256 会每天漂一次
+            # （历轮登记的遗留）。归一化后基准可长期复用，且仍能捕获任何逻辑变化。
+            raw = _DATE_RE.sub("<DATE>", response.text)
             digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
             blocks.append(
                 f"### {name} {path}\n"

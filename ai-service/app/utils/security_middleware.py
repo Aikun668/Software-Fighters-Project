@@ -60,7 +60,13 @@ def safe_export_path(filename: str, *, allowed_ext: str, exports_dir: str) -> st
     if os.path.splitext(safe_name)[1].lower() != allowed_ext:
         raise ValueError("不支持的文件类型")
     file_path = os.path.join(exports_dir, safe_name)
-    if not os.path.realpath(file_path).startswith(os.path.realpath(exports_dir)):
+
+    # 包含性判定：`startswith(root)` 会把**同前缀的兄弟目录**（`/x/exports_evil`）误判为内部，
+    # 必须按路径段比较（`root + os.sep`）。等值分支覆盖「exports_dir 本身」这一不可能情况，
+    # 只为让语义显式。（历轮登记的「导出路径包含性加固」）
+    exports_root = os.path.realpath(exports_dir)
+    resolved = os.path.realpath(file_path)
+    if resolved != exports_root and not resolved.startswith(exports_root + os.sep):
         raise ValueError("非法文件路径")
     if not os.path.exists(file_path):
         raise FileNotFoundError("文件不存在或已过期")

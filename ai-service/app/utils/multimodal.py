@@ -7,9 +7,10 @@
 ⚠️ 本次只做归位，**没有接线**：`/api/chat` 仍然不会把 `body.images` 喂进来。
 接线会让聊天链路真实接受外部图片，属于独立一步，须先处理下方登记的缺口。
 
-⚠️ 已登记缺口：MIME 白名单的判定条件是 `img.find(";") > 0`。不带分号的
-data URI（`data:image/svg+xml,<svg …>`）取不到分号，整段判定被跳过，SVG 因此
-绕过白名单。当前零调用故未暴露，接线后即为活风险。归位不改行为，缺口保留原样。
+✅ 已修缺口（P3-C 轮）：MIME 白名单原先以 `img.find(";") > 0` 为前置条件，
+不带分号的 data URI（`data:image/svg+xml,<svg …>`）会整段跳过校验 → SVG 绕过白名单。
+现改为「先取 MIME 再判定」，且 `data:` 前缀一律进校验。契约用例
+`MM-A09` 已从「锁现状缺口」改写为「锁已修复」，由 `MM-A09b` 锁其他非图片 MIME。
 """
 
 import logging
@@ -41,13 +42,14 @@ def build_multimodal_message(text: str, images: list[str] | None) -> dict:
     for img in images:
         if not img or not img.strip():
             continue
-        if img.startswith("data:image/"):
-            mime_end = img.find(";")
-            if mime_end > 0:
-                mime = img[len("data:"):mime_end]
-                if mime not in ALLOWED_IMAGE_MIMES:
-                    logger.warning(f"Rejected image with unsupported MIME: {mime}")
-                    continue
+        if img.startswith("data:"):
+            # MIME 必须先取再判，**不能**把 `find(";")` 当前置条件：不带分号的
+            # data URI（`data:image/svg+xml,<svg …>`）取不到分号，会整段跳过校验
+            # → SVG 绕过白名单（历轮登记的 MM-A09，本轮已修）。
+            mime = img[len("data:"):].split(";", 1)[0].split(",", 1)[0].strip().lower()
+            if mime not in ALLOWED_IMAGE_MIMES:
+                logger.warning(f"Rejected image with unsupported MIME: {mime}")
+                continue
             url = img
         elif img.startswith("http://") or img.startswith("https://"):
             if is_internal_url(img):

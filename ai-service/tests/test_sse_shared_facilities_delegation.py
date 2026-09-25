@@ -277,7 +277,12 @@ class TestStructuralClosure:
 
     @pytest.mark.asyncio
     async def test_d17_sse_sanitize_is_still_unwired(self):
-        """「未接线锁」：本轮只把 sse_sanitize 归位，没有接线。
+        """「未接线锁」：`sse_sanitize` 保持零调用。
+
+        ⚠️ 这把锁在 P3-C 轮**语义升级**了：不再是「本轮没空接线」，而是
+        「**不得接线**」——`tests/test_sse_forgery_contract.py` 已用真实 ASGI
+        注入取证：威胁由 JSON 编码中和（`FG-A01..A03`），而接线本身会破坏帧
+        （`FG-C01`）或损坏 markdown 渲染（`FG-C02`）。
 
         生产代码（`internal_api.py` + `app/`）里不得出现任何 `sse_sanitize(...)` **调用**。
         将来真的接线时必须显式改掉这条测试——这就是它存在的意义。

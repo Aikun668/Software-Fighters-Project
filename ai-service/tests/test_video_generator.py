@@ -7,7 +7,16 @@ from app.services.media.tts_adapter import TTSResult, MockTTSAdapter
 
 @pytest.fixture
 def video_gen():
-    return VideoGenerator(use_mock=True)
+    """`use_mock=True` + **显式关闭 ffmpeg**。
+
+    P3-C 收口：本类（`TestVideoGeneratorMock`）的语义是「mock 幻灯片生成」，
+    不应依赖机器上是否装了可用 ffmpeg。原先 3 例因未关 ffmpeg 而在装了 ffmpeg
+    但合成失败的机器上抛 `RuntimeError('Video synthesis failed')`（环境依赖型红灯）。
+    兄弟用例 `test_fallback_pptx_format` 一直显式 patch 为 False，此处统一到 fixture。
+    """
+    gen = VideoGenerator(use_mock=True)
+    gen.ffmpeg_available = False
+    return gen
 
 
 class TestVideoGeneratorMock:

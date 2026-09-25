@@ -305,7 +305,11 @@ class TestPartBUnification:
         }
 
     def test_err_b06_sse_sanitize_stays_unwired(self):
-        """跨轮守护锁：`sse_sanitize` 的接线是独立一轮的事，本轮不得顺手接上。
+        """跨轮守护锁：`sse_sanitize` 不得接线。
+
+        ⚠️ P3-C 轮起本锁的定性从「本轮不得顺手接上」升级为「**永远不该接**」：
+        `tests/test_sse_forgery_contract.py` 已取证威胁由 JSON 编码中和，且接线会
+        破坏帧结构 / 损坏 markdown 渲染。
 
         接线会改变响应字节，必须与「零行为变化」的轮次分开。
         """

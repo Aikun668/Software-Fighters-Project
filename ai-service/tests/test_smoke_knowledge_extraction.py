@@ -107,8 +107,12 @@ class TestD1_FunctionalCorrectness:
         assert ids == {"svm", "kerneltrick", "featureengineering"}
 
     @pytest.mark.asyncio
-    async def test_id_slugified_from_chinese_name(self):
-        """When name has no ASCII, _slugify_id falls back to 'node'."""
+    async def test_id_pinyinized_from_chinese_name(self):
+        """纯中文名 → **拼音** id（`_node_id_from_name`：normalize → 拼音 → hash 兜底）。
+
+        P3-C 对齐：原用例断言 `"node"`（更早的固定兜底），与同文件
+        `test_chinese_names_produce_pinyin_ids`（拼音契约，绿）直接矛盾，属陈旧期望。
+        """
         llm = _make_mock_llm([{
             "name": "深度学习",
             "type": "concept",
@@ -121,7 +125,7 @@ class TestD1_FunctionalCorrectness:
             "ai_intro", "深度学习和机器学习有什么区别？", "深度学习是机器学习的子集...", llm=llm,
         )
         assert len(result["all"]) == 1
-        assert result["all"][0]["id"] == "node"
+        assert result["all"][0]["id"] == "shen_du_xue_xi"
 
     @pytest.mark.asyncio
     async def test_id_normalizes_special_chars(self):
@@ -582,7 +586,10 @@ class TestD4_Stress:
 
     @pytest.mark.asyncio
     async def test_node_id_edge_cases(self):
-        """Tricky ids: pure numbers, very long, empty-after-normalize."""
+        """Tricky ids：纯数字保留、超长保留、归一化后为空的走 **hash 兜底**。
+
+        P3-C 对齐：`"!!!"` 归一化后为空 → `node_<md5[:4]>`（不再是固定字面量 `"node"`）。
+        """
         llm = _make_mock_llm([
             {"id": "12345", "name": "PureNumID", "type": "fact",
              "description": "d", "category": "foundational",
@@ -598,7 +605,7 @@ class TestD4_Stress:
         ids = {n["id"] for n in result["all"]}
         assert "12345" in ids
         assert "a" * 200 in ids
-        assert "node" in ids
+        assert any(i.startswith("node_") for i in ids), f"缺少 hash 兜底 id：{ids}"
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -736,7 +743,13 @@ class TestD0_FindingsFromSmokeTest:
         assert _node_id_from_name("深度学习") == "shen_du_xue_xi"
 
     @pytest.mark.asyncio
-    async def test_skeleton_id_underscore_mismatch_with_extraction(self):
+    async def test_skeleton_id_agrees_with_extraction_so_dedup_works(self):
+        """骨架节点 id 与抽取 id 现已一致 → 去重生效 → 0 条通过。
+
+        P3-C 对齐：原用例名为 `..._underscore_mismatch_...`，断言 `== 1`，
+        锁的是「id 不一致导致去重失效」这一 **D0 已修缺陷**（统一走
+        `app.utils.graph_id.normalize_node_id`）。现在这里锁修复后的行为。
+        """
         llm = _make_mock_llm([{
             "id": "ai_overview", "name": "AI概述", "type": "concept",
             "description": "AI基础知识", "category": "foundational",
@@ -747,7 +760,7 @@ class TestD0_FindingsFromSmokeTest:
             existing_node_ids={"ai_overview"},
             llm=llm,
         )
-        assert len(result["all"]) == 1
+        assert len(result["all"]) == 0, "已知骨架节点应被去重"
 
     def test_whitespace_only_not_short_circuited(self):
         assert bool("  ") is True
