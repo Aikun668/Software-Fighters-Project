@@ -30,7 +30,7 @@ ALLOWED_KEYS = frozenset({
     "context_turn_count",  # 本次请求携带的历史消息条数（数字，不含正文）
     "profile_fields_used", # Task 6 ContextBuilder 起填充；当前为 None
     "kb_chunks_used",      # Task 6 起填充；当前为 None
-    "model_latency_ms",    # ResultAgent 管线耗时
+    "model_latency_ms",    # ChatTaskDispatcher 管线耗时（原 ResultAgent）
     "retry_count",         # Task 8 ResponseSanityCheck 起有意义；当前恒 0
     "sse_terminal_event",  # done / error / None（管线视角的终止事件）
     "error_code",          # Task 3/8 定义错误码后填充；当前为 None

@@ -48,11 +48,12 @@ DECISION_MODULE_OWNERS = {
 # API 层禁止**引用**的路由决策符号（AST 级；docstring 里的文字说明不算引用）。
 API_FORBIDDEN_SYMBOLS = {
     "RouterAgent",
-    "ResultAgent",
+    "ChatTaskDispatcher",     # 原 ResultAgent（P3-B3a 改名）
     "CapabilityGate",
     "ResourceAgentSelector",  # 原 Director（P3-B2 改名）
     "DomainClassifier",       # 原 DomainRouter（P3-B2 改名）
     # 旧名一并保留为「不得复活」护栏
+    "ResultAgent",
     "Director",
     "DomainRouter",
 }
@@ -75,7 +76,7 @@ OWNERSHIP_MODULES = [
 #   （`app/workflows/` → `app/orchestration/`），标注随文件走；迁移由 `RO-D04` 锁定。
 NAMING_MODULES = [
     "app/centers/router_agent.py",
-    "app/centers/result_agent.py",
+    "app/centers/chat_task_dispatcher.py",  # P3-B3a：原 result_agent.py
     "app/centers/auto_center.py",
     "app/services/domain_classifier.py",
     "app/orchestration/resource_selector.py",

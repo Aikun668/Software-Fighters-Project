@@ -102,11 +102,11 @@ class ProfileAgent(BaseAgent):
     def build_graph(self):
         graph = StateGraph(ProfileState)
 
-        graph.add_node("extract", self._extract_node)
+        graph.add_node("extract", self.extract)
         graph.add_node("semantic_judge", self._semantic_judge_node)
-        graph.add_node("merge", self._merge_node)
+        graph.add_node("merge", self.merge)
         graph.add_node("audit", self._audit_node)
-        graph.add_node("response", self._response_node)
+        graph.add_node("response", self.respond)
 
         graph.set_entry_point("extract")
         graph.add_edge("extract", "semantic_judge")
@@ -119,7 +119,8 @@ class ProfileAgent(BaseAgent):
 
     # ── extract ─────────────────────────────────────────────────────
 
-    async def _extract_node(self, state: ProfileState) -> dict:
+    async def extract(self, state: ProfileState) -> dict:
+        """公开节点 API：`ProfileWorkflow` 会复用本节点（P3-B3a 起不再穿透私有名）。"""
         messages = state.get("messages", [])
         current_profile = state.get("current_profile", {})
         last_idx = state.get("last_extracted_msg_index")
@@ -166,7 +167,8 @@ class ProfileAgent(BaseAgent):
 
     # ── merge ────────────────────────────────────────────────────────
 
-    async def _merge_node(self, state: ProfileState) -> dict:
+    async def merge(self, state: ProfileState) -> dict:
+        """公开节点 API：`ProfileWorkflow` 会复用本节点（含 DB 持久化）。"""
         fragment = state.get("extracted_fragment", {})
 
         if not fragment:
@@ -365,7 +367,8 @@ class ProfileAgent(BaseAgent):
 
     # ── response ─────────────────────────────────────────────────────
 
-    async def _response_node(self, state: ProfileState) -> dict:
+    async def respond(self, state: ProfileState) -> dict:
+        """公开节点 API：`ProfileWorkflow` 会复用它生成追问。"""
         messages = state.get("messages", [])
         current_profile = state.get("current_profile", {})
 
@@ -720,7 +723,7 @@ class ProfileAgent(BaseAgent):
             "last_extracted_msg_index": last_idx,
         }
 
-        extract_result = await self._extract_node(state)
+        extract_result = await self.extract(state)
         fragment = extract_result.get("extracted_fragment", {})
         extract_reasoning = extract_result.get("extract_reasoning", "")
         if not fragment:
@@ -740,7 +743,7 @@ class ProfileAgent(BaseAgent):
             "judge_result": judge_result.get("judge_result", {}),
             "last_extracted_msg_index": extract_result.get("last_extracted_msg_index", last_idx),
         }
-        merge_result = await self._merge_node(merge_state)
+        merge_result = await self.merge(merge_state)
 
         profile = merge_result.get("current_profile", current_profile)
         changed = merge_result.get("profile_changed", False)

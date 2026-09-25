@@ -5,7 +5,7 @@
 - HTTP 200 + text/event-stream + 唯一 done
 - token 流顺序保留
 - 结构化产物（无 token）成功
-- ResultAgent 异常 → error + 唯一 done
+- ChatTaskDispatcher 异常 → error + 唯一 done
 - 推荐抽取挂起不阻塞 done
 - inspect.getsource(_unified_chat) 结构断言：API 无业务编排
 """
@@ -38,8 +38,8 @@ def _token_event(chunk: str) -> StreamEvent:
     return StreamEvent(type=StreamEventType.TOKEN, data={"content": chunk})
 
 
-class _StubResultAgent:
-    """预置事件序列或抛错的 ResultAgent 替身。"""
+class _StubChatTaskDispatcher:
+    """预置事件序列或抛错的 ChatTaskDispatcher 替身。"""
 
     def __init__(self, events=None, *, error=None):
         self._events = list(events or [])
@@ -59,8 +59,8 @@ async def _empty_extract(*args, **kwargs):
 
 
 def _make_chat_center(events, *, error=None, extract=None, timeout=None) -> ChatCenter:
-    """真实 ChatCenter + stub ResultAgent + stub extract，走真实 stream_chat。"""
-    center = ChatCenter(result_agent=_StubResultAgent(events, error=error))
+    """真实 ChatCenter + stub ChatTaskDispatcher + stub extract，走真实 stream_chat。"""
+    center = ChatCenter(dispatcher=_StubChatTaskDispatcher(events, error=error))
     center._extract_knowledge_nodes = extract or _empty_extract
     if timeout is not None:
         center._recommendation_timeout_sec = timeout
@@ -186,8 +186,8 @@ class TestChatCenterApiDelegation:
         ]
 
     @pytest.mark.asyncio
-    async def test_result_agent_exception_yields_error_then_single_done(self):
-        """ResultAgent 异常 → error（前端可读 content）+ 唯一 done 收尾。"""
+    async def test_dispatcher_exception_yields_error_then_single_done(self):
+        """ChatTaskDispatcher 异常 → error（前端可读 content）+ 唯一 done 收尾。"""
         center = _make_chat_center(
             events=[_token_event("前半段")],
             error=RuntimeError("Agent 内部爆炸"),
@@ -268,7 +268,8 @@ class TestChatApiStructuralAssertions:
         for forbidden in (
             "extract_knowledge_nodes",
             "RouterAgent",
-            "ResultAgent",
+            "ResultAgent",          # 旧名（P3-B3a 改名），保留为「不得复活」护栏
+            "ChatTaskDispatcher",   # 新名同属业务编排，不得出现在 API 层
             "RECOMMENDATION_EXTRACTION_TIMEOUT_SEC",
             "_done_payload_has_content",
             "assistant_content",

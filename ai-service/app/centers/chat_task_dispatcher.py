@@ -1,10 +1,16 @@
-"""中心结果聚合与跨业务域任务调度。
+"""聊天域任务分发与事件编排（P3-B3a 由 `ResultAgent` 改名而来）。
 
-【命名澄清】名字叫 `ResultAgent`，实际职责是**跨业务域总调度 + SSE 终态编排**
-  （`_execute_task` 分发到 auto / plan / resource / exercise / visualization）：
-  - GUIDE P2 要求其「不再承担跨业务域的默认总调度」，**该项尚未收敛**（P2 遗留，独立轮）
+职责：把 `ExecutionPlan` 里的 `tasks` 逐条派给对应 Center（`_center_for` 映射表），
+并把各 Center 的结果装配成 SSE 事件流 + 终局 `done` 载荷。
+
+【命名澄清】原名 `ResultAgent`（名不副实：它是**调度器**，不是"结果整理 Agent"）。
+  - 作用域：**只服务聊天域** —— 生产代码中唯一引用者是 `ChatCenter`
+    （`app/centers/chat_center.py`），由契约 `ST-D02` 锁定；
+  - GUIDE P2 的「不再承担跨业务域的默认总调度」在**调用拓扑上已达成**；
+  - 仍保留的职责（SSE 事件拼装 / 正文合成 `_ensure_user_visible_response`）是否迁移，
+    见 `P3-B3状态与职责收敛实施方案.md` 的 P3-B3b（**行为变更轮**，未做）；
   - 注：`tests/test_chat_center_api_delegation.py` 锁的是「API 层不得出现本符号」，
-    属**分层断言**，并非对本类名的锁定
+    属**分层断言**，并非对本类名的锁定。
 """
 
 import asyncio
@@ -61,8 +67,12 @@ def _finalize_event(payload: dict) -> StreamEvent:
 logger = logging.getLogger(__name__)
 
 
-class ResultAgent:
+class ChatTaskDispatcher:
     CENTER_DELAY_SECONDS = 0.0
+
+    # 需要逐字 token 回调的 mode（其余 Center 的 execute 不接 on_token）。
+    # 与 `_center_for` 一样，把 mode 字面量集中为**数据**，不散落在 if 比较里。
+    _ON_TOKEN_MODES = frozenset({"auto"})
 
     def __init__(
         self,
@@ -195,27 +205,36 @@ class ResultAgent:
             "results": [self._serialize_result(r) for r in aggregated.results],
         })
 
+    def _center_for(self, mode: str):
+        """`mode` → Center 显式映射表（未知 mode 返回 None）。
+
+        P3-B3a：取代原先的 `if task.mode == ...` if-链 —— 新增业务域只需在此表加一行。
+        """
+        return {
+            "auto": self.auto_center,
+            "plan": self.plan_center,
+            "resource": self.resource_center,
+            "exercise": self.exercise_center,
+            "visualization": self.visualization_center,
+        }.get(mode)
+
     async def _execute_task(self, task: CenterTask, on_token=None) -> CenterResult:
         try:
-            if task.mode == "auto":
-                return await self.auto_center.execute(task, on_token=on_token)
-            if task.mode == "plan":
-                return await self.plan_center.execute(task)
-            if task.mode == "resource":
-                return await self.resource_center.execute(task)
-            if task.mode == "exercise":
-                return await self.exercise_center.execute(task)
-            if task.mode == "visualization":
-                return await self.visualization_center.execute(task)
-            return CenterResult(
-                mode=task.mode,
-                intent=task.intent,
-                event_type="error",
-                error=f"未知 center: {task.mode}",
-                sequence=task.sequence,
-            )
+            center = self._center_for(task.mode)
+            if center is None:
+                return CenterResult(
+                    mode=task.mode,
+                    intent=task.intent,
+                    event_type="error",
+                    error=f"未知 center: {task.mode}",
+                    sequence=task.sequence,
+                )
+            if task.mode in self._ON_TOKEN_MODES:
+                # 只有对话底座需要逐字 token 回调；其余 Center 不收 on_token
+                return await center.execute(task, on_token=on_token)
+            return await center.execute(task)
         except Exception as e:
-            logger.error(f"ResultAgent execute task failed: {e}")
+            logger.error(f"ChatTaskDispatcher execute task failed: {e}")
             return CenterResult(
                 mode=task.mode,
                 intent=task.intent,
@@ -266,7 +285,7 @@ class ResultAgent:
         solution = payload.get("solution")
         if isinstance(solution, str) and solution.strip():
             return {**payload, "response": solution, "content": solution}
-        summary = ResultAgent._summarize_product(result.mode, payload)
+        summary = ChatTaskDispatcher._summarize_product(result.mode, payload)
         if not summary:
             return payload
         return {**payload, "response": summary, "content": summary}

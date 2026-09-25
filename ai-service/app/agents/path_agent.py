@@ -46,15 +46,18 @@ class PathAgent(BaseAgent):
 
     def build_graph(self) -> "CompiledStateGraph":
         graph = StateGraph(PathState)
-        graph.add_node("draft", self._draft_node)
-        graph.add_node("revise", self._revise_node)
+        graph.add_node("draft", self.draft)
+        graph.add_node("revise", self.revise)
         graph.set_entry_point("draft")
         graph.add_edge("draft", "revise")
         graph.set_finish_point("revise")
         return graph.compile()
 
-    async def _draft_node(self, state: PathState) -> dict:
-        """Draft：调用 LLM 设计学习路径"""
+    async def draft(self, state: PathState) -> dict:
+        """公开节点 API：`LearningPathWorkflow` 会复用本节点（P3-B3a 起不再穿透私有名）。
+
+        Draft：调用 LLM 设计学习路径。
+        """
         student_profile = state.get("student_profile", {})
         topic = state.get("topic", "")
 
@@ -130,8 +133,11 @@ class PathAgent(BaseAgent):
             return gs.get_subgraph_for_topic(topic)
         return {"nodes": gs.load_skeleton()["nodes"], "edges": gs.load_skeleton()["edges"]}
 
-    async def _revise_node(self, state: PathState) -> dict:
-        """Revise: LLM 自我审查 + 修正 drafted 路径"""
+    async def revise(self, state: PathState) -> dict:
+        """公开节点 API：`LearningPathWorkflow` 会复用本节点。
+
+        Revise: LLM 自我审查 + 修正 drafted 路径。
+        """
         steps = state.get("steps", [])
         student_profile = state.get("student_profile", {})
         concept_graph = state.get("concept_graph", {})

@@ -40,41 +40,41 @@ class TestChatCenter:
 
     def test_chat_center_constructs(self):
         center = ChatCenter()
-        result = center._get_result()
+        result = center._get_dispatcher()
         assert result is not None
 
 
-class TestResultAgent:
+class TestChatTaskDispatcher:
     @pytest.mark.asyncio
     async def test_inquiry_task_yields_done(self):
-        from app.centers.result_agent import ResultAgent
+        from app.centers.chat_task_dispatcher import ChatTaskDispatcher
 
         plan = ExecutionPlan(
             tasks=[CenterTask(mode="inquiry", intent="inquiry", input="x", params={"question": "test"})],
             is_clear=False,
         )
         events = []
-        async for event in ResultAgent().execute(plan):
+        async for event in ChatTaskDispatcher().execute(plan):
             events.append(event)
         assert any(e.type.value == "inquiry" for e in events)
         assert any(e.type.value == "done" for e in events)
 
     @pytest.mark.asyncio
     async def test_unknown_center_returns_error(self):
-        from app.centers.result_agent import ResultAgent
+        from app.centers.chat_task_dispatcher import ChatTaskDispatcher
 
         plan = ExecutionPlan(
             tasks=[CenterTask(mode="invalid", intent="x", input="x")],
         )
         events = []
-        async for event in ResultAgent().execute(plan):
+        async for event in ChatTaskDispatcher().execute(plan):
             events.append(event)
         done = [e for e in events if e.type.value == "done"][0]
         assert any(r["error"] for r in done.data.get("results", []))
 
     @pytest.mark.asyncio
     async def test_exercise_mode_routes_to_exercise_center(self):
-        from app.centers.result_agent import ResultAgent
+        from app.centers.chat_task_dispatcher import ChatTaskDispatcher
 
         plan = ExecutionPlan(
             tasks=[CenterTask(
@@ -86,7 +86,7 @@ class TestResultAgent:
             )],
         )
         events = []
-        async for event in ResultAgent().execute(plan):
+        async for event in ChatTaskDispatcher().execute(plan):
             events.append(event)
         done = [e for e in events if e.type.value == "done"][0]
         result = done.data["results"][0]
@@ -119,24 +119,24 @@ class TestCapabilityProductResponse:
     否则统一聊天里用户看到空回答（评审 cap-01/05/06 空回答根因）。"""
 
     @pytest.fixture
-    def result_agent(self):
-        from app.centers.result_agent import ResultAgent
-        return ResultAgent()
+    def dispatcher(self):
+        from app.centers.chat_task_dispatcher import ChatTaskDispatcher
+        return ChatTaskDispatcher()
 
     @staticmethod
-    async def _content_payloads(result_agent, mode, payload):
+    async def _content_payloads(dispatcher, mode, payload):
         plan = ExecutionPlan(
             tasks=[CenterTask(mode=mode, intent="x", input="x", params={}, context={})],
         )
         events = []
-        async for event in result_agent.execute(plan):
+        async for event in dispatcher.execute(plan):
             events.append(event)
         return [e.data for e in events if e.type.value == "content" and isinstance(e.data, dict)]
 
     @pytest.mark.asyncio
-    async def test_plan_payload_gains_response_summary(self, result_agent):
+    async def test_plan_payload_gains_response_summary(self, dispatcher):
         from app.centers.plan_center import PlanCenter
-        from app.centers.result_agent import ResultAgent
+        from app.centers.chat_task_dispatcher import ChatTaskDispatcher
         from app.centers.schemas import CenterResult
 
         class FakePlanCenter:
@@ -151,7 +151,7 @@ class TestCapabilityProductResponse:
                     agent="ScheduleAgent", sequence=0,
                 )
 
-        agent = ResultAgent(plan_center=FakePlanCenter())
+        agent = ChatTaskDispatcher(plan_center=FakePlanCenter())
         payloads = await self._content_payloads(agent, "plan", {})
         assert payloads, "plan 中心必须产出 content 事件"
         response = payloads[0].get("response", "")
@@ -160,8 +160,8 @@ class TestCapabilityProductResponse:
         assert "3" in response
 
     @pytest.mark.asyncio
-    async def test_visualization_payload_gains_response_summary(self, result_agent):
-        from app.centers.result_agent import ResultAgent
+    async def test_visualization_payload_gains_response_summary(self, dispatcher):
+        from app.centers.chat_task_dispatcher import ChatTaskDispatcher
         from app.centers.schemas import CenterResult
 
         class FakeVizCenter:
@@ -175,7 +175,7 @@ class TestCapabilityProductResponse:
                     agent="VisualizationCenter", sequence=0,
                 )
 
-        agent = ResultAgent(visualization_center=FakeVizCenter())
+        agent = ChatTaskDispatcher(visualization_center=FakeVizCenter())
         payloads = await self._content_payloads(agent, "visualization", {})
         assert payloads, "visualization 中心必须产出 content 事件"
         response = payloads[0].get("response", "")
@@ -183,8 +183,8 @@ class TestCapabilityProductResponse:
         assert "TCP 三次握手" in response
 
     @pytest.mark.asyncio
-    async def test_existing_response_not_rewritten(self, result_agent):
-        from app.centers.result_agent import ResultAgent
+    async def test_existing_response_not_rewritten(self, dispatcher):
+        from app.centers.chat_task_dispatcher import ChatTaskDispatcher
         from app.centers.schemas import CenterResult
 
         class FakeResourceCenter:
@@ -195,6 +195,6 @@ class TestCapabilityProductResponse:
                     agent="ResourceGenWorkflow", sequence=0,
                 )
 
-        agent = ResultAgent(resource_center=FakeResourceCenter())
+        agent = ChatTaskDispatcher(resource_center=FakeResourceCenter())
         payloads = await self._content_payloads(agent, "resource", {})
         assert payloads[0]["response"] == "已为您生成学习文档，共 7 个内容块。"

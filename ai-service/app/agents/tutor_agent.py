@@ -3,7 +3,7 @@ from typing import TypedDict
 
 from langgraph.graph import StateGraph
 
-from app.agents.base_agent import BaseAgent
+from app.agents.base_agent import BaseAgent, current_on_token
 from app.services.analogy_library import get_analogy_library
 from app.services.domain_classifier import get_domain_classifier
 from app.services.hallucination_guard import HallucinationGuard, kb_verify
@@ -353,9 +353,9 @@ class TutorAgent(BaseAgent):
         # ── SSE token 流（B1）：上层传入 on_token 时，在 chat_stream 推
         # chunk 时同步回调 on_token。**只调一次 chat_stream**，sanity
         # check 复用同一个累积的 response 字符串。
-        # BaseAgent.run 把 _on_token 挂在 self._current_on_token 上
-        # （LangGraph 的 ainvoke 会丢弃 schema 外字段）。
-        on_token = getattr(self, "_current_on_token", None)
+        # P3-B3a：回调来自模块级 ContextVar（按协程隔离），不再挂实例属性
+        # —— 见 `base_agent.current_on_token` 的说明。
+        on_token = current_on_token.get()
 
         async def generate_once(_context):
             response = ""

@@ -1,12 +1,12 @@
 """ChatCenter.stream_chat 契约离线测试。
 
-不调真实 LLM、真实 Center、真实 ResultAgent、真实 extract_knowledge_nodes。
+不调真实 LLM、真实 Center、真实 ChatTaskDispatcher、真实 extract_knowledge_nodes。
 仅验证：
 - 路由分支: NORMAL_CHAT / PLAN / RESOURCE / EXERCISE
 - 流式行为: 唯一 done、多 done 收敛、缺 done 补发、管线异常转 error + done、追问合法
 - 推荐抽取: 一次调用、出现在 done 之前、超时不阻塞 done、异常不污染主回答
 - 唯一性: 一次 stream_chat 只触发一次 extract_knowledge_nodes
-- 取消: consumer 取消时 ResultAgent task 被取消或回收
+- 取消: consumer 取消时 ChatTaskDispatcher task 被取消或回收
 
 **RED 状态说明(截至 Task 1 提交)**:
 - ChatCenter.stream_chat 尚未实现 → 17 个测试因 AttributeError RED
@@ -36,9 +36,9 @@ from app.events.types import (
 
 
 def _token(content) -> StreamEvent:
-    """_StubResultAgent 的 token helper: 接受 dict 直接作 data,或字符串包成 {"content": s}。
+    """_StubChatTaskDispatcher 的 token helper: 接受 dict 直接作 data,或字符串包成 {"content": s}。
 
-    真实 ResultAgent 用 _token_event(chunk: str) → data={"content": chunk}。
+    真实 ChatTaskDispatcher 用 _token_event(chunk: str) → data={"content": chunk}。
     测试 helper 同时接受 `_token("你好")` 和 `_token({"content": "..."})`。
     """
     if isinstance(content, dict):
@@ -51,8 +51,8 @@ def _token(content) -> StreamEvent:
 # ═══════════════════════════════════════════════════════════════
 
 
-class _StubResultAgent:
-    """可编程的 ResultAgent 替身: 预置事件序列或抛错。"""
+class _StubChatTaskDispatcher:
+    """可编程的 ChatTaskDispatcher 替身: 预置事件序列或抛错。"""
 
     def __init__(self, events=None, *, error=None, execute_calls=None):
         self._events = list(events or [])
@@ -94,25 +94,25 @@ async def _stub_extract(*args, **kwargs):
 
 def _make_center(
     *,
-    result_agent=None,
+    dispatcher=None,
     extract_knowledge_nodes=None,
     recommendation_timeout_sec=None,
 ) -> ChatCenter:
-    """构造 ChatCenter + 注入 stub ResultAgent + 注入 fake extract 函数。
+    """构造 ChatCenter + 注入 stub ChatTaskDispatcher + 注入 fake extract 函数。
 
     Test 1 (RED) 时 ChatCenter.stream_chat 尚未实现 → 全部 AttributeError。
-    Task 2 (GREEN) 后默认注入 stub result_agent + stub extract,避免真实 LLM 调用。
+    Task 2 (GREEN) 后默认注入 stub dispatcher + stub extract,避免真实 LLM 调用。
     """
     center = ChatCenter()
-    if result_agent is None:
+    if dispatcher is None:
         # 默认 stub:一个 token + 一个 done,让 stream_chat 能立即收敛。
-        result_agent = _StubResultAgent(
+        dispatcher = _StubChatTaskDispatcher(
             events=[
                 _token({"content": "stub"}),
                 done_event({"summary": "stub"}),
             ]
         )
-    center.result_agent = result_agent
+    center.dispatcher = dispatcher
     # stream_chat 必须能从中心提取 extract 函数;测试通过构造时直接 monkey patch
     center._extract_knowledge_nodes = extract_knowledge_nodes or _stub_extract
     if recommendation_timeout_sec is not None:
@@ -197,7 +197,7 @@ class TestChatCenterStreamChatContract:
     """ChatCenter.stream_chat 流式终态契约。
 
     验证:
-    - 一次 stream_chat 仅调用一次 ResultAgent.execute
+    - 一次 stream_chat 仅调用一次 ChatTaskDispatcher.execute
     - 成功路径恰好一个 done
     - 内部多个 done 被收敛为一个
     - 内部缺少 done 时补发一个 done
@@ -206,27 +206,27 @@ class TestChatCenterStreamChatContract:
     """
 
     @pytest.mark.asyncio
-    async def test_stream_chat_calls_result_agent_execute_once(self):
-        """一次 stream_chat 仅调一次 ResultAgent.execute(plan)。"""
-        ra = _StubResultAgent(events=[
+    async def test_stream_chat_calls_dispatcher_execute_once(self):
+        """一次 stream_chat 仅调一次 ChatTaskDispatcher.execute(plan)。"""
+        stub = _StubChatTaskDispatcher(events=[
             _token("你好"),
             done_event({"summary": "ok"}),
         ])
-        center = _make_center(result_agent=ra)
+        center = _make_center(dispatcher=stub)
         await _consume(center.stream_chat(
             message="hi", history=[], mode="auto",
             student_profile={}, user_id=1,
         ))
-        assert len(ra.execute_calls) == 1
+        assert len(stub.execute_calls) == 1
 
     @pytest.mark.asyncio
     async def test_success_yields_exactly_one_done(self):
         """成功路径: 内部已发 done → 唯一 done 出现一次。"""
-        ra = _StubResultAgent(events=[
+        stub = _StubChatTaskDispatcher(events=[
             _token({"content": "x"}),
             done_event({"summary": "ok"}),
         ])
-        center = _make_center(result_agent=ra)
+        center = _make_center(dispatcher=stub)
         events = await _consume(center.stream_chat(
             message="hi", history=[], mode="auto",
             student_profile={}, user_id=1,
@@ -238,12 +238,12 @@ class TestChatCenterStreamChatContract:
     @pytest.mark.asyncio
     async def test_multiple_internal_dones_collapsed_to_one(self):
         """内部多 done 被收敛为一个。"""
-        ra = _StubResultAgent(events=[
+        stub = _StubChatTaskDispatcher(events=[
             _token({"content": "1"}),
             done_event({"summary": "a"}),
             done_event({"summary": "b"}),
         ])
-        center = _make_center(result_agent=ra)
+        center = _make_center(dispatcher=stub)
         events = await _consume(center.stream_chat(
             message="hi", history=[], mode="auto",
             student_profile={}, user_id=1,
@@ -254,10 +254,10 @@ class TestChatCenterStreamChatContract:
     @pytest.mark.asyncio
     async def test_missing_done_synthesized_exactly_once(self):
         """内部不发 done → 边界补发恰好一个 done。"""
-        ra = _StubResultAgent(events=[
+        stub = _StubChatTaskDispatcher(events=[
             _token({"content": "only content"}),
         ])
-        center = _make_center(result_agent=ra)
+        center = _make_center(dispatcher=stub)
         events = await _consume(center.stream_chat(
             message="hi", history=[], mode="auto",
             student_profile={}, user_id=1,
@@ -268,12 +268,12 @@ class TestChatCenterStreamChatContract:
 
     @pytest.mark.asyncio
     async def test_pipeline_exception_yields_error_then_done(self):
-        """ResultAgent 抛错 → stream_chat 仍 yield error + 唯一 done。"""
-        ra = _StubResultAgent(
+        """ChatTaskDispatcher 抛错 → stream_chat 仍 yield error + 唯一 done。"""
+        stub = _StubChatTaskDispatcher(
             events=[_token({"content": "前半段"})],
             error=RuntimeError("boom"),
         )
-        center = _make_center(result_agent=ra)
+        center = _make_center(dispatcher=stub)
         events = await _consume(center.stream_chat(
             message="hi", history=[], mode="auto",
             student_profile={}, user_id=1,
@@ -286,11 +286,11 @@ class TestChatCenterStreamChatContract:
     @pytest.mark.asyncio
     async def test_inquiry_event_not_misjudged_as_empty(self):
         """追问事件合法,不得被终态合同补 error。"""
-        ra = _StubResultAgent(events=[
+        stub = _StubChatTaskDispatcher(events=[
             inquiry_event("你想了解什么？"),
             done_event({"type": "inquiry", "is_clear": False}),
         ])
-        center = _make_center(result_agent=ra)
+        center = _make_center(dispatcher=stub)
         events = await _consume(center.stream_chat(
             message="", history=[], mode="auto",
             student_profile={}, user_id=1,
@@ -320,7 +320,7 @@ class TestChatCenterStreamChatRecommendation:
     @pytest.mark.asyncio
     async def test_extract_knowledge_called_exactly_once(self):
         """一次 stream_chat 仅调一次 extract_knowledge_nodes。"""
-        ra = _StubResultAgent(events=[
+        stub = _StubChatTaskDispatcher(events=[
             _token({"content": "反向传播"}),
             done_event({"summary": "ok"}),
         ])
@@ -329,7 +329,7 @@ class TestChatCenterStreamChatRecommendation:
             "related": [],
             "broad": [],
         })
-        center = _make_center(result_agent=ra, extract_knowledge_nodes=extract_mock)
+        center = _make_center(dispatcher=stub, extract_knowledge_nodes=extract_mock)
         await _consume(center.stream_chat(
             message="hi", history=[], mode="auto",
             student_profile={}, user_id=1,
@@ -339,7 +339,7 @@ class TestChatCenterStreamChatRecommendation:
     @pytest.mark.asyncio
     async def test_recommendation_before_done_on_success(self):
         """抽取成功: recommendation_event 出现在 done 之前。"""
-        ra = _StubResultAgent(events=[
+        stub = _StubChatTaskDispatcher(events=[
             _token({"content": "反向传播"}),
             done_event({"summary": "ok"}),
         ])
@@ -348,7 +348,7 @@ class TestChatCenterStreamChatRecommendation:
             "related": [{"id": "node-2", "name": "梯度下降"}],
             "broad": [],
         })
-        center = _make_center(result_agent=ra, extract_knowledge_nodes=extract_mock)
+        center = _make_center(dispatcher=stub, extract_knowledge_nodes=extract_mock)
         events = await _consume(center.stream_chat(
             message="讲讲反向传播", history=[], mode="auto",
             student_profile={}, user_id=1,
@@ -369,12 +369,12 @@ class TestChatCenterStreamChatRecommendation:
         async def _hanging_extract(*args, **kwargs):
             await asyncio.Event().wait()
 
-        ra = _StubResultAgent(events=[
+        stub = _StubChatTaskDispatcher(events=[
             _token({"content": "回答"}),
             done_event({"summary": "ok"}),
         ])
         center = _make_center(
-            result_agent=ra,
+            dispatcher=stub,
             extract_knowledge_nodes=_hanging_extract,
             recommendation_timeout_sec=0.5,
         )
@@ -397,12 +397,12 @@ class TestChatCenterStreamChatRecommendation:
         async def _boom_extract(*args, **kwargs):
             raise RuntimeError("LLM boom")
 
-        ra = _StubResultAgent(events=[
+        stub = _StubChatTaskDispatcher(events=[
             _token({"content": "你好"}),
             done_event({"summary": "ok"}),
         ])
         center = _make_center(
-            result_agent=ra,
+            dispatcher=stub,
             extract_knowledge_nodes=_boom_extract,
         )
         events = await _consume(center.stream_chat(
@@ -421,13 +421,13 @@ class TestChatCenterStreamChatRecommendation:
 
 
 class TestChatCenterStreamChatCancellation:
-    """consumer 取消时 ResultAgent task 兜底回收契约。"""
+    """consumer 取消时 ChatTaskDispatcher task 兜底回收契约。"""
 
     @pytest.mark.asyncio
     async def test_consumer_cancel_does_not_leave_orphan_task(self):
         """consumer 提前断开 → stream_chat 内部 task 被取消,不留挂起任务。"""
 
-        class _HangingResultAgent:
+        class _HangingChatTaskDispatcher:
             def __init__(self):
                 self.execute_calls: list[ExecutionPlan] = []
 
@@ -438,8 +438,8 @@ class TestChatCenterStreamChatCancellation:
                 # 永不结束
                 await asyncio.Event().wait()
 
-        ra = _HangingResultAgent()
-        center = _make_center(result_agent=ra)
+        stub = _HangingChatTaskDispatcher()
+        center = _make_center(dispatcher=stub)
 
         gen = center.stream_chat(
             message="hi", history=[], mode="auto",

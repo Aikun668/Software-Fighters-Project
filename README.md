@@ -333,8 +333,9 @@ curl -X POST http://127.0.0.1:8001/internal/knowledge-graph/ai_course \
 | **P3-A 路由与命名约定** | 三类决策/命名/状态范围立约定 + 9 模块澄清标注 + 19 例「决策所有权」契约测试（零行为变化，55 条字节存证一致） | ✅ | `P3-A-路由与命名约定-2026-09-24.md` |
 | **P3-B1 结构收敛** | 删 `RouterAgent` 死代码 + 画像图节点改名 `completeness_check` + `ResourceWhiteboard` 移出 `workflows/`（结构变、字节不变，55 条存证一致） | ✅ | `P3-B1-结构收敛-2026-09-24.md` |
 | **P3-B2 重命名** | `Director`→`ResourceAgentSelector`、`DomainRouter`→`DomainClassifier`（含模块文件与实例属性；结构变、字节不变，55 条存证一致） | ✅ | `P3-B2-重命名-2026-09-24.md` |
+| **P3-B3a 状态范围收敛** | 逐请求回调改 `contextvars`（**修掉已复现的并发 token 串流**）+ 节点复用改公开 API + 分发映射表化 + `ResultAgent`→`ChatTaskDispatcher`（零行为变化，55 条存证一致） | ✅ | `P3-B3a-状态范围收敛-2026-09-24.md` |
 
-**下一步**：P3-B3（状态范围收敛 + `ResultAgent` 跨域收敛，**行为变更轮**）→ 模型参数清洗 / `sse_sanitize` 接线 → 「2、后续流式事件化」。
+**下一步**：P3-B3b（合并双层图 / 迁移 SSE 职责 —— **需先确认 `ProfileAgent` 的节点集**）→ 模型参数清洗 / `sse_sanitize` 接线 → 「2、后续流式事件化」。
 
 ---
 

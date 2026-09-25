@@ -55,8 +55,8 @@ async def sse_client():
         yield client
 
 
-class _StubResultAgent:
-    """预置事件序列或抛错的 ResultAgent 替身。"""
+class _StubChatTaskDispatcher:
+    """预置事件序列或抛错的 ChatTaskDispatcher 替身。"""
 
     def __init__(self, events=None, *, error=None):
         self._events = list(events or [])
@@ -75,7 +75,7 @@ class FakeChatCenter:
     """可编程的 ChatCenter 替身：预置事件序列或异常。
 
     Task 3 后 _unified_chat 委派 ChatCenter.stream_chat()；替身把 stream_chat
-    委托给真实 ChatCenter（stub ResultAgent + stub extract 注入），因此
+    委托给真实 ChatCenter（stub ChatTaskDispatcher + stub extract 注入），因此
     多 done 收敛 / 缺 done 兜底 / 错误补发等终态行为由真实实现承担，
     本文件只验证 API 边界（委派 + SSE 序列化 + 心跳包装）公开语义不变。
     """
@@ -87,7 +87,7 @@ class FakeChatCenter:
         self._error = error
         self.route_calls: list[dict] = []
 
-        real = ChatCenter(result_agent=_StubResultAgent(events, error=error))
+        real = ChatCenter(dispatcher=_StubChatTaskDispatcher(events, error=error))
         real._extract_knowledge_nodes = AsyncMock(return_value={"primary": []})
         real.route_calls = self.route_calls
 

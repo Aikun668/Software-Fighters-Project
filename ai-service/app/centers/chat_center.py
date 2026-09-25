@@ -15,7 +15,7 @@ from app.centers.auto_center import AutoCenter
 from app.centers.exercise_center import ExerciseCenter
 from app.centers.plan_center import PlanCenter
 from app.centers.resource_center import ResourceCenter
-from app.centers.result_agent import ResultAgent
+from app.centers.chat_task_dispatcher import ChatTaskDispatcher
 from app.centers.router_agent import RouterAgent
 from app.centers.schemas import CenterTask, ExecutionPlan
 from app.centers.visualization_center import VisualizationCenter
@@ -41,7 +41,7 @@ from app.services.llm_service import (
 
 logger = logging.getLogger(__name__)
 
-# CapabilityKind → ResultAgent 编排中心（Task 11 评审回归项：
+# CapabilityKind → ChatTaskDispatcher 编排中心（Task 11 评审回归项：
 # gate 判定了能力，二级路由就必须进入对应中心，不得回落 tutor）
 _KIND_TO_CENTER = {
     "PLAN": "plan",
@@ -60,11 +60,11 @@ class ChatCenter:
     def __init__(
         self,
         router_agent: RouterAgent | None = None,
-        result_agent: ResultAgent | None = None,
+        dispatcher: ChatTaskDispatcher | None = None,
         capability_gate: CapabilityGate | None = None,
     ):
         self.router_agent = router_agent
-        self.result_agent = result_agent
+        self.dispatcher = dispatcher
         self.capability_gate = capability_gate
 
     def _get_router(self) -> RouterAgent:
@@ -77,8 +77,8 @@ class ChatCenter:
             self.capability_gate = CapabilityGate()
         return self.capability_gate
 
-    def _get_result(self) -> ResultAgent:
-        if self.result_agent is None:
+    def _get_dispatcher(self) -> ChatTaskDispatcher:
+        if self.dispatcher is None:
             decompose = DecomposeAgent()
             goal = GoalAgent()
             schedule = ScheduleAgent()
@@ -88,7 +88,7 @@ class ChatCenter:
             exercise = ExerciseAgent(model_profile=PROFILE_EXERCISE)
             content = ContentAgent()
 
-            self.result_agent = ResultAgent(
+            self.dispatcher = ChatTaskDispatcher(
                 auto_center=AutoCenter(
                     diagnose_agent=diagnose,
                     profile_agent=profile,
@@ -107,7 +107,7 @@ class ChatCenter:
                 ),
                 visualization_center=VisualizationCenter(),
             )
-        return self.result_agent
+        return self.dispatcher
 
     @staticmethod
     def _audit_context(message: str, context: dict | None) -> dict:
@@ -147,7 +147,7 @@ class ChatCenter:
             )
 
         # 一级判定：CapabilityGate。默认 NORMAL_CHAT 直达 TutorAgent，
-        # 只有明确能力请求才进入 RouterAgent → ExecutionPlan → ResultAgent。
+        # 只有明确能力请求才进入 RouterAgent → ExecutionPlan → ChatTaskDispatcher。
         decision = self._get_gate().decide(
             message=message,
             mode=mode,
@@ -212,7 +212,7 @@ class ChatCenter:
     async def execute(self, plan: ExecutionPlan):
         meta = plan.intent_meta or {}
         audit_route = meta.get("route")
-        result = self._get_result()
+        result = self._get_dispatcher()
 
         started = time.perf_counter()
         terminal: str | None = None
@@ -286,13 +286,13 @@ class ChatCenter:
 
         责任：
         1. route() → ExecutionPlan
-        2. ResultAgent.execute(plan) → 业务事件流（含内部 done）
+        2. ChatTaskDispatcher.execute(plan) → 业务事件流（含内部 done）
         3. 收集 assistant_content（token / content / partial payload）
         4. 在最终 done 前调一次 extract_knowledge_nodes（超时预算内）
            ├─ primary[0] → recommendation_event
            └─ primary/related/broad → knowledge_candidates_event
         5. 多 done 收敛为唯一 done（失败补 error,缺 done 补 done）
-        6. 消费端取消时取消 ResultAgent 任务并回收
+        6. 消费端取消时取消 ChatTaskDispatcher 任务并回收
         """
         messages = list(history or []) + [{"role": "user", "content": message}]
         context = {
@@ -308,7 +308,7 @@ class ChatCenter:
             context=context,
         )
 
-        result = self._get_result()
+        result = self._get_dispatcher()
         extract_fn = getattr(self, "_extract_knowledge_nodes", None)
         if extract_fn is None:
             from app.services.knowledge_extraction import (

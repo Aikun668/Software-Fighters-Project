@@ -15,12 +15,17 @@ BaseAgent -- 所有智能体的基类
 
 import logging
 from abc import ABC, abstractmethod
+from contextvars import ContextVar
 from typing import Any, AsyncGenerator
 
 from app.services.llm_service import create_llm, AgentModelProfile, ModelConfig
 from app.utils.prompt_loader import build_prompt
 from app.orchestration.agent_turn_summary import AgentTurnSummary
 from app.utils.security_logger import SecurityLogger
+
+# 逐请求回调（SSE token 流）：按**协程**隔离，并发请求不会互相覆盖。
+# 见 `三类决策与命名约定.md` §5「状态范围约定」——逐请求状态不得挂在 Agent 实例上。
+current_on_token: ContextVar = ContextVar("current_on_token", default=None)
 
 SAFETY_SYSTEM_PROMPT = """你是面向高等教育的AI学习助手，运行在人工智能课程教学平台中。
 
@@ -121,22 +126,21 @@ class BaseAgent(ABC):
     async def run(self, input_state: dict) -> dict:
         """执行智能体工作流（使用缓存的 compiled graph）
 
-        B1-2：input_state 里的 ``_on_token`` 会被提取到 agent 实例上，
-        供 LangGraph 节点在执行期间回调（如 SSE token 流）。LangGraph
-        的 ainvoke 会丢弃 schema 之外的字段，必须用实例属性中转。
+        P3-B3a：``input_state`` 里的 ``_on_token`` 写入**模块级 ContextVar**
+        ``current_on_token``，供 LangGraph 节点在本次请求内回调（如 SSE token 流）。
+
+        - 为什么不放进 state：LangGraph 的 ``ainvoke`` 会丢弃 schema 之外的字段；
+        - 为什么不放实例属性：Agent 存在**长生命周期单例**装配路径
+          （`internal_api._get_tutor_agent` / `_get_tutor_center`），
+          并发请求会互相覆盖逐请求回调 → token 串流到错误的请求。
+          ContextVar 按协程隔离，嵌套调用也由 set/reset 配对保证。
         """
         on_token = input_state.pop("_on_token", None)
-        prev_on_token = getattr(self, "_current_on_token", None)
-        if on_token is not None:
-            self._current_on_token = on_token
+        token = current_on_token.set(on_token)
         try:
             result = await self._compiled_graph.ainvoke(input_state)
         finally:
-            if on_token is not None:
-                if prev_on_token is None:
-                    delattr(self, "_current_on_token")
-                else:
-                    self._current_on_token = prev_on_token
+            current_on_token.reset(token)
         return self._postprocess_output(result, input_state)
 
     def _postprocess_output(self, output: dict, input_state: dict) -> dict:

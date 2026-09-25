@@ -33,7 +33,7 @@ from evals.run_stability_regress import (  # noqa: E402
 from app.agents.tutor_agent import TutorAgent  # noqa: E402
 from app.centers.auto_center import AutoCenter  # noqa: E402
 from app.centers.chat_center import ChatCenter  # noqa: E402
-from app.centers.result_agent import ResultAgent  # noqa: E402
+from app.centers.chat_task_dispatcher import ChatTaskDispatcher  # noqa: E402
 from app.events.types import StreamEventType  # noqa: E402
 from app.services.capability_gate import CapabilityGate  # noqa: E402
 from app.services.context_builder import ContextBuilder  # noqa: E402
@@ -189,7 +189,7 @@ class _StubViz:
 
 
 def _error_terminal_chat_center() -> ChatCenter:
-    return ChatCenter(result_agent=ResultAgent(
+    return ChatCenter(dispatcher=ChatTaskDispatcher(
         auto_center=AutoCenter(tutor_agent=_RaisingTutor(), visualize_pipeline=_StubViz()),
     ))
 
@@ -229,7 +229,7 @@ class _EmptyKB:
 
 
 def _mock_tutor_chat_center() -> ChatCenter:
-    return ChatCenter(result_agent=ResultAgent(
+    return ChatCenter(dispatcher=ChatTaskDispatcher(
         auto_center=AutoCenter(tutor_agent=TutorAgent(use_mock_llm=True),
                                visualize_pipeline=_StubViz()),
     ))

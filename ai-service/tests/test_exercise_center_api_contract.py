@@ -672,8 +672,8 @@ class TestCenterStructuralContract:
         assert inspect.isasyncgenfunction(ExerciseCenter.generate_stream)
         assert inspect.isasyncgenfunction(ExerciseCenter.solve_stream)
 
-    def test_execute_stays_available_for_result_agent(self):
-        """execute(CenterTask) 保留给聊天侧 ResultAgent，行为不变。"""
+    def test_execute_stays_available_for_chat_task_dispatcher(self):
+        """execute(CenterTask) 保留给聊天侧 ChatTaskDispatcher，行为不变。"""
         assert inspect.iscoroutinefunction(ExerciseCenter.execute)
 
     @pytest.mark.parametrize("name", [

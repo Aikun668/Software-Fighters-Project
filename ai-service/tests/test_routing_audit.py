@@ -23,8 +23,8 @@ _HISTORY_ASSISTANT_SENTINEL = "历史正文-助手回复DEF"
 _ANSWER_SENTINEL = "回答正文-不应进日志"
 
 
-class _FakeResultAgent:
-    """替代 ResultAgent：按脚本吐事件，保持 execute 路径离线可测。"""
+class _FakeChatTaskDispatcher:
+    """替代 ChatTaskDispatcher：按脚本吐事件，保持 execute 路径离线可测。"""
 
     def __init__(self, events=None, raise_exc=None):
         self._events = events or [content_event({"content": _ANSWER_SENTINEL}), done_event({"results": []})]
@@ -41,7 +41,7 @@ class _FakeResultAgent:
 def chat_center():
     return ChatCenter(
         router_agent=RouterAgent(intent_extractor=IntentExtractor(use_mock=True)),
-        result_agent=_FakeResultAgent(),
+        dispatcher=_FakeChatTaskDispatcher(),
     )
 
 
@@ -133,7 +133,7 @@ class TestRoutingAuditLog:
         caplog.set_level("INFO", logger=AUDIT_LOGGER)
         cc = ChatCenter(
             router_agent=RouterAgent(intent_extractor=IntentExtractor(use_mock=True)),
-            result_agent=_FakeResultAgent(raise_exc=RuntimeError("boom")),
+            dispatcher=_FakeChatTaskDispatcher(raise_exc=RuntimeError("boom")),
         )
         plan = await cc.route("什么是进程？", mode="auto", context={})
         with pytest.raises(RuntimeError):

@@ -78,12 +78,12 @@ class ProfileWorkflow(BaseWorkflow):
 
     async def _extract_node(self, state: ProfileWorkflowState) -> dict:
         """委托 ProfileAgent 的 extract 节点"""
-        result = await self.profile_agent._extract_node(state)
+        result = await self.profile_agent.extract(state)
         return result
 
     async def _merge_node(self, state: ProfileWorkflowState) -> dict:
         """委托 ProfileAgent 的 merge 节点（含 DB 持久化）"""
-        result = await self.profile_agent._merge_node(state)
+        result = await self.profile_agent.merge(state)
         return result
 
     async def _completeness_check_node(self, state: ProfileWorkflowState) -> dict:
@@ -102,7 +102,7 @@ class ProfileWorkflow(BaseWorkflow):
 
     async def _response_node(self, state: ProfileWorkflowState) -> dict:
         """委托 ProfileAgent 的 response 节点生成追问"""
-        result = await self.profile_agent._response_node(state)
+        result = await self.profile_agent.respond(state)
         return result
 
     async def _complete_node(self, state: ProfileWorkflowState) -> dict:

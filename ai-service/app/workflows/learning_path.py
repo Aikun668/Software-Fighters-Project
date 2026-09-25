@@ -67,7 +67,7 @@ class LearningPathWorkflow(BaseWorkflow):
             "student_profile": student_profile,
             "topic": topic,
         }
-        result = await self.path_agent._draft_node(path_state)
+        result = await self.path_agent.draft(path_state)
 
         logger.info(f"Path draft generated: {len(result.get('steps', []))} steps")
         return result
@@ -85,7 +85,7 @@ class LearningPathWorkflow(BaseWorkflow):
             "concept_graph": concept_graph,
             "topic": topic,
         }
-        result = await self.path_agent._revise_node(path_state)
+        result = await self.path_agent.revise(path_state)
 
         logger.info(f"Path revised: {len(result.get('steps', []))} steps (v{result.get('version', 2)})")
         return result
