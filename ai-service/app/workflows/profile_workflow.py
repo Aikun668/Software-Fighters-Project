@@ -1,14 +1,29 @@
 """
-ProfileWorkflow — 画像构建编排工作流
+ProfileWorkflow — 画像构建编排工作流（**单层图**，P3-B3b 合并）
 
-借鉴 OpenMAIC 的图循环（START → extract → merge → completeness_check → response/complete）：
-  extract:             LLM 从对话中抽取画像片段
-  merge:               纯逻辑增量合并 + DB 持久化
+结构（合并后）：
+  pipeline:            **委托 `ProfileAgent.run()`** —— 唯一画像管线
+                       （extract → semantic_judge → merge → audit → respond）
   completeness_check:  纯逻辑判断——6 维度中 ≥4 个有值判定「完整」
                        完整 → complete（触发下游通知）
-                       不完整 → response（生成追问，等待下一轮用户输入）
+                       不完整 → 结束（`respond` 已在 pipeline 内产出追问）
 
-completeness_check 节点是纯逻辑，不调用 LLM。
+**为什么合并（P3-B3b）**：合并前是两层图 —— 外层 5 节点（extract/merge/
+completeness_check/response/complete）逐节点转发内层同名节点，**内层的
+`semantic_judge`（语义去重）与 `audit`（画像审计）在生产路径从未执行**：
+设计好的画像质量能力被静默跳过。合并后只有一层，管线即 `ProfileAgent` 的图。
+
+**行为变更（本轮已验收）**：
+
+| 变化 | 说明 |
+|---|---|
+| `semantic_judge` 开始执行 | merge 前用 Flash 模型做语义去重；embedding 预筛 `DEDUP_PREFILTER=0.45`，**无候选不调 LLM**；异常回退 embedding |
+| `audit` 开始执行 | 每 `AUDIT_MSG_INTERVAL=20` 条抽取消息一次；无 weak_points/interest 条目时直接返回 |
+| `respond` 由「仅不完整分支」变为「管线末节点」 | 完整分支下其输出会被 `complete` 的固定文案覆盖，**用户可见输出不变**，代价是完成那一轮多一次 LLM 调用 |
+| `_postprocess_output` 安全扫描 | 走 `BaseAgent.run` 后，画像路径也过一遍出站安全检查（防御纵深） |
+
+**回退**：把 `_build_graph` 的 `pipeline` 节点换回原 5 节点转发版即可（原实现见
+`验收记录/P3-B3b-单层化-2026-09-25.md` §回退）。
 
 【命名澄清】本工作流的 `completeness_check` **图节点**（`_completeness_check_node`）
   是纯算术完整度判断（6 维中 ≥4 个有值 → 完整）。
@@ -52,39 +67,35 @@ class ProfileWorkflow(BaseWorkflow):
     def _build_graph(self):
         graph = StateGraph(ProfileWorkflowState)
 
-        graph.add_node("extract", self._extract_node)
-        graph.add_node("merge", self._merge_node)
+        graph.add_node("pipeline", self._pipeline_node)
         graph.add_node("completeness_check", self._completeness_check_node)
-        graph.add_node("response", self._response_node)
         graph.add_node("complete", self._complete_node)
 
-        graph.set_entry_point("extract")
-        graph.add_edge("extract", "merge")
-        graph.add_edge("merge", "completeness_check")
+        graph.set_entry_point("pipeline")
+        graph.add_edge("pipeline", "completeness_check")
 
+        # 路由字符串保持 `response` / `complete`（`_route_after_completeness_check`
+        # 的既有语义与测试不变）；`response` 已在 pipeline 内产出，故映射到图终点。
         graph.add_conditional_edges(
             "completeness_check",
             self._route_after_completeness_check,
             {
-                "response": "response",
+                "response": END,
                 "complete": "complete",
             },
         )
 
-        graph.add_edge("response", END)
         graph.add_edge("complete", END)
 
         return graph.compile()
 
-    async def _extract_node(self, state: ProfileWorkflowState) -> dict:
-        """委托 ProfileAgent 的 extract 节点"""
-        result = await self.profile_agent.extract(state)
-        return result
+    async def _pipeline_node(self, state: ProfileWorkflowState) -> dict:
+        """委托 `ProfileAgent.run()` —— 单层化的唯一入口。
 
-    async def _merge_node(self, state: ProfileWorkflowState) -> dict:
-        """委托 ProfileAgent 的 merge 节点（含 DB 持久化）"""
-        result = await self.profile_agent.merge(state)
-        return result
+        走 `run()` 而非逐节点转发，是为了让 `semantic_judge` / `audit`
+        真正进入生产路径（合并前它们被外层图绕过，从未执行）。
+        """
+        return await self.profile_agent.run(state)
 
     async def _completeness_check_node(self, state: ProfileWorkflowState) -> dict:
         """纯逻辑：检查画像完整度（纯算术判定，不调用 LLM）"""
@@ -99,11 +110,6 @@ class ProfileWorkflow(BaseWorkflow):
             "filled_dimensions": status["filled_dimensions"],
             "profile_complete": status["complete"],
         }
-
-    async def _response_node(self, state: ProfileWorkflowState) -> dict:
-        """委托 ProfileAgent 的 response 节点生成追问"""
-        result = await self.profile_agent.respond(state)
-        return result
 
     async def _complete_node(self, state: ProfileWorkflowState) -> dict:
         """画像完整时：生成总结回复 + 触发下游通知"""

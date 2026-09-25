@@ -335,10 +335,11 @@ curl -X POST http://127.0.0.1:8001/internal/knowledge-graph/ai_course \
 | **P3-B2 重命名** | `Director`→`ResourceAgentSelector`、`DomainRouter`→`DomainClassifier`（含模块文件与实例属性；结构变、字节不变，55 条存证一致） | ✅ | `P3-B2-重命名-2026-09-24.md` |
 | **P3-B3a 状态范围收敛** | 逐请求回调改 `contextvars`（**修掉已复现的并发 token 串流**）+ 节点复用改公开 API + 分发映射表化 + `ResultAgent`→`ChatTaskDispatcher`（零行为变化，55 条存证一致） | ✅ | `P3-B3a-状态范围收敛-2026-09-24.md` |
 | **P3-C SSE 伪造帧防护 + 遗留清零** | 补注入契约测试（真实 ASGI 注入伪造 done 帧）→ 证明威胁已由「帧载荷强制 JSON 编码」中和；**`sse_sanitize` 经证据否决接线**；分支遗留 **10/14 终结**：`MM-A09` SVG 绕过**已修**、导出路径包含性**已加固**、计划域基准**日期归一化**、**16 例陈旧/环境依赖红灯清零**（含 `test_sse_heartbeat` 按「包装器即流边界」重写） | ✅ | `SSE伪造帧防护与sse_sanitize接线决策-2026-09-25.md` |
+| **P3-B3b 画像单层化** | 双层 LangGraph → 单层：外层 3 节点，`pipeline` 委托 `ProfileAgent.run()`；被静默跳过的 `semantic_judge`（语义去重）/ `audit`（画像审计）**已激活**（**行为变更轮**，含一行回退方案） | ✅ | `P3-B3b-画像单层化-2026-09-25.md` |
 
-**全量测试**：`1588 passed / 15 skipped / 0 failed`（此前 16 例红灯已全部终结）
+**全量测试**：`1595 passed / 15 skipped / 0 failed`
 
-**下一步**：P3-B3b（合并双层图 —— **需先确认 `ProfileAgent` 的 `semantic_judge` / `audit` 是否执行**）→ 模型参数清洗（GUIDE P2 step 3）→ 「2、后续流式事件化」。
+**下一步**：模型参数清洗（GUIDE P2 step 3）→ 「2、后续流式事件化」（L2 → L3 统一事件，整阶段未开始）。
 
 ---
 
