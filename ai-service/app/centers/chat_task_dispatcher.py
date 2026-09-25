@@ -34,6 +34,7 @@ from app.centers.schemas import (
 )
 from app.agents.base_agent import current_emitter
 from app.centers.visualization_center import VisualizationCenter
+from app.events.graph_stream import graph_stream_enabled
 from app.events.stream import MessageDeltaCollector, ProgressEventType, StreamEmitter
 from app.events.types import (
     StreamEvent,
@@ -160,9 +161,12 @@ class ChatTaskDispatcher:
                 await run_emitter.on_token(chunk)
                 await token_queue.put(chunk)
 
-            # 阶段 C 试点：把本 run 的事件源注入协程上下文（create_task 会复制上下文），
+            # 阶段 C：把本 run 的事件源注入协程上下文（create_task 会复制上下文），
             # 于是 Agent 内部的 LangGraph 节点事件也会汇入同一条事件流。
-            emitter_ctx_token = current_emitter.set(run_emitter)
+            # `AI_SERVICE_GRAPH_STREAM=0` 时注入 None → Agent 退回 `ainvoke` 纯路径。
+            emitter_ctx_token = current_emitter.set(
+                run_emitter if graph_stream_enabled() else None,
+            )
             result_task = asyncio.create_task(
                 self._execute_task(task, on_token=_on_token)
             )

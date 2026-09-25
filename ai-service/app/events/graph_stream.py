@@ -21,14 +21,38 @@
 from __future__ import annotations
 
 import logging
+import os
+from contextvars import ContextVar
 from typing import Any
 
 from app.events.stream import ProgressEventType, StreamEmitter
 
 logger = logging.getLogger(__name__)
 
+#: 标记「当前协程里已有一条图流在跑」——用于保证**只有最外层开流**。
+#:
+#: 为什么必须这样：内层（Workflow 节点里 `await agent.run()`）如果也开 `astream`，
+#: 它拿到的 chunk 会被父级的 namespace 前缀污染，导致取不到自己的顶层 `values`
+#: 快照（实测：会走到回退分支）。而内层**不开流也不会丢事件** —— 外层
+#: `subgraphs=True` 本来就能看到内层节点（最小实验 `SP-05` 已证）。
+_streaming_active: ContextVar[bool] = ContextVar("graph_stream_active", default=False)
+
 #: 多模式 + 子图时使用的流模式组合
 DEFAULT_STREAM_MODES: tuple[str, ...] = ("updates", "values")
+
+#: 图流总开关（**默认开启**；显式设 `0/false/no/off` 可整条退回 `ainvoke` 纯路径）
+GRAPH_STREAM_ENV = "AI_SERVICE_GRAPH_STREAM"
+
+
+def graph_stream_enabled() -> bool:
+    """是否把 LangGraph 执行流接入统一事件层。
+
+    默认开启（此时执行走 `astream`，但返回值与 `ainvoke` 等价，见 `GS-A02`）；
+    设 `AI_SERVICE_GRAPH_STREAM=0` 可一键退回旧路径（回退开关，用于排障）。
+    """
+    return os.getenv(GRAPH_STREAM_ENV, "1").strip().lower() not in {
+        "0", "false", "no", "off",
+    }
 
 
 def _chunk_parts(chunk: Any) -> tuple[tuple[str, ...], str | None, Any]:
@@ -78,33 +102,38 @@ async def ainvoke_with_events(
     Returns:
         终态字典，与 `compiled_graph.ainvoke(input_state)` 逐字段一致。
     """
-    if emitter is None:
+    if emitter is None or _streaming_active.get():
+        # 无事件源，或已有一条外层图流在跑（内层只需普通执行，节点事件由外层捕获）
         return await compiled_graph.ainvoke(input_state, config)
 
     final_state: dict | None = None
-    async for chunk in compiled_graph.astream(
-        input_state,
-        config=config,
-        stream_mode=list(DEFAULT_STREAM_MODES),
-        subgraphs=True,
-    ):
-        namespace, mode, data = _chunk_parts(chunk)
+    active_token = _streaming_active.set(True)
+    try:
+        async for chunk in compiled_graph.astream(
+            input_state,
+            config=config,
+            stream_mode=list(DEFAULT_STREAM_MODES),
+            subgraphs=True,
+        ):
+            namespace, mode, data = _chunk_parts(chunk)
 
-        if mode == "values":
-            # 只认顶层快照；内层子图的 values 不是本次调用的返回值
-            if not namespace and isinstance(data, dict):
-                final_state = data
-            continue
+            if mode == "values":
+                # 只认顶层快照；内层子图的 values 不是本次调用的返回值
+                if not namespace and isinstance(data, dict):
+                    final_state = data
+                continue
 
-        if mode == "updates" and isinstance(data, dict):
-            path = _namespace_path(namespace)
-            for node_name in data:
-                emitter.emit(
-                    ProgressEventType.NODE_COMPLETED,
-                    node=str(node_name),
-                    namespace=path,
-                    depth=len(path),
-                )
+            if mode == "updates" and isinstance(data, dict):
+                path = _namespace_path(namespace)
+                for node_name in data:
+                    emitter.emit(
+                        ProgressEventType.NODE_COMPLETED,
+                        node=str(node_name),
+                        namespace=path,
+                        depth=len(path),
+                    )
+    finally:
+        _streaming_active.reset(active_token)
 
     if final_state is None:
         # 兜底：图没有产出顶层 values（例如被中断）→ 回退到 ainvoke，保证返回值语义

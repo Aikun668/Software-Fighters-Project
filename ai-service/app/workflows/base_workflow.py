@@ -12,6 +12,10 @@ from typing import Any
 
 from langgraph.graph import StateGraph
 
+from app.agents.base_agent import current_emitter
+from app.events.graph_stream import ainvoke_with_events, graph_stream_enabled
+from app.events.stream import StreamEmitter, ProgressEventType
+
 
 
 class BaseWorkflow(ABC):
@@ -35,10 +39,33 @@ class BaseWorkflow(ABC):
         return self._compiled_graph
 
     async def run(self, state: dict, on_progress=None) -> dict:
-        """执行工作流，通过编译后的图运行"""
+        """执行工作流。
+
+        P3-E（流式阶段 C5）：**图流默认开启** —— 执行走 `astream`，把每个节点完成发成
+        统一事件（`node.completed`），并注入 `current_emitter`，使节点里嵌套调用的
+        Agent（`agent.run()`）也把内层节点事件汇入同一条流。返回值与 `ainvoke` 等价
+        （契约 `GS-A02`/`CS-A01`），设 `AI_SERVICE_GRAPH_STREAM=0` 可整条退回旧路径。
+        """
         if on_progress:
             await on_progress("start", f"[{self.__class__.__name__}] 开始执行")
-        result = await self.graph.ainvoke(state)
+
+        emitter = StreamEmitter() if graph_stream_enabled() else None
+        ctx_token = current_emitter.set(emitter)
+        try:
+            result = await ainvoke_with_events(self.graph, state, emitter=emitter)
+        finally:
+            current_emitter.reset(ctx_token)
+
+        if emitter is not None:
+            nodes = [
+                event.data.get("node") for event in emitter.events
+                if event.type is ProgressEventType.NODE_COMPLETED
+            ]
+            self.logger.info(
+                "workflow %s run %s: %d node event(s) %s",
+                self.__class__.__name__, emitter.run_id, len(nodes), nodes,
+            )
+
         if on_progress:
             await on_progress("done", f"[{self.__class__.__name__}] 执行完成")
         return result
