@@ -337,9 +337,11 @@ curl -X POST http://127.0.0.1:8001/internal/knowledge-graph/ai_course \
 | **P3-C SSE 伪造帧防护 + 遗留清零** | 补注入契约测试（真实 ASGI 注入伪造 done 帧）→ 证明威胁已由「帧载荷强制 JSON 编码」中和；**`sse_sanitize` 经证据否决接线**；分支遗留 **10/14 终结**：`MM-A09` SVG 绕过**已修**、导出路径包含性**已加固**、计划域基准**日期归一化**、**16 例陈旧/环境依赖红灯清零**（含 `test_sse_heartbeat` 按「包装器即流边界」重写） | ✅ | `SSE伪造帧防护与sse_sanitize接线决策-2026-09-25.md` |
 | **P3-B3b 画像单层化** | 双层 LangGraph → 单层：外层 3 节点，`pipeline` 委托 `ProfileAgent.run()`；被静默跳过的 `semantic_judge`（语义去重）/ `audit`（画像审计）**已激活**（**行为变更轮**，含一行回退方案） | ✅ | `P3-B3b-画像单层化-2026-09-25.md` |
 
-**全量测试**：`1595 passed / 15 skipped / 0 failed`
+| **P3-D 模型参数清洗 + 统一事件层** | ①GUIDE P2 第 3 步收官：3 个漏网 LLM 入口接上 `sanitize_model`（图谱抽取 / 建计划 / 出题）+ `_get_mock_flag` **环境化**；②流式**阶段 B**：新增 `app/events/stream.py`（`run_id` + 单调 `seq` + Collector 对账，**零字节变化**）；③补「真实画像管线」存证 harness（此前被 stub 掩盖） | ✅ | `P3-D-模型参数清洗与统一事件层-2026-09-25.md` |
 
-**下一步**：模型参数清洗（GUIDE P2 step 3）→ 「2、后续流式事件化」（L2 → L3 统一事件，整阶段未开始）。
+**全量测试**：`1595 passed / 15 skipped / 0 failed`（P3-D 新增 22 例契约后见验收记录）
+
+**下一步**：流式**阶段 C**（接入 LangGraph 原生 streaming，让图执行本身成为事件源）。
 
 ---
 

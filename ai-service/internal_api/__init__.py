@@ -15,6 +15,7 @@
 """
 
 import logging
+import os
 import threading
 from pathlib import Path
 
@@ -157,13 +158,18 @@ def _get_chat_center():
 
 
 def _get_mock_flag() -> bool:
-    """恒返回 False：走真实 LLM，不构造 mock 替身。
+    """是否用 mock LLM 构造 Agent（离线可跑）。
 
-    它同时是 13 个 `_get_xxx` 工厂能否在离线环境构造的开关——硬编码 False 时
-    这些工厂会因缺 API key 抛 ValueError。离线测试需自行 patch 本函数；
-    改名/改值属 GUIDE P2 第 3 步「模型参数清洗」范畴，本轮（第 5 步）不动。
+    P3-D 改造：由硬编码 `return False` 改为**环境变量开关** ——
+    `AI_SERVICE_MOCK_LLM=1|true|yes|on` → True；未设置/其它值 → **False**（生产默认，
+    与历史行为逐字一致，故零行为变化）。
+
+    它同时是 13 个 `_get_xxx` 工厂能否在无 API key 环境构造成功的开关：
+    置 True 时工厂走 mock LLM，离线可构造；离线测试现在可以
+    `monkeypatch.setenv("AI_SERVICE_MOCK_LLM", "1")` 而不必 patch 本函数
+    （旧手法仍有效，本函数保持 `internal_api` 命名空间下的可 patch 性）。
     """
-    return False
+    return os.getenv("AI_SERVICE_MOCK_LLM", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _get_profile_agent():

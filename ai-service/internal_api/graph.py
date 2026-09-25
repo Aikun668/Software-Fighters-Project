@@ -6,6 +6,7 @@ from fastapi import APIRouter
 
 import internal_api as api
 from app.api.errors import ErrorCode
+from app.utils.prompt_guard import sanitize_model
 from app.api.models import (
     GraphExtractRequest,
     GraphLayeredRequest,
@@ -61,6 +62,8 @@ async def get_node_card(course_id: str, node_id: str, body: KnowledgeGraphNodeRe
 
 @router.post("/graph/extract")
 async def graph_extract(body: GraphExtractRequest):
+    # 模型参数清洗（P3-D）：user_message / assistant_reply 会进 LLM 抽取知识节点
+    body = sanitize_model(body)
     try:
         result = await api._get_graph_center().extract_nodes(
             course_id=body.course_id,

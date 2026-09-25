@@ -33,6 +33,7 @@ from app.centers.schemas import (
     ExecutionPlan,
 )
 from app.centers.visualization_center import VisualizationCenter
+from app.events.stream import MessageDeltaCollector, ProgressEventType, StreamEmitter
 from app.events.types import (
     StreamEvent,
     StreamEventType,
@@ -104,6 +105,7 @@ class ChatTaskDispatcher:
         self,
         plan: ExecutionPlan,
         event_queue: asyncio.Queue | None = None,
+        emitter: StreamEmitter | None = None,
     ) -> AsyncGenerator[StreamEvent, None]:
         if plan.tasks and plan.tasks[0].mode == "inquiry":
             task = plan.tasks[0]
@@ -118,6 +120,15 @@ class ChatTaskDispatcher:
 
         aggregated = AggregatedResult()
         total = len(plan.tasks)
+
+        # ── P3-E（流式阶段 B）：本 run 的统一事件源 + 对账 Collector。
+        # 事件源只有一个（下面的 token pump），消费者已有两个：
+        #   ① token_queue → SSE（既有通路，**逐字不变**）
+        #   ② MessageDeltaCollector → 完整文本对账（只记录，不进 SSE 载荷）
+        run_emitter = emitter or StreamEmitter()
+        delta_collector = MessageDeltaCollector()
+        run_emitter.subscribe(delta_collector)
+        run_emitter.emit(ProgressEventType.RUN_STARTED, tasks=total)
 
         for idx, task in enumerate(plan.tasks):
             progress = round((idx / total) * 100) / 100 if total else 0.0
@@ -138,7 +149,14 @@ class ChatTaskDispatcher:
             #   - get 是 await 的（主循环一边 yield 一边等 chunk）
             token_queue: asyncio.Queue = asyncio.Queue()
 
+            run_emitter.emit(
+                ProgressEventType.NODE_STARTED, center=task.mode, sequence=idx,
+            )
+
             async def _on_token(chunk: str) -> None:
+                # 「一次生成、多方消费」：先发 message.delta 事件（广播给 Collector 等），
+                # 再进既有 SSE 通路。chunk 本体不做任何加工 → SSE 字节逐字不变。
+                await run_emitter.on_token(chunk)
                 await token_queue.put(chunk)
 
             result_task = asyncio.create_task(
@@ -180,6 +198,13 @@ class ChatTaskDispatcher:
                 sequence=idx,
             )
 
+            run_emitter.emit(
+                ProgressEventType.NODE_COMPLETED,
+                center=task.mode,
+                sequence=idx,
+                error=bool(result.error),
+            )
+
             # 出错时不发 finalize（partial 对错误事件无意义，走 error_event）
             if result.error:
                 yield error_event(stage=result.mode, message=result.error)
@@ -196,6 +221,19 @@ class ChatTaskDispatcher:
         summary = self._build_summary(aggregated)
         aggregated.summary = summary
         aggregated.next_steps = self._build_next_steps(aggregated)
+
+        # 对账（指导文档 §6-3）：前端逐字收到的文本 vs 后台收集的完整文本
+        run_emitter.emit(
+            ProgressEventType.RUN_COMPLETED,
+            tasks=total,
+            deltas=delta_collector.delta_count,
+            chars=len(delta_collector.text),
+        )
+        logger.info(
+            "stream run %s: %d task(s), %d delta(s), %d char(s)",
+            run_emitter.run_id, total,
+            delta_collector.delta_count, len(delta_collector.text),
+        )
 
         yield done_event({
             "type": "done",

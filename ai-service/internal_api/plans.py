@@ -17,6 +17,7 @@ from app.api.models import (
     TodayTasksRequest,
 )
 from app.centers.plan_center import PlanGenerationError, PlanNotFoundError
+from app.utils.prompt_guard import sanitize_model
 
 logger = logging.getLogger("internal_api")
 
@@ -60,6 +61,8 @@ async def learning_path(student_id: str, body: CreatePlanFromPathRequest):
 @router.post("/plans/create-from-path")
 async def create_plan_from_path(body: CreatePlanFromPathRequest):
     """一键生成学习计划。业务编排全部委派给 PlanCenter.create_from_path()。"""
+    # 模型参数清洗（P3-D）：topic 会进 LLM（Goal → Decompose → Schedule）
+    body = sanitize_model(body)
     try:
         result = await api._get_plan_center().create_from_path(
             topic=body.topic or "",
@@ -83,6 +86,8 @@ async def complete_plan_step(plan_id: int, body: CompleteStepRequest):
     返回值包含 questions 和 recommended_action，前端据此展示「做两道题巩固」。
     Java 拿到 questions 后存入练习库（带 knowledge_node_id），用户作答后走 exercise 闭环。
     """
+    # 模型参数清洗（P3-D）：step.topic 会进 LLM 出题
+    body = sanitize_model(body)
     try:
         result = await api._get_plan_center().complete_step(
             step=body.step, plan=body.plan, steps=body.steps,
