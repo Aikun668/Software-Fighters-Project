@@ -184,3 +184,40 @@ describe('QuestionNavChat 对话历史传输（Task 11 后续合同）', () => {
     ])
   })
 })
+
+describe('QuestionNavChat 执行进度展示（阶段 D 合同）', () => {
+  it('progress 事件展示进度文案，正文到达后清除，且不重复正文', async () => {
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => (release = resolve))
+
+    sendMessageStreamMock.mockResolvedValue(new ReadableStream())
+    parseSSEStreamMock.mockImplementation(
+      async (
+        _stream: ReadableStream,
+        onData: (d: string) => void,
+        onDone: () => void,
+        _onError: (e: Error) => void,
+        onProgress: (p: { stage: string; message: string; phase: string }) => void,
+      ) => {
+        onProgress({ stage: 'extract', message: '正在执行 extract', phase: 'started' })
+        await gate
+        onData('正文内容')
+        onDone()
+      },
+    )
+
+    const wrapper = mountPage()
+    await sendViaEnter(wrapper, '讲讲反向传播')
+
+    // 流式进行中：进度文案顶替"正在思考…"
+    expect(wrapper.text()).toContain('正在执行 extract')
+    expect(wrapper.text()).not.toContain('正在思考')
+
+    release()
+    await flushPromises()
+
+    // 正文到达；流结束后进度清除
+    expect(wrapper.text()).toContain('正文内容')
+    expect(wrapper.text()).not.toContain('正在执行 extract')
+  })
+})

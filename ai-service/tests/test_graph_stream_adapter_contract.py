@@ -11,6 +11,7 @@
 | `GS-A05` | 事件顺序 = 实际执行顺序（外层节点与其内层节点的先后关系正确） |
 | `GS-A06` | 本层不依赖 web 框架（与 `app/events/stream.py` 同一约束） |
 | `GS-A07` | 图未产出顶层 `values` → **抛错且不重跑**（防节点副作用翻倍） |
+| `GS-A08` | `node.started` 覆盖每个节点（含内层）、带 `namespace`，且**早于**同节点的 completed |
 """
 
 import ast
@@ -172,6 +173,42 @@ class TestGraphStreamAdapter:
             await ainvoke_with_events(graph, {"trace": []}, emitter=StreamEmitter())
 
         assert graph.ainvoke_calls == 0, "图未产出 values 时不得回退 ainvoke 重跑"
+
+    @pytest.mark.asyncio
+    async def test_gs_a08_node_started_covers_nodes_with_namespace(self):
+        """`node.started` 由 `debug` 流的 `task` 事件提供（阶段 D 补）。
+
+        `updates` 模式只在节点**完成**时报告，因此此前没有 started。实测（spike `SP-07`）：
+        `debug` 模式的 `type == "task"` 事件恰好是「节点开始」，且带与 `updates` 同形的
+        namespace，故无需逐节点改 `custom` writer。
+
+        要求：每个「完成」的节点都必须先有 started；顺序上 started 必须早于同节点的 completed。
+        """
+        _graph, emitter, _state = await _run_with_emitter()
+
+        started = [
+            ((tuple(e.data["namespace"])), e.data["node"], e.seq)
+            for e in emitter.events if e.type is ProgressEventType.NODE_STARTED
+        ]
+        completed = [
+            ((tuple(e.data["namespace"])), e.data["node"], e.seq)
+            for e in emitter.events if e.type is ProgressEventType.NODE_COMPLETED
+        ]
+
+        assert started, "阶段 D：必须产出 node.started 事件"
+        started_seqs = {(ns, node): seq for ns, node, seq in started}
+        missing = [
+            (ns, node) for ns, node, _seq in completed if (ns, node) not in started_seqs
+        ]
+        assert not missing, f"这些节点有 completed 却无 started：{missing}"
+        for ns, node, seq in completed:
+            assert started_seqs[(ns, node)] < seq, (
+                f"{node}（namespace={ns}）的 started 未早于 completed"
+            )
+
+        # 内层（嵌套）节点也要有 started，且带非空 namespace —— 与 completed 同口径
+        inner_started = [ns for ns, _node, _seq in started if ns]
+        assert inner_started, f"内层节点缺少 started（namespace 应非空）：{started}"
 
     def test_gs_a06_no_web_dependency(self):  # noqa: E301 —— 保持 A06 编号稳定
         tree = ast.parse(MODULE_PATH.read_text(encoding="utf-8"))

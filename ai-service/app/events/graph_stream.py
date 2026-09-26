@@ -13,6 +13,7 @@
 | `updates` + `subgraphs=True` 能看到**内层（手工嵌套 `ainvoke`）节点**并带 namespace | 无需重写现有嵌套结构即可拿到分层节点事件 |
 | `messages` 模式抓不到本项目自研 LLM 包装（`OpenAILLM`）的 token | **token 仍走既有旁路**（`current_on_token`），本层只管节点/状态事件 |
 | `astream` 终态与 `ainvoke` 一致 | 可安全做等价替换 + 回退 |
+| `debug` 模式的 `type == "task"` 事件 = **节点开始**，且带与 `updates` **同形**的 namespace | 阶段 D 据此补 `node.started`（`GS-A08`），**不必**逐节点改 `custom` writer |
 
 ⚠️ 本层**不改任何传输字节**：只发内部事件，不参与 SSE 帧构造。
 `token` / `message.delta` 仍由既有 token 泵负责（见 `app/events/stream.py` 的说明）。
@@ -38,7 +39,12 @@ logger = logging.getLogger(__name__)
 _streaming_active: ContextVar[bool] = ContextVar("graph_stream_active", default=False)
 
 #: 多模式 + 子图时使用的流模式组合
-DEFAULT_STREAM_MODES: tuple[str, ...] = ("updates", "values")
+#:
+#: - `updates` → 节点**完成**（`node.completed`）；
+#: - `values`  → 顶层终态快照（返回值来源）；
+#: - `debug`   → 节点**开始**（`type == "task"`，阶段 D 起用于 `node.started`）。
+#:   `debug` 每节点多一个 chunk，但只读 `payload["name"]`（不落地/不序列化大载荷）。
+DEFAULT_STREAM_MODES: tuple[str, ...] = ("updates", "values", "debug")
 
 #: 图流总开关（**默认开启**；显式设 `0/false/no/off` 可整条退回 `ainvoke` 纯路径）
 GRAPH_STREAM_ENV = "AI_SERVICE_GRAPH_STREAM"
@@ -133,6 +139,21 @@ async def ainvoke_with_events(
                         namespace=path,
                         depth=len(path),
                     )
+                continue
+
+            if mode == "debug" and isinstance(data, dict):
+                # 节点开始（阶段 D）：`debug` 流的 `task` 事件。其余 debug 类型
+                # （`task_result` / `checkpoint` 等）本层不需要 —— `updates` 已给完成事件。
+                if data.get("type") == "task":
+                    node_name = (data.get("payload") or {}).get("name")
+                    if node_name:
+                        path = _namespace_path(namespace)
+                        emitter.emit(
+                            ProgressEventType.NODE_STARTED,
+                            node=str(node_name),
+                            namespace=path,
+                            depth=len(path),
+                        )
     finally:
         _streaming_active.reset(active_token)
 

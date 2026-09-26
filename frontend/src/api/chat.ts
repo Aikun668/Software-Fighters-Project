@@ -67,12 +67,19 @@ export const sendMessageStream = async (data: {
  * @param onData - 数据回调
  * @param onDone - 完成回调
  * @param onError - 错误回调
+ * @param onProgress - 进度回调（阶段 D）：后端 `progress` 事件表示"正在执行某步骤"，
+ *   只用于展示**进度文案**；**绝不可**当作正文追加（正文只来自 token/content 事件）。
  */
 export const parseSSEStream = async (
   stream: ReadableStream,
   onData: (delta: string, mode: string) => void,
   onDone: () => void,
-  onError?: (error: Error) => void
+  onError?: (error: Error) => void,
+  onProgress?: (progress: {
+    stage: string
+    message: string
+    phase: string
+  }) => void
 ) => {
   const reader = stream.getReader()
   const decoder = new TextDecoder('utf-8') // 处理中文必须指定utf-8
@@ -160,6 +167,17 @@ export const parseSSEStream = async (
               }
               break
             }
+            case 'progress':
+              // 阶段 D：执行进度（后端 stage=节点名；不掺正文）
+              if (onProgress) {
+                onProgress({
+                  stage: typeof data.stage === 'string' ? data.stage : '',
+                  message: typeof data.message === 'string' ? data.message : '',
+                  phase:
+                    typeof data.data?.phase === 'string' ? data.data.phase : '',
+                })
+              }
+              break
             case 'done':
               console.log('[SSE] 流结束:', data)
               terminated = true

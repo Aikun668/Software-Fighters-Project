@@ -18,6 +18,8 @@ const route = useRoute()
 const prompt = ref('')
 const messages = ref<ChatMessage[]>([])
 const sending = ref(false)
+/** 阶段 D：当前执行进度文案（来自后端 `progress` 事件；先按占位文案展示） */
+const progressText = ref('')
 const resourceMode = computed(() => route.query.mode === 'resource')
 const conversationStarted = computed(() => messages.value.length > 0)
 const suggestions = [
@@ -65,6 +67,7 @@ const failMessage = (id: string, error: unknown) => {
     msg.streaming = false
     msg.error = error instanceof Error ? error.message : String(error)
   }
+  progressText.value = ''
   sending.value = false
 }
 
@@ -78,6 +81,7 @@ const send = async () => {
   const assistantId = `a-${Date.now()}`
   messages.value.push({ id: assistantId, role: 'assistant', content: '', streaming: true })
   sending.value = true
+  progressText.value = ''
   await scrollToEnd()
 
   try {
@@ -97,10 +101,15 @@ const send = async () => {
             msg.error = '后端没有返回任何内容'
           }
         }
+        progressText.value = ''
         sending.value = false
       },
       (error) => {
         failMessage(assistantId, error)
+      },
+      (progress) => {
+        // 阶段 D：进度只更新**文案**，正文仍只由 onData 追加（不重复渲染）
+        progressText.value = progress.message
       },
     )
   } catch (error) {
@@ -138,7 +147,8 @@ const send = async () => {
           <div class="msg-bubble">
             <template v-if="msg.role === 'assistant'">
               <p v-if="msg.content" class="msg-text">{{ msg.content }}<span v-if="msg.streaming" class="stream-cursor">▍</span></p>
-              <p v-else-if="msg.streaming && !msg.error" class="msg-pending">正在思考…</p>
+              <p v-else-if="msg.streaming && !msg.error" class="msg-pending">{{ progressText || '正在思考…' }}</p>
+              <p v-if="msg.streaming && msg.content && progressText" class="msg-pending">{{ progressText }}</p>
               <p v-if="msg.error" class="msg-error">{{ msg.error }}</p>
             </template>
             <p v-else class="msg-text">{{ msg.content }}</p>

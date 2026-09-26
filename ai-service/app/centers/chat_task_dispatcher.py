@@ -35,7 +35,12 @@ from app.centers.schemas import (
 from app.agents.base_agent import current_emitter
 from app.centers.visualization_center import VisualizationCenter
 from app.events.graph_stream import graph_stream_enabled
-from app.events.stream import MessageDeltaCollector, ProgressEventType, StreamEmitter
+from app.events.stream import (
+    MessageDeltaCollector,
+    ProgressEvent,
+    ProgressEventType,
+    StreamEmitter,
+)
 from app.events.types import (
     StreamEvent,
     StreamEventType,
@@ -64,6 +69,24 @@ def _finalize_event(payload: dict) -> StreamEvent:
     return StreamEvent(
         type=StreamEventType.CONTENT,
         data={**payload, "partial": True},
+    )
+
+
+def _progress_event(node_event: ProgressEvent, phase: str) -> StreamEvent:
+    """内部**图节点**事件 → 线上 `progress` 帧（阶段 D：把执行过程变成前端可见）。
+
+    - `stage` 带**节点名**（内部名，如 `extract`）；`message` 是**占位文案** ——
+      「节点/事件 → 用户可见文案」映射表本轮**不做**，前端先按占位展示。
+    - 载荷只带 `node` / `phase`（`started` | `completed`），**不掺正文**，
+      以免与既有 `token` 帧重复渲染（契约 `PG-A04`）。
+    """
+    node = str(node_event.data.get("node", ""))
+    text = f"正在执行 {node}" if phase == "started" else f"{node} 已完成"
+    return StreamEvent(
+        type=StreamEventType.PROGRESS,
+        stage=node,
+        message=text,
+        data={"node": node, "phase": phase},
     )
 
 
@@ -130,6 +153,18 @@ class ChatTaskDispatcher:
         run_emitter = emitter or StreamEmitter()
         delta_collector = MessageDeltaCollector()
         run_emitter.subscribe(delta_collector)
+
+        # ── 阶段 D：把内部**图节点**事件搬到线上（只**新增** progress 帧，既有帧不变）。
+        # 订阅者必须是同步可调用对象，故只做 `put_nowait`；由主循环按事件顺序吐出。
+        progress_queue: asyncio.Queue = asyncio.Queue()
+
+        def _forward_progress(event: ProgressEvent) -> None:
+            if event.type is ProgressEventType.NODE_STARTED:
+                progress_queue.put_nowait(_progress_event(event, "started"))
+            elif event.type is ProgressEventType.NODE_COMPLETED:
+                progress_queue.put_nowait(_progress_event(event, "completed"))
+
+        run_emitter.subscribe(_forward_progress)
         run_emitter.emit(ProgressEventType.RUN_STARTED, tasks=total)
 
         for idx, task in enumerate(plan.tasks):
@@ -177,9 +212,15 @@ class ChatTaskDispatcher:
                         chunk = await asyncio.wait_for(
                             token_queue.get(), timeout=0.05
                         )
-                        yield _token_event(chunk)
                     except asyncio.TimeoutError:
-                        continue
+                        chunk = None
+
+                    # 进度帧先于紧随其后的 token 吐出，保持事件的时间顺序
+                    while not progress_queue.empty():
+                        yield progress_queue.get_nowait()
+
+                    if chunk is not None:
+                        yield _token_event(chunk)
 
                 result = await result_task
                 # 排空残留 chunk（generate_once 完成时旁路可能还有几个
@@ -190,6 +231,10 @@ class ChatTaskDispatcher:
                     except asyncio.QueueEmpty:
                         break
                     yield _token_event(chunk)
+
+                # 任务结束后补吐剩余进度帧（全部早于 center_end / done）
+                while not progress_queue.empty():
+                    yield progress_queue.get_nowait()
 
                 aggregated.results.append(result)
             finally:
