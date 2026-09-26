@@ -344,6 +344,7 @@ curl -X POST http://127.0.0.1:8001/internal/knowledge-graph/ai_course \
 | **P3-E 补丁（续）· P1/P2 全量修复** | ①**P2** `center.*` / `node.*` 事件类型分离（同一类型承载两种载荷 schema 的问题消除）；②**P2** 兜底不再回退 `ainvoke` —— **禁止重跑整张图**（防 LLM/DB 副作用与成本翻倍）；③**P1** `DeepSolveWorkflow` 接入 `BaseWorkflow`（四个流程同构）；④**P1** C4 对账补**真实 Workflow**（`ProfileWorkflow` 生产图 + 内层嵌套 Agent）；⑤**P1** 默认开启代价量化：`CS-A07` 实测大 state（200KB）倍率 **1.13x**。新增契约 `EM-B04` / `GS-A07` / `CS-A05`~`CS-A07` / `DS-A01` | ✅ | 本轮（2026-09-26） |
 | **画像存证键序归一化** | review 发现 `deep_solve.py` 接入 `BaseWorkflow` 后画像载荷的 **JSON 字段顺序**变化 → raw-text sha256 全变，但 **84 个事件逐条语义完全相同**。harness 增加 `data:` 载荷 `sort_keys` 归一化（与计划域日期归一化同法），基准重出为 `acceptance/snapshots/profile/_accept_profile_pipeline_after_normalized.txt`；**同规则回放 09-25 旧基准 → 3/3 一致** | ✅ | 本轮（2026-09-26） |
 | **阶段 D 最小切片 · 执行进度可见** | 内部 `node.started` / `node.completed` → 线上 `progress` 帧。`node.started` 取自 `debug` 流的 `task` 事件（实测与 `updates` **同形 namespace**，故**不必**逐节点改 `custom` writer）；前端解析器新增 `onProgress`（**绝不进正文**）+ 对话页最简进度行。**用户可见变更轮**：既有帧逐帧不变、只**新增**进度帧。动手前侦察确认 **Java 网关原样透传**新事件类型（`emitter.send(SseEmitter.event().data(eventData))`，其 `type` 分支只用于入库、不过滤）。契约 `PG-A01`~`PG-A05` / `PG-B01` / `GS-A08` | ✅ | `阶段D-执行进度可见-2026-09-26.md` |
+| **阶段 D 收口 · 端到端 harness 补盲区** | 新增 `acceptance/harness/chat_progress_frames.py`：**不 stub 任何 Center/Workflow**，跑真实 `POST /internal/api/chat`（ChatCenter → ChatTaskDispatcher → TutorAgent 图），把 `progress` 帧纳入指纹与断言（started/completed 成对、token 正文非空、done 唯一且最后）。实测 **79 帧**（69 token + 6 进度帧）、`progress_stages=['analyze','respond','retrieve']`、两次运行指纹一致。**过程中发现真问题**：聊天链路**未接** `AI_SERVICE_MOCK_LLM` —— 构造 Agent 时不传 mock 旗标（`ChatCenter._get_dispatcher()` 直连 `DecomposeAgent()` 等）、个别处还直接 `OpenAILLM(...)`，故无 Key 环境下整条链路在**构造期**抛错；harness 被迫对 `create_llm` / `OpenAILLM` 做全覆盖 patch（已在记录登记） | ✅ | `阶段D-执行进度可见-2026-09-26.md` |
 
 **全量测试**：`1595 passed / 15 skipped / 0 failed`（P3-D 新增 22 例 + P3-E 新增 24 例契约后见验收记录）
 
@@ -355,7 +356,7 @@ curl -X POST http://127.0.0.1:8001/internal/knowledge-graph/ai_course \
 
 **P3-E 修复覆盖**：原 review 清单 ①~⑤ 已全部处理 —— ①→`CS-A05`/`CS-A06`（真实 Workflow 对账）、②→`EM-B04`（center/node 分离）、③→`GS-A07`（抛错不重跑）、④→`CS-A07` 量化（实测 **1.13x**，`CS-A04` 保留防病态退化定位）、⑤→`DS-A01`（DeepSolve 接入基类）
 
-**仍有登记（未做）**：① dispatcher 在 `create_task` 前 `current_emitter.set` 的上下文污染窗口（实际无害）；② ~~节点事件暂无**用户可见**消费者~~ → 阶段 D 已接（**仅对话页**，`conversations.ts` 另一份解析器与其余页面待接）；③ 进度**文案映射表**未做 —— 占位文案直接露内部节点名（`extract` / `merge`）；④ 端到端 harness 盲区：19 条 SSE 用例的聊天链路走 stub，**未触及** `progress` 帧（覆盖来自契约 + 手测）
+**仍有登记（未做）**：① dispatcher 在 `create_task` 前 `current_emitter.set` 的上下文污染窗口（实际无害）；② ~~节点事件暂无**用户可见**消费者~~ → 阶段 D 已接（**仅对话页**，`conversations.ts` 另一份解析器与其余页面待接）；③ 进度**文案映射表**未做 —— 占位文案直接露内部节点名（`extract` / `merge`）；④ ~~端到端 harness 盲区~~ → **已补**：`acceptance/harness/chat_progress_frames.py`（真实聊天链路，`progress` 帧入指纹）；⑤ 聊天链路未接 `AI_SERVICE_MOCK_LLM`（见上条：构造 Agent 不传旗标 + 直接 `OpenAILLM(...)`）→ 无 Key 环境无法离线跑聊天链路
 
 **下一步**：阶段 E（取消 / 背压 / 断线重连 / 可观测 —— 按真实需求择项）；或先补 ③ 文案映射表与 ④ 端到端 harness 盲区。
 
