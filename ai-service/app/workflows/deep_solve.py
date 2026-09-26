@@ -6,6 +6,7 @@ from langgraph.graph import StateGraph
 from app.services.llm_service import create_llm
 from app.utils.json_parser import parse_llm_json
 from app.utils.prompt_loader import build_prompt, interpolate_variables
+from app.workflows.base_workflow import BaseWorkflow
 
 logger = logging.getLogger(__name__)
 
@@ -21,12 +22,21 @@ class DeepSolveState(TypedDict, total=False):
     response: str
 
 
-class DeepSolveWorkflow:
-    def __init__(self):
-        self.llm = create_llm(temperature=0.1)
-        self.graph = self.build_graph()
+class DeepSolveWorkflow(BaseWorkflow):
+    """深度解题工作流（plan → investigate → solve → verify）。
 
-    def build_graph(self) -> "CompiledStateGraph":
+    P1 修复（契约 `DS-A01`）：接入 `BaseWorkflow` —— 此前是四个工作流中唯一
+    不继承基类的实现（自带 `run()` 直调 `ainvoke`），因此拿不到 P3-E 的节点
+    事件、上游事件源复用与 `AI_SERVICE_GRAPH_STREAM` 回退开关。接入后与其余
+    三个流程同构：`run()` 由基类提供，图由 `_build_graph()` 懒编译。
+    生产调用链目前未引用本类，改动影响面限于测试与将来的接入。
+    """
+
+    def __init__(self, use_mock: bool = False):
+        super().__init__(use_mock=use_mock)
+        self.llm = create_llm(temperature=0.1, use_mock=use_mock)
+
+    def _build_graph(self) -> "CompiledStateGraph":
         graph = StateGraph(DeepSolveState)
         graph.add_node("plan", self._plan_node)
         graph.add_node("investigate", self._investigate_node)
@@ -249,6 +259,3 @@ class DeepSolveWorkflow:
             "verification": result,
             "response": f"解题完成。答案：{answer}。验证：{'通过' if result.get('is_valid') else '需复查'}。",
         }
-
-    async def run(self, state: dict) -> dict:
-        return await self.graph.ainvoke(state)

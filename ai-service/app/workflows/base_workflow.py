@@ -45,11 +45,22 @@ class BaseWorkflow(ABC):
         统一事件（`node.completed`），并注入 `current_emitter`，使节点里嵌套调用的
         Agent（`agent.run()`）也把内层节点事件汇入同一条流。返回值与 `ainvoke` 等价
         （契约 `GS-A02`/`CS-A01`），设 `AI_SERVICE_GRAPH_STREAM=0` 可整条退回旧路径。
+
+        P0 修复（契约 `CS-B04`~`CS-B06`）：事件源**优先复用上游注入的实例**（如
+        `ChatTaskDispatcher` 的 run_emitter）。此前无条件 `StreamEmitter()` 会覆盖
+        上游，导致本工作流的节点事件落入一个**无消费者的局部实例**、run_id 也与
+        同请求不一致。现在：有上游 → 复用（同一 run_id、同一条流）；无上游 → 自建
+        （独立调用场景，事件仅落本地日志）。`AI_SERVICE_GRAPH_STREAM=0` 仍是硬总闸：
+        一律不注入、退回 `ainvoke` 纯路径。
         """
         if on_progress:
             await on_progress("start", f"[{self.__class__.__name__}] 开始执行")
 
-        emitter = StreamEmitter() if graph_stream_enabled() else None
+        emitter: StreamEmitter | None = None
+        if graph_stream_enabled():
+            emitter = current_emitter.get() or StreamEmitter()
+        seq_base = emitter.seq if emitter is not None else 0
+
         ctx_token = current_emitter.set(emitter)
         try:
             result = await ainvoke_with_events(self.graph, state, emitter=emitter)
@@ -57,9 +68,14 @@ class BaseWorkflow(ABC):
             current_emitter.reset(ctx_token)
 
         if emitter is not None:
+            # 只统计**本次 run** 产生的图节点事件：复用上游事件源时，其中已有前序
+            # task 的轨迹；`"node" in data` 为纵深防御（center 级事件已改用 `center.*`，
+            # 见 `EM-B04`）。
             nodes = [
-                event.data.get("node") for event in emitter.events
+                event.data["node"] for event in emitter.events
                 if event.type is ProgressEventType.NODE_COMPLETED
+                and event.seq > seq_base
+                and "node" in event.data
             ]
             self.logger.info(
                 "workflow %s run %s: %d node event(s) %s",

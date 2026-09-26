@@ -119,6 +119,43 @@ class TestDeepSolveWorkflow:
         assert "response" in state
         assert state.get("plan") is not None
 
+    @pytest.mark.asyncio
+    async def test_ds_a01_is_base_workflow_and_emits_node_events(self, monkeypatch):
+        """接入 `BaseWorkflow`（P1 修复，契约 `DS-A01`）。
+
+        此前 `DeepSolveWorkflow` 是四个工作流中唯一不继承基类的实现，拿不到
+        节点事件 / 上游事件源复用 / 回退开关。本用例锁住「接入基类且四个阶段
+        节点事件可达」。
+        """
+        monkeypatch.delenv("AI_SERVICE_GRAPH_STREAM", raising=False)
+
+        from app.events.stream import ProgressEventType, StreamEmitter
+        from app.workflows.base_workflow import BaseWorkflow
+        from app.workflows.deep_solve import DeepSolveWorkflow
+
+        assert issubclass(DeepSolveWorkflow, BaseWorkflow), (
+            "DeepSolveWorkflow 必须继承 BaseWorkflow（P3-E 节点事件与回退开关的前提）"
+        )
+
+        captured: list[StreamEmitter] = []
+        real_init = StreamEmitter.__init__
+
+        def _spy_init(self, *args, **kwargs):
+            real_init(self, *args, **kwargs)
+            captured.append(self)
+
+        monkeypatch.setattr(StreamEmitter, "__init__", _spy_init)
+
+        workflow = DeepSolveWorkflow(use_mock=True)
+        await workflow.run({"question": "1+1=?", "context": "", "student_profile": {}})
+
+        assert captured, "未创建事件源"
+        nodes = [
+            event.data["node"] for event in captured[0].events
+            if event.type is ProgressEventType.NODE_COMPLETED
+        ]
+        assert {"plan", "investigate", "solve", "verify"} <= set(nodes), nodes
+
 
 class TestPDFExporter:
     def test_export_basic_content(self):

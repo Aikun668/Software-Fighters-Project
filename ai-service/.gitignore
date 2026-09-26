@@ -16,3 +16,4 @@ acceptance/snapshots/
 # 字节存证 harness 的 cwd 产出（基准另存 acceptance/snapshots/，此处只忽略走散产物）
 _accept_*.txt
 server_output.log
+server_error.log

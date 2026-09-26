@@ -152,7 +152,7 @@ class ChatTaskDispatcher:
             token_queue: asyncio.Queue = asyncio.Queue()
 
             run_emitter.emit(
-                ProgressEventType.NODE_STARTED, center=task.mode, sequence=idx,
+                ProgressEventType.CENTER_STARTED, center=task.mode, sequence=idx,
             )
 
             async def _on_token(chunk: str) -> None:
@@ -208,7 +208,7 @@ class ChatTaskDispatcher:
             )
 
             run_emitter.emit(
-                ProgressEventType.NODE_COMPLETED,
+                ProgressEventType.CENTER_COMPLETED,
                 center=task.mode,
                 sequence=idx,
                 error=bool(result.error),

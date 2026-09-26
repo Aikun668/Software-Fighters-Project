@@ -14,6 +14,7 @@
 | `EM-A05` | 事件轨迹有留存上限（长流不无界增长） |
 | `EM-B01` | **集成**：真实分发器下，Collector 文本 == SSE 收到的 token 拼接（§6-3 对账） |
 | `EM-B02` | SSE 通路仍直接消费**原始** chunk（字节不变的机器化保证） |
+| `EM-B04` | **`center.*` / `node.*` 分离**：分发器只发 center 级事件，载荷不含图节点字段（P2 修复） |
 | `EM-C01` | `app/events/stream.py` 不 import web 框架（§2.3） |
 """
 
@@ -91,7 +92,7 @@ class TestEventLayerUnit:
 
         emitter.emit(ProgressEventType.RUN_STARTED, tasks=1)
         emitter.emit(ProgressEventType.MESSAGE_DELTA, content="反向")
-        emitter.emit(ProgressEventType.NODE_STARTED, center="auto")
+        emitter.emit(ProgressEventType.CENTER_STARTED, center="auto")
         emitter.emit(ProgressEventType.MESSAGE_DELTA, content="传播")
 
         assert collector.text == "反向传播"
@@ -182,6 +183,35 @@ class TestDispatcherIntegration:
         source = ast.unparse(on_token)
         assert "token_queue.put(chunk)" in source, "原始 chunk 未进 SSE 队列"
         assert "run_emitter.on_token(chunk)" in source, "未接入统一事件层"
+
+    @pytest.mark.asyncio
+    async def test_em_b04_dispatcher_emits_center_events_not_node_events(self):
+        """`center.*` 与 `node.*` 分离：分发器只发 center 级事件（P2 修复）。
+
+        此前两者共用 `node.*` —— 同一事件类型承载两种 schema（center/sequence
+        与 node/namespace/depth），消费者无法凭类型判读载荷。现在：
+        `center.*` 只表示 Center 级任务，`node.*` 只表示 LangGraph 图节点。
+        """
+        dispatcher = ChatTaskDispatcher(auto_center=_ChunkingAutoCenter("你好世界"))
+        emitter = StreamEmitter(run_id="run-center-events")
+
+        async for _event in dispatcher.execute(_plan(), emitter=emitter):
+            pass
+
+        types = [e.type for e in emitter.events]
+        assert ProgressEventType.CENTER_STARTED in types, f"缺少 center.started：{types}"
+        assert ProgressEventType.CENTER_COMPLETED in types, f"缺少 center.completed：{types}"
+        assert ProgressEventType.NODE_STARTED not in types, "Center 级不得再发 node.* 类型"
+        assert ProgressEventType.NODE_COMPLETED not in types, "Center 级不得再发 node.* 类型"
+
+        for event in emitter.events:
+            if event.type in (
+                ProgressEventType.CENTER_STARTED,
+                ProgressEventType.CENTER_COMPLETED,
+            ):
+                assert "center" in event.data, event.data
+                assert "sequence" in event.data, event.data
+                assert "node" not in event.data, "center 事件不得携带图节点载荷"
 
 
 # ═══════════════════════════════════════════════════════════════════

@@ -340,8 +340,21 @@ curl -X POST http://127.0.0.1:8001/internal/knowledge-graph/ai_course \
 | **P3-D 模型参数清洗 + 统一事件层** | ①GUIDE P2 第 3 步收官：3 个漏网 LLM 入口接上 `sanitize_model`（图谱抽取 / 建计划 / 出题）+ `_get_mock_flag` **环境化**；②流式**阶段 B**：新增 `app/events/stream.py`（`run_id` + 单调 `seq` + Collector 对账，**零字节变化**）；③补「真实画像管线」存证 harness（此前被 stub 掩盖） | ✅ | `P3-D-模型参数清洗与统一事件层-2026-09-25.md` |
 
 | **P3-E 流式阶段 C（C1–C5 全部完成）** | ①最小实验量清 LangGraph 1.1.2 能给的流（**关键意外收获**：手工嵌套 `ainvoke` 的内层节点事件可见，不必重写嵌套）；②转换层 `ainvoke_with_events`（等价替换 + 分层节点事件）；③Agent 层接入事件源；④一致性验证（终态/节点覆盖/顺序）；⑤**开关默认开启** + 四个 Workflow 自动获得节点事件。**修掉嵌套开流互相污染的真问题** —— 58 条字节/指纹全一致 | ✅ | `P3-E-流式阶段C-2026-09-25.md` |
+| **P3-E 补丁 · Workflow 事件源复用（P0 修复）** | 修掉 `BaseWorkflow.run` 无条件自建 `StreamEmitter` 覆盖上游的断链：资源生成路径的节点事件曾落入**无消费者的局部实例**、`run_id` 与同请求不一致。改为「有上游 → 复用（同一 `run_id`）；无上游 → 自建」；`AI_SERVICE_GRAPH_STREAM=0` 保持**硬总闸**语义。新增契约 `CS-B04`~`CS-B06`。存证：SSE **19/19**、图谱 **27/27**、计划 **9/9** 逐字节一致；画像 3 条**语义一致**（raw-byte 因字段顺序变化，见下条） | ✅ | 本轮（2026-09-26） |
+| **P3-E 补丁（续）· P1/P2 全量修复** | ①**P2** `center.*` / `node.*` 事件类型分离（同一类型承载两种载荷 schema 的问题消除）；②**P2** 兜底不再回退 `ainvoke` —— **禁止重跑整张图**（防 LLM/DB 副作用与成本翻倍）；③**P1** `DeepSolveWorkflow` 接入 `BaseWorkflow`（四个流程同构）；④**P1** C4 对账补**真实 Workflow**（`ProfileWorkflow` 生产图 + 内层嵌套 Agent）；⑤**P1** 默认开启代价量化：`CS-A07` 实测大 state（200KB）倍率 **1.13x**。新增契约 `EM-B04` / `GS-A07` / `CS-A05`~`CS-A07` / `DS-A01` | ✅ | 本轮（2026-09-26） |
+| **画像存证键序归一化** | review 发现 `deep_solve.py` 接入 `BaseWorkflow` 后画像载荷的 **JSON 字段顺序**变化 → raw-text sha256 全变，但 **84 个事件逐条语义完全相同**。harness 增加 `data:` 载荷 `sort_keys` 归一化（与计划域日期归一化同法），基准重出为 `acceptance/snapshots/profile/_accept_profile_pipeline_after_normalized.txt`；**同规则回放 09-25 旧基准 → 3/3 一致** | ✅ | 本轮（2026-09-26） |
 
 **全量测试**：`1595 passed / 15 skipped / 0 failed`（P3-D 新增 22 例 + P3-E 新增 24 例契约后见验收记录）
+
+**P0/P1/P2 修复轮验证**：事件/流式契约 5 文件 `44 passed`；受影响面 8 文件 `212 passed / 3 skipped`（全量复跑见下）
+
+**本轮全量复跑**（2026-09-26）：`1651 passed / 15 skipped`（`tests/` 口径，收集 **1665** 例）。另根目录 `test_spark_api.py`（`async def test_*` 被 pytest 误收集）与 `test_connectivity.py`（需联网）是**手工脚本**，贡献 `2 failed + 1 error`，与本轮改动无关。
+
+**存证口径（本轮起）**：SSE / 图谱 / 计划 = **逐字节** sha256 一致；画像 = **语义归一化**后一致（`sort_keys` 键序 + `<TS>` 时间戳），基准 `acceptance/snapshots/profile/_accept_profile_pipeline_after_normalized.txt`
+
+**P3-E 修复覆盖**：原 review 清单 ①~⑤ 已全部处理 —— ①→`CS-A05`/`CS-A06`（真实 Workflow 对账）、②→`EM-B04`（center/node 分离）、③→`GS-A07`（抛错不重跑）、④→`CS-A07` 量化（实测 **1.13x**，`CS-A04` 保留防病态退化定位）、⑤→`DS-A01`（DeepSolve 接入基类）
+
+**仍有登记（未做）**：① dispatcher 在 `create_task` 前 `current_emitter.set` 的上下文污染窗口（实际无害）；② 节点事件暂无**用户可见**消费者 —— 属阶段 D
 
 **下一步**：阶段 D（多 Agent 执行过程对用户可见：如"正在检索课程资料"）或按需补 `node.started` / `custom` 进度事件。
 

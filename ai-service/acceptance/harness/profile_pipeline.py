@@ -14,11 +14,18 @@ P3-B3b 合并双层图时，55 条存证全部"一致"，其实什么也没证�
 - 同一 commit 重跑应得到完全相同的 sha256；
 - 跨 commit 比对可证明画像管线（含 `semantic_judge` / `audit`）**是否改变行为**。
 
-注意：时间戳用正则归一化（与 `plan_endpoints.py` 同法），避免跨日/跨秒漂移。
+归一化有两处（缺任一处都会把"语义等价"误报成"行为变化"）：
+
+1. **时间戳**：正则把 ISO 日期/时间折叠成 `<TS>`（与 `plan_endpoints.py` 同法），防跨日/跨秒漂移；
+2. **JSON 键序**：`data:` 载荷先 `json.loads` 再 `json.dumps(sort_keys=True)` 重编码。
+   起因：P3-E 补丁轮（`deep_solve.py` 接入 `BaseWorkflow`）之后，画像载荷的**字段顺序**
+   发生变化 —— 84 个事件逐条语义完全相同，但 raw-text 哈希全变（详见该轮验收记录）。
+   键序归一化后，本 harness 只对**内容**负责，顺序抖动不再误报。
 """
 
 import asyncio
 import hashlib
+import json
 import os
 import re
 import sys
@@ -36,6 +43,29 @@ from internal_api import router  # noqa: E402
 
 # 归一化：ISO 日期/时间（`2026-09-25`、`2026-09-25T12:34:56`）→ <TS>
 _TS_RE = re.compile(r"\d{4}-\d{2}-\d{2}(?:T[\d:.]+)?(?:Z|[+-]\d{2}:?\d{2})?")
+_DATA_PREFIX = "data: "
+
+
+def _normalize_json_keys(text: str) -> str:
+    """把 `data: {json}` 行的 JSON 键序归一化（`sort_keys=True`），其余行原样保留。
+
+    只影响 **sha256 口径**，不改 harness 打印/落盘的原始文本（人看得到的仍是原始帧）。
+    解析失败的行（非 JSON 帧）保持原样，避免掩盖真实畸形。
+    """
+    lines: list[str] = []
+    for line in text.splitlines():
+        if not line.startswith(_DATA_PREFIX):
+            lines.append(line)
+            continue
+        try:
+            payload = json.loads(line[len(_DATA_PREFIX):])
+        except (ValueError, TypeError):
+            lines.append(line)
+            continue
+        lines.append(
+            _DATA_PREFIX + json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        )
+    return "\n".join(lines)
 
 
 def _entry(text: str) -> dict:
@@ -84,7 +114,7 @@ async def main(label: str) -> int:
                 "student_profile": profile,
                 "messages": [{"role": "user", "content": message}],
             })
-            raw = _TS_RE.sub("<TS>", response.text)
+            raw = _TS_RE.sub("<TS>", _normalize_json_keys(response.text))
             digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
             blocks.append(
                 f"### {name}\n"

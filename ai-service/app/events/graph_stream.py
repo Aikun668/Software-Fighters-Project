@@ -91,7 +91,8 @@ async def ainvoke_with_events(
       （带 `node` 名、`namespace` 层级路径、`depth` 层级深度）；
     - `values` 模式 → 取**顶层**最后一次快照作为返回值，与 `ainvoke` 语义一致；
     - 不传 `emitter` 时**直接走 `ainvoke`**（零额外开销，既有调用点可无脑替换）；
-    - 订阅者异常被 `StreamEmitter` 隔离，不影响本次执行。
+    - 订阅者异常被 `StreamEmitter` 隔离，不影响本次执行；
+    - 图未产出顶层 `values`（疑似被中断）→ **抛错，绝不重跑**（`GS-A07`）。
 
     Args:
         compiled_graph: 已编译的 LangGraph 图（`compile()` 的产物）。
@@ -136,11 +137,13 @@ async def ainvoke_with_events(
         _streaming_active.reset(active_token)
 
     if final_state is None:
-        # 兜底：图没有产出顶层 values（例如被中断）→ 回退到 ainvoke，保证返回值语义
-        logger.warning(
-            "ainvoke_with_events: 未收到顶层 values 快照，回退 ainvoke（run_id=%s）",
-            emitter.run_id,
+        # P2 修复（契约 `GS-A07`）：**不**回退 `ainvoke` —— 那会把整张图重跑一遍，
+        # 节点副作用（LLM 调用 / DB 写入）与成本翻倍，代价远高于一次显式异常。
+        # 本项目不使用 LangGraph 中断（无 `interrupt` / checkpointer），正常图必然
+        # 产出顶层 `values` 快照；走到这里说明图被异常中断，应让调用方感知并决定。
+        raise RuntimeError(
+            "ainvoke_with_events: 图未产出顶层 values 快照（疑似被中断），"
+            f"拒绝重跑整张图；run_id={emitter.run_id}"
         )
-        return await compiled_graph.ainvoke(input_state, config)
 
     return final_state

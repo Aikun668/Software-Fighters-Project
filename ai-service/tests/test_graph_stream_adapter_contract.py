@@ -10,6 +10,7 @@
 | `GS-A04` | 订阅者抛异常不影响返回值与事件数量（横切逻辑不得拖垮主流程） |
 | `GS-A05` | 事件顺序 = 实际执行顺序（外层节点与其内层节点的先后关系正确） |
 | `GS-A06` | 本层不依赖 web 框架（与 `app/events/stream.py` 同一约束） |
+| `GS-A07` | 图未产出顶层 `values` → **抛错且不重跑**（防节点副作用翻倍） |
 """
 
 import ast
@@ -144,7 +145,35 @@ class TestGraphStreamAdapter:
             "outer_first", "inner_a", "inner_b", "wrapped", "outer_last",
         ], f"事件顺序应与执行顺序一致：{order}"
 
-    def test_gs_a06_no_web_dependency(self):
+    @pytest.mark.asyncio
+    async def test_gs_a07_no_top_level_values_raises_instead_of_rerunning(self):
+        """图未产出顶层 `values` → **抛错且不重跑**（P2 修复）。
+
+        重跑整张图会让节点副作用（LLM 调用 / DB 写入）与成本翻倍，
+        故本层改为显式异常，由调用方感知并决定如何处理。
+        """
+
+        class _NoValuesGraph:
+            """astream 不产出任何快照；ainvoke 一旦被调用即记录（用于断言不重跑）。"""
+
+            def __init__(self):
+                self.ainvoke_calls = 0
+
+            async def astream(self, *_args, **_kwargs):
+                return
+                yield  # noqa: unreachable —— 使其成为 async generator
+
+            async def ainvoke(self, *_args, **_kwargs):
+                self.ainvoke_calls += 1
+                return {"unexpected": True}
+
+        graph = _NoValuesGraph()
+        with pytest.raises(RuntimeError, match="拒绝重跑"):
+            await ainvoke_with_events(graph, {"trace": []}, emitter=StreamEmitter())
+
+        assert graph.ainvoke_calls == 0, "图未产出 values 时不得回退 ainvoke 重跑"
+
+    def test_gs_a06_no_web_dependency(self):  # noqa: E301 —— 保持 A06 编号稳定
         tree = ast.parse(MODULE_PATH.read_text(encoding="utf-8"))
         modules: set[str] = set()
         for node in ast.walk(tree):

@@ -5,11 +5,17 @@
 - `CS-A02` 节点事件**覆盖图的全部节点**（不遗漏、不重复发）
 - `CS-A03` 事件顺序 == 实际执行顺序
 - `CS-A04` 图流开销可测（宽松上限，防病态退化；不作硬性能断言）
+- `CS-A05` **真实 Workflow**（生产 `_build_graph` + 内层嵌套 Agent）终态与 `ainvoke` 逐字段一致
+- `CS-A06` 真实 Workflow 的节点事件覆盖外层（depth=0）与内层（depth>0）
+- `CS-A07` 大 state 下 `values` 快照开销的实测与上限（默认开启的代价被量化）
 
 **C5（开关与扩展）**：
 - `CS-B01` 图流**默认开启**：`BaseWorkflow.run` 会产出节点事件
 - `CS-B02` `AI_SERVICE_GRAPH_STREAM=0` → 一键退回：无节点事件、结果一致
 - `CS-B03` Workflow 节点里**嵌套调用的 Agent** 也把内层节点事件汇入同一条流
+- `CS-B04` 上游已注入事件源时，Workflow **复用它**（同一 run_id，P0 修复回归）
+- `CS-B05` 复用的上游事件源一路贯穿到嵌套 Agent 的内层节点
+- `CS-B06` `AI_SERVICE_GRAPH_STREAM=0` 是**硬总闸**：即使上游注入了事件源也一律退回
 """
 
 import ast
@@ -71,6 +77,44 @@ def _profile_agent_with_spies():
     agent._audit_node = _spy("audit")
     agent._compiled_graph = agent.build_graph()
     return agent
+
+
+def _profile_workflow_with_spies():
+    """**真实** `ProfileWorkflow`（生产 `_build_graph`）+ 内层 Agent 换 spy。
+
+    外层 3 节点（`pipeline` / `completeness_check` / `complete`）来自生产代码，
+    其中 `pipeline` 节点手工嵌套 `ProfileAgent.run()`（5 节点 spy）—— 覆盖
+    「真实 Workflow 图 + 手工嵌套 Agent」这一此前未被对账的形态（P1 修复）。
+    """
+    from app.workflows.profile_workflow import ProfileWorkflow
+
+    workflow = ProfileWorkflow(use_mock=True)
+    workflow.profile_agent = _profile_agent_with_spies()
+    return workflow
+
+
+def _bulky_graph(payload_chars: int = 200_000):
+    """3 节点图，首节点写入大 payload —— 模拟「长文生成」路径的 state 体积。"""
+    payload = "x" * payload_chars
+
+    async def one(state: dict) -> dict:
+        return {"blob": payload, "trace": [*(state.get("trace") or []), "b1"]}
+
+    async def two(state: dict) -> dict:
+        return {"trace": [*(state.get("trace") or []), "b2"]}
+
+    async def three(state: dict) -> dict:
+        return {"trace": [*(state.get("trace") or []), "b3"]}
+
+    graph = StateGraph(dict)
+    graph.add_node("one", one)
+    graph.add_node("two", two)
+    graph.add_node("three", three)
+    graph.set_entry_point("one")
+    graph.add_edge("one", "two")
+    graph.add_edge("two", "three")
+    graph.add_edge("three", END)
+    return graph.compile()
 
 
 TARGETS = [
@@ -155,6 +199,80 @@ class TestConsistency:
         print(f"\n[CS-A04] ainvoke x5 = {plain*1000:.1f}ms, astream x5 = {streamed*1000:.1f}ms")
         assert streamed < plain * 20 + 2.0, (
             f"图流开销异常：plain={plain:.4f}s streamed={streamed:.4f}s"
+        )
+
+    @pytest.mark.asyncio
+    async def test_cs_a05_real_workflow_final_state_matches_ainvoke(self):
+        """**真实 Workflow** 终态与 `ainvoke` 逐字段一致（P1 修复）。
+
+        此前 TARGETS 只覆盖玩具图 + spy agent；本用例用生产 `_build_graph`
+        构建的 `ProfileWorkflow`（`pipeline` 节点手工嵌套 Agent）做对账。
+        """
+        workflow = _profile_workflow_with_spies()
+        input_state = {
+            "messages": [{"role": "user", "content": "hi"}],
+            "current_profile": {},
+        }
+
+        invoked = await workflow.graph.ainvoke(dict(input_state))
+        streamed = await ainvoke_with_events(
+            workflow.graph, dict(input_state), emitter=StreamEmitter(),
+        )
+
+        assert streamed == invoked, f"真实 Workflow 终态不一致：{streamed} != {invoked}"
+
+    @pytest.mark.asyncio
+    async def test_cs_a06_real_workflow_events_cover_top_and_nested(self):
+        """真实 Workflow：外层节点（depth=0）与嵌套 Agent 内层节点（depth>0）都被覆盖。"""
+        workflow = _profile_workflow_with_spies()
+        emitter = StreamEmitter()
+
+        await ainvoke_with_events(
+            workflow.graph,
+            {"messages": [{"role": "user", "content": "hi"}], "current_profile": {}},
+            emitter=emitter,
+        )
+
+        node_events = [
+            event for event in emitter.events
+            if event.type is ProgressEventType.NODE_COMPLETED
+        ]
+        top = {e.data["node"] for e in node_events if e.data["depth"] == 0}
+        nested = {e.data["node"] for e in node_events if e.data["depth"] > 0}
+
+        # 外层：pipeline → completeness_check →（画像不完整）END；`complete` 不执行
+        assert {"pipeline", "completeness_check"} <= top, top
+        assert {"extract", "semantic_judge", "merge", "audit", "response"} <= nested, nested
+
+    @pytest.mark.asyncio
+    async def test_cs_a07_bulky_state_overhead_is_measured_and_bounded(self):
+        """大 state（模拟长文生成）下 `values` 全量快照开销：实测 + 有意义的上限。
+
+        默认开启图流后，终态取自 `values` 模式 —— **每步全量快照**。本用例把
+        这一代价量化（`pytest -s` 可见实测倍率），并设宽松但有意义的上限防静默退化。
+        """
+        graph = _bulky_graph(200_000)
+
+        start = time.perf_counter()
+        for _ in range(3):
+            await graph.ainvoke({"blob": "", "trace": []})
+        plain = time.perf_counter() - start
+
+        start = time.perf_counter()
+        for _ in range(3):
+            await ainvoke_with_events(
+                graph, {"blob": "", "trace": []}, emitter=StreamEmitter(),
+            )
+        streamed = time.perf_counter() - start
+
+        ratio = streamed / plain if plain > 0 else float("inf")
+        print(
+            f"\n[CS-A07] bulky(200KB) x3: ainvoke={plain*1000:.1f}ms "
+            f"astream={streamed*1000:.1f}ms ratio={ratio:.2f}x"
+        )
+        assert streamed < plain * 20 + 1.0, (
+            f"大 state 下图流开销异常：ratio={ratio:.2f}x "
+            f"(plain={plain:.4f}s streamed={streamed:.4f}s)"
         )
 
 
@@ -295,3 +413,77 @@ class TestSwitchAndExtension:
         assert {"extract", "semantic_judge", "merge", "audit", "response"} <= set(nested), (
             f"嵌套 Agent 的内层节点事件未汇入同一条流：{nested}"
         )
+
+    # ── P0 修复回归：emitter 复用（有上游就必须汇入上游）─────────────
+
+    @pytest.mark.asyncio
+    async def test_cs_b04_workflow_reuses_upstream_emitter(self, monkeypatch):
+        """上游已注入事件源 → Workflow **复用**它（同一 run_id），不得自建。
+
+        P0 回归：早前版本无条件 `StreamEmitter()` 覆盖上游，节点事件落入
+        无消费者的局部实例，run_id 也与同请求不一致。
+        """
+        monkeypatch.delenv("AI_SERVICE_GRAPH_STREAM", raising=False)
+
+        upstream = StreamEmitter(run_id="upstream-run")
+        token = current_emitter.set(upstream)
+        try:
+            workflow = _make_minimal_workflow()
+            result = await workflow.run({"trace": []})
+        finally:
+            current_emitter.reset(token)
+
+        assert result["trace"] == ["wf_first", "wf_second"]
+        node_events = [
+            event for event in upstream.events
+            if event.type is ProgressEventType.NODE_COMPLETED
+        ]
+        assert [e.data.get("node") for e in node_events] == ["first", "second"], (
+            f"节点事件未汇入上游事件源：{[e.data for e in upstream.events]}"
+        )
+        assert all(e.run_id == "upstream-run" for e in upstream.events), (
+            "事件 run_id 必须与上游一致（同一请求同一条流）"
+        )
+
+    @pytest.mark.asyncio
+    async def test_cs_b05_upstream_emitter_reaches_nested_agent_nodes(self, monkeypatch):
+        """复用的上游事件源一路贯穿到嵌套 Agent 的内层节点（带 namespace）。"""
+        monkeypatch.delenv("AI_SERVICE_GRAPH_STREAM", raising=False)
+
+        upstream = StreamEmitter(run_id="upstream-run")
+        agent = _profile_agent_with_spies()
+        token = current_emitter.set(upstream)
+        try:
+            workflow = _make_minimal_workflow(nested_agent=agent)
+            await workflow.run({"trace": []})
+        finally:
+            current_emitter.reset(token)
+
+        node_events = [
+            event for event in upstream.events
+            if event.type is ProgressEventType.NODE_COMPLETED
+        ]
+        top = {e.data["node"] for e in node_events if e.data["depth"] == 0}
+        nested = {e.data["node"] for e in node_events if e.data["depth"] > 0}
+        assert {"first", "second"} <= top, top
+        assert {"extract", "semantic_judge", "merge", "audit", "response"} <= nested, nested
+        assert all(e.run_id == "upstream-run" for e in upstream.events)
+
+    @pytest.mark.asyncio
+    async def test_cs_b06_flag_off_is_hard_master_switch(self, monkeypatch):
+        """`AI_SERVICE_GRAPH_STREAM=0` 是硬总闸：即使上游注入了事件源也一律退回。
+
+        锁住「一键退回」承诺：总闸关闭时不产生任何图流事件（上游事件源必须保持空）。
+        """
+        monkeypatch.setenv("AI_SERVICE_GRAPH_STREAM", "0")
+
+        upstream = StreamEmitter(run_id="upstream-run")
+        token = current_emitter.set(upstream)
+        try:
+            workflow = _make_minimal_workflow()
+            result = await workflow.run({"trace": []})
+        finally:
+            current_emitter.reset(token)
+
+        assert result["trace"] == ["wf_first", "wf_second"], "回退路径结果必须一致"
+        assert upstream.events == [], "总闸关闭后上游事件源不应收到本工作流的事件"

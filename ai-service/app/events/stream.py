@@ -34,12 +34,20 @@ DEFAULT_MAX_RETAINED_EVENTS = 200
 
 
 class ProgressEventType(str, Enum):
-    """最小事件集（阶段 B：先从最少几类开始）。"""
+    """最小事件集（阶段 B：先从最少几类开始）。
+
+    ⚠️ **`node.*` 与 `center.*` 语义/载荷分离，不得混用**（P2 修复，契约 `EM-B04`）：
+    - `node.*`  → **LangGraph 图节点**，载荷 `{node, namespace, depth}`（`graph_stream` 发）；
+    - `center.*` → **Center 级任务**，载荷 `{center, sequence[, error]}`（`ChatTaskDispatcher` 发）。
+    此前二者共用 `node.*`，同一事件类型承载两种 schema，消费者无法凭类型判读载荷。
+    """
 
     RUN_STARTED = "run.started"
     RUN_COMPLETED = "run.completed"
     NODE_STARTED = "node.started"
     NODE_COMPLETED = "node.completed"
+    CENTER_STARTED = "center.started"
+    CENTER_COMPLETED = "center.completed"
     MESSAGE_DELTA = "message.delta"
     ERROR = "error"
 
