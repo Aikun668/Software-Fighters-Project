@@ -51,10 +51,14 @@ class ExerciseCenter:
         exercise_agent: ExerciseAgent | None = None,
         solve_agent=None,
         llm_service=None,
+        use_mock_llm: bool = False,
     ):
         self.exercise_agent = exercise_agent
         self.solve_agent = solve_agent
         self.llm_service = llm_service
+        # P0-B：惰性构造的 Agent 继承本旗标；`_llm()` 走 get_llm_service()，
+        # 后者已由统一环境开关接管（app/services/llm_service.py::_env_mock_flag）。
+        self.use_mock_llm = use_mock_llm
         # 节流节奏：API 现状 0.3s / 0.5s / 0.03s / 4 字，离线测试注入 0
         self.plan_progress_delay = 0.3
         self.generate_progress_delay = 0.5
@@ -63,13 +67,15 @@ class ExerciseCenter:
 
     def _exercise_agent(self) -> ExerciseAgent:
         if self.exercise_agent is None:
-            self.exercise_agent = ExerciseAgent(model_profile=PROFILE_EXERCISE)
+            self.exercise_agent = ExerciseAgent(
+                model_profile=PROFILE_EXERCISE, use_mock_llm=self.use_mock_llm
+            )
         return self.exercise_agent
 
     def _solve_agent_instance(self):
         if self.solve_agent is None:
             from app.agents.solve_agent import SolveAgent
-            self.solve_agent = SolveAgent()
+            self.solve_agent = SolveAgent(use_mock_llm=self.use_mock_llm)
         return self.solve_agent
 
     def _llm(self):

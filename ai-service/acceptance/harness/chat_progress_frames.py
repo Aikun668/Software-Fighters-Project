@@ -10,10 +10,10 @@
       → 真 ChatTaskDispatcher（token 泵 + progress 转发）
       → 真 TutorAgent 图（retrieve → respond）
 
-⚠️ **本 harness 必须额外强制 LLM 走 mock**：聊天链路**未接** `AI_SERVICE_MOCK_LLM`
-（`ChatCenter._get_dispatcher()` 直接 `DecomposeAgent()` / `TutorAgent()`，没带 mock 旗标，
-与 `internal_api` 工厂的 `_get_mock_flag()` 口径不一致）→ 没有 API Key 的环境下，
-整条链路**在构造期**就抛 `ValueError`。故只把 `create_llm` 的 `use_mock` 强制为 `True`；
+P0-B（2026-09-27）后**不再 patch 任何业务对象**：统一开关 `AI_SERVICE_MOCK_LLM=1`
+经 `internal_api._get_chat_center()` → `ChatCenter(use_mock_llm=...)` → 8 Agent + 5 Center
+全链透传生效。此前必须强行 patch `create_llm` + `OpenAILLM`（见 git 历史），
+因为聊天链路不认该开关、无 Key 环境在**构造期**就抛 `ValueError`。
 其余（ChatCenter / ChatTaskDispatcher / TutorAgent 图 / SSE 装配）**全部真实**。
 
 用法（在 ai-service 目录）：
@@ -38,53 +38,6 @@ os.environ.setdefault("AI_SERVICE_MOCK_LLM", "1")
 
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-
-import app.services.llm_service as _llm_service_module  # noqa: E402
-
-_real_create_llm = _llm_service_module.create_llm
-_real_openai_llm = _llm_service_module.OpenAILLM
-
-
-class _MockForcedOpenAILLM(_real_openai_llm):
-    """直接实例化的 LLM 也强制 mock（否则无 Key 环境在构造期就抛错）。"""
-
-    def __init__(self, *args, **kwargs):
-        kwargs["use_mock"] = True
-        super().__init__(*args, **kwargs)
-
-
-def _force_mock_create_llm(*args, **kwargs):
-    """强制 mock：只让 LLM 离线，管道与图保持真实。"""
-    kwargs["use_mock"] = True
-    return _real_create_llm(*args, **kwargs)
-
-
-def _patch_create_llm_everywhere() -> int:
-    """把 `create_llm` 与 `OpenAILLM` 换成强制 mock 版。
-
-    两处都要换，因为代码库里两条构造路径并存（都不认 `AI_SERVICE_MOCK_LLM`）：
-    - `create_llm(...)`：被多个模块各自 `from ... import`；
-    - `OpenAILLM(...)`：个别 Agent 直接实例化（如 `ProfileAgent.judge_llm`、
-      `TutorAgent._get_clarity_llm`），且用的是**实例上的** `use_mock_llm`。
-
-    `from` 导入是**绑定引用**，只改一处不生效。故：① 先换 `llm_service` 模块里的
-    源头（此后新导入的模块自动拿到 mock 版）；② 再扫描**已加载**模块，把仍指向旧
-    符号的引用一并对换。
-    """
-    patched = 0
-    _llm_service_module.create_llm = _force_mock_create_llm
-    _llm_service_module.OpenAILLM = _MockForcedOpenAILLM
-    for module in list(sys.modules.values()):
-        if getattr(module, "create_llm", None) is _real_create_llm:
-            setattr(module, "create_llm", _force_mock_create_llm)
-            patched += 1
-        if getattr(module, "OpenAILLM", None) is _real_openai_llm:
-            setattr(module, "OpenAILLM", _MockForcedOpenAILLM)
-            patched += 1
-    return patched
-
-
-_patch_create_llm_everywhere()
 
 from fastapi import FastAPI  # noqa: E402
 from httpx import ASGITransport, AsyncClient  # noqa: E402

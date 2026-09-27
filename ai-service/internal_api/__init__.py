@@ -15,7 +15,6 @@
 """
 
 import logging
-import os
 import threading
 from pathlib import Path
 
@@ -153,23 +152,23 @@ def _get_chat_center():
         with _chat_center_lock:
             if _chat_center_singleton is None:
                 from app.centers.chat_center import ChatCenter
-                _chat_center_singleton = ChatCenter()
+                _chat_center_singleton = ChatCenter(use_mock_llm=_get_mock_flag())
     return _chat_center_singleton
 
 
 def _get_mock_flag() -> bool:
     """是否用 mock LLM 构造 Agent（离线可跑）。
 
-    P3-D 改造：由硬编码 `return False` 改为**环境变量开关** ——
-    `AI_SERVICE_MOCK_LLM=1|true|yes|on` → True；未设置/其它值 → **False**（生产默认，
-    与历史行为逐字一致，故零行为变化）。
+    P3-D：由硬编码 `return False` 改为**环境变量开关**（`AI_SERVICE_MOCK_LLM`）。
+    P0-B（决策 2）：**归一到单一真源** —— 转发 `app.services.llm_service._env_mock_flag()`，
+    后者同时认过渡期兼容别名 `USE_MOCK_LLM`（任一为真即为真）。两个读取入口从此同源。
 
-    它同时是 13 个 `_get_xxx` 工厂能否在无 API key 环境构造成功的开关：
-    置 True 时工厂走 mock LLM，离线可构造；离线测试现在可以
-    `monkeypatch.setenv("AI_SERVICE_MOCK_LLM", "1")` 而不必 patch 本函数
-    （旧手法仍有效，本函数保持 `internal_api` 命名空间下的可 patch 性）。
+    它同时是 13 个 `_get_xxx` 工厂能否在无 API key 环境构造成功的开关；
+    保持 `internal_api` 命名空间下的**可 patch 性**（旧手法与契约 MS-C03 依赖这一点）。
     """
-    return os.getenv("AI_SERVICE_MOCK_LLM", "").strip().lower() in {"1", "true", "yes", "on"}
+    from app.services.llm_service import _env_mock_flag
+
+    return _env_mock_flag()
 
 
 def _get_profile_agent():

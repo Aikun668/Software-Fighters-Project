@@ -19,6 +19,7 @@ class DiagnoseAgent:
         self,
         config: dict[str, Any] | None = None,
         exercise_agent: ExerciseAgent | None = None,
+        use_mock_llm: bool = False,
         p_learn: float = _DEFAULT_P_LEARN,
         p_slip: float = _DEFAULT_P_SLIP,
         p_guess: float = _DEFAULT_P_GUESS,
@@ -26,6 +27,8 @@ class DiagnoseAgent:
     ):
         self.config = config or {}
         self.exercise_agent = exercise_agent
+        # P0-B：非 BaseAgent 子类，需显式持有旗标以统一装配口径
+        self.use_mock_llm = use_mock_llm
         self.p_learn = p_learn
         self.p_slip = p_slip
         self.p_guess = p_guess
@@ -57,7 +60,7 @@ class DiagnoseAgent:
 
     async def _generate_attempts(self, topic: str, skills: list[str], student_profile: dict) -> list[dict]:
         try:
-            agent = self.exercise_agent or ExerciseAgent()
+            agent = self.exercise_agent or ExerciseAgent(use_mock_llm=self.use_mock_llm)
             state = await agent.run({
                 "topic": topic,
                 "count": len(skills) * 2 or 3,

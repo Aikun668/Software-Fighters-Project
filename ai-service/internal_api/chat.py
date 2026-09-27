@@ -68,7 +68,7 @@ async def get_conversation_summary(conversation_id: int, body: SummaryRequest):
         from app.utils.conversation_compress import format_messages_for_compress, llm_summarize
 
         messages_text = format_messages_for_compress(body.messages)
-        summary = await llm_summarize("", messages_text)
+        summary = await llm_summarize("", messages_text, use_mock=api._get_mock_flag())
 
         return api.api_success({
             "conversation_id": conversation_id,

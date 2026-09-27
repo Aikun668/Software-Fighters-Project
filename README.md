@@ -321,7 +321,9 @@ curl -X POST http://127.0.0.1:8001/internal/knowledge-graph/ai_course \
 
 ## 工程改造进展
 
-> 依据 `temp_file/9.15工程改造计划/`（渐进式架构收敛：API 只做协议、每个业务能力只有一个主入口）。当前阶段：**编排解耦（P2 收尾）**。
+> 依据 `temp_file/9.15工程改造计划/`（渐进式架构收敛：API 只做协议、每个业务能力只有一个主入口）。
+> **阶段 E（取消 / 背压 / 断线重连 / 可观测）按决策跳过** —— 其四项与《学习闭环化五优先级技术路线与实施总纲》P4 逐条对应，并入后续"按需、由真实问题触发"的建设。
+> 主线转入 `3、学习闭环化`。当前阶段：**P0 已完成，准备进入 P1**。
 
 | 轮次 | 内容 | 状态 | 验收记录 |
 |---|---|---|---|
@@ -345,6 +347,7 @@ curl -X POST http://127.0.0.1:8001/internal/knowledge-graph/ai_course \
 | **画像存证键序归一化** | review 发现 `deep_solve.py` 接入 `BaseWorkflow` 后画像载荷的 **JSON 字段顺序**变化 → raw-text sha256 全变，但 **84 个事件逐条语义完全相同**。harness 增加 `data:` 载荷 `sort_keys` 归一化（与计划域日期归一化同法），基准重出为 `acceptance/snapshots/profile/_accept_profile_pipeline_after_normalized.txt`；**同规则回放 09-25 旧基准 → 3/3 一致** | ✅ | 本轮（2026-09-26） |
 | **阶段 D 最小切片 · 执行进度可见** | 内部 `node.started` / `node.completed` → 线上 `progress` 帧。`node.started` 取自 `debug` 流的 `task` 事件（实测与 `updates` **同形 namespace**，故**不必**逐节点改 `custom` writer）；前端解析器新增 `onProgress`（**绝不进正文**）+ 对话页最简进度行。**用户可见变更轮**：既有帧逐帧不变、只**新增**进度帧。动手前侦察确认 **Java 网关原样透传**新事件类型（`emitter.send(SseEmitter.event().data(eventData))`，其 `type` 分支只用于入库、不过滤）。契约 `PG-A01`~`PG-A05` / `PG-B01` / `GS-A08` | ✅ | `阶段D-执行进度可见-2026-09-26.md` |
 | **阶段 D 收口 · 端到端 harness 补盲区** | 新增 `acceptance/harness/chat_progress_frames.py`：**不 stub 任何 Center/Workflow**，跑真实 `POST /internal/api/chat`（ChatCenter → ChatTaskDispatcher → TutorAgent 图），把 `progress` 帧纳入指纹与断言（started/completed 成对、token 正文非空、done 唯一且最后）。实测 **79 帧**（69 token + 6 进度帧）、`progress_stages=['analyze','respond','retrieve']`、两次运行指纹一致。**过程中发现真问题**：聊天链路**未接** `AI_SERVICE_MOCK_LLM` —— 构造 Agent 时不传 mock 旗标（`ChatCenter._get_dispatcher()` 直连 `DecomposeAgent()` 等）、个别处还直接 `OpenAILLM(...)`，故无 Key 环境下整条链路在**构造期**抛错；harness 被迫对 `create_llm` / `OpenAILLM` 做全覆盖 patch（已在记录登记） | ✅ | `阶段D-执行进度可见-2026-09-26.md` |
+| **P0 真实链路可信（学习闭环化首个阶段）** | **P0-B**：开关归一到 `AI_SERVICE_MOCK_LLM` 单一真源（`USE_MOCK_LLM` 兼容别名）+ `create_llm`/`OpenAILLM`/`SparkLLM` 改 `None` 语义 + 7 Center / Dispatcher / 2 Agent / 摘要路径全链透传；**P0-A**：真实链路台账；**P0-C**：`chat_progress_frames` **去掉 47 行全覆盖 patch**，新增计划 / 练习两条真链路 harness。**实测**：契约 **34 passed**、针对性回归 **202 passed**、聊天 harness **79 帧零 patch**（与阶段 D 记录一致 ⇒ 行为等价）。过程中修复 **3 处被 patch 掩盖的漏网**（`VisualizePipeline` / `plan_center.ExerciseCenter` / dispatcher 默认 Center） | ✅ | `1、P0-真实链路可信/验收记录/P0-真实链路与模型配置一致性-2026-09-27.md` |
 
 **全量测试**：`1595 passed / 15 skipped / 0 failed`（P3-D 新增 22 例 + P3-E 新增 24 例契约后见验收记录）
 
@@ -358,7 +361,8 @@ curl -X POST http://127.0.0.1:8001/internal/knowledge-graph/ai_course \
 
 **仍有登记（未做）**：① dispatcher 在 `create_task` 前 `current_emitter.set` 的上下文污染窗口（实际无害）；② ~~节点事件暂无**用户可见**消费者~~ → 阶段 D 已接（**仅对话页**，`conversations.ts` 另一份解析器与其余页面待接）；③ 进度**文案映射表**未做 —— 占位文案直接露内部节点名（`extract` / `merge`）；④ ~~端到端 harness 盲区~~ → **已补**：`acceptance/harness/chat_progress_frames.py`（真实聊天链路，`progress` 帧入指纹）；⑤ 聊天链路未接 `AI_SERVICE_MOCK_LLM`（见上条：构造 Agent 不传旗标 + 直接 `OpenAILLM(...)`）→ 无 Key 环境无法离线跑聊天链路
 
-**下一步**：阶段 E（取消 / 背压 / 断线重连 / 可观测 —— 按真实需求择项）；或先补 ③ 文案映射表与 ④ 端到端 harness 盲区。
+**下一步**：**进入 P1**（学习状态与学习证据 V1 设计），需先立 `P1-学习状态与学习证据V1设计方案.md`。
+**前提（P0-A 台账结论）**：四个学生动作中**只有"答疑"全链贯通**，计划 / 练习 / 资源的**前端第一跳是断的**（页面为静态演示数据）→ P1 的"六类状态样例"只能先用后端 / harness 造数据，**不能假装已有真实学习证据**；这些页面的真实接线属 P3。
 
 ---
 

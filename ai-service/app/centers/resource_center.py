@@ -11,10 +11,20 @@ logger = logging.getLogger(__name__)
 
 
 class ResourceCenter:
-    def __init__(self, resource_workflow=None, content_agent=None, inquiry_service=None):
+    def __init__(
+        self,
+        resource_workflow=None,
+        content_agent=None,
+        inquiry_service=None,
+        use_mock_llm: bool = False,
+    ):
         self.resource_workflow = resource_workflow
         self.content_agent = content_agent
         self.inquiry_service = inquiry_service
+        # P0-B：惰性构造的 ResourceGenWorkflow 继承本旗标（其默认 use_mock=False
+        # 会**显式**阻断环境跟随）；InquiryService 走 get_llm_service()，
+        # 已由统一环境开关接管。
+        self.use_mock_llm = use_mock_llm
 
     async def execute(self, task: CenterTask, event_queue=None) -> CenterResult:
         """聊天路径：先 InquiryService.check，清晰后调 _run_generation。"""
@@ -91,7 +101,7 @@ class ResourceCenter:
 
         每次请求仅运行一次 Workflow；event_queue 非空时透传给 Workflow（用于内部进度事件）。
         """
-        workflow = self.resource_workflow or ResourceGenWorkflow()
+        workflow = self.resource_workflow or ResourceGenWorkflow(use_mock=self.use_mock_llm)
         workflow_state: dict[str, Any] = {
             "user_id": user_id,
             "topic": topic,

@@ -27,21 +27,24 @@ class TutorCenter:
         self,
         tutor_agent: TutorAgent | None = None,
         profile_agent: ProfileAgent | None = None,
+        use_mock_llm: bool = False,
     ):
         self.tutor_agent = tutor_agent
         self.profile_agent = profile_agent
+        # P0-B：惰性构造的 Agent 继承本旗标
+        self.use_mock_llm = use_mock_llm
         # 节流节奏：API 现状 0.03s 间隔 / 4 字分片，离线测试注入 0
         self.token_delay = 0.03
         self.chunk_size = 4
 
     def _tutor_agent(self) -> TutorAgent:
         if self.tutor_agent is None:
-            self.tutor_agent = TutorAgent()
+            self.tutor_agent = TutorAgent(use_mock_llm=self.use_mock_llm)
         return self.tutor_agent
 
     def _profile_agent_instance(self) -> ProfileAgent:
         if self.profile_agent is None:
-            self.profile_agent = ProfileAgent()
+            self.profile_agent = ProfileAgent(use_mock_llm=self.use_mock_llm)
         return self.profile_agent
 
     async def stream_chat(

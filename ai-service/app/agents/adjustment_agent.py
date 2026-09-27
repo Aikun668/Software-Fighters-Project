@@ -7,8 +7,10 @@ logger = logging.getLogger(__name__)
 
 
 class AdjustmentAgent:
-    def __init__(self, config: dict[str, Any] | None = None):
+    def __init__(self, config: dict[str, Any] | None = None, use_mock_llm: bool = False):
         self.config = config or {}
+        # 本 Agent 只用纯算法 PlanService，不构造 LLM；保留旗标以统一装配口径
+        self.use_mock_llm = use_mock_llm
         self.plan_service = PlanService()
 
     async def run(self, state: dict) -> dict:

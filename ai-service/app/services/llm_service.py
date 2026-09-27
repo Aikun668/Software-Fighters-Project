@@ -276,6 +276,21 @@ PROFILE_REVIEW = AgentModelProfile(
 # ═══════════════════════════════════════════════════════════════
 
 
+def _env_mock_flag() -> bool:
+    """统一 mock 开关（**单一真源**，学习闭环化 P0-B 决策 2）。
+
+    主开关 `AI_SERVICE_MOCK_LLM`；兼容别名 `USE_MOCK_LLM`（过渡期，任一为真即为真）。
+
+    归一前是两套并存：`internal_api._get_mock_flag()` 只读前者、
+    `get_llm_service()` 只读后者。归一后两个读取入口同源，老环境（只配了
+    `USE_MOCK_LLM`）行为只增不减。
+    """
+    for name in ("AI_SERVICE_MOCK_LLM", "USE_MOCK_LLM"):
+        if os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}:
+            return True
+    return False
+
+
 _llm_service_singleton = None
 
 
@@ -283,7 +298,7 @@ def get_llm_service(use_mock: bool | None = None):
     global _llm_service_singleton
     if _llm_service_singleton is None:
         if use_mock is None:
-            use_mock = os.getenv("USE_MOCK_LLM", "false").lower() == "true"
+            use_mock = _env_mock_flag()
         _llm_service_singleton = create_llm(use_mock=use_mock)
     elif use_mock is not None and use_mock != _llm_service_singleton.use_mock:
         raise RuntimeError(
@@ -297,7 +312,7 @@ def get_llm_service(use_mock: bool | None = None):
 def create_llm(
     temperature: float = 0.7,
     max_tokens: int = 8192,
-    use_mock: bool = False,
+    use_mock: bool | None = None,
     model: str | None = None,
     api_key: str = "",
     base_url: str = "",
@@ -309,10 +324,14 @@ def create_llm(
     LLM_PROVIDER=openai  → OpenAILLM (OpenAI 兼容 HTTP)
 
     Args:
+        use_mock: `True`/`False` 显式指定（显式优先）；`None`（默认）时读统一
+            环境开关 `_env_mock_flag()` —— 保证"未显式传参"的路径也能离线构造。
         model: 模型名称，仅 OpenAI 兼容后端使用。None 时使用 MINIMAX_MODEL_CHAT 环境变量。
         api_key: 非空时优先于 MINIMAX_API_KEY 环境变量。
         base_url: 非空时优先于 MINIMAX_BASE_URL 环境变量。
     """
+    if use_mock is None:
+        use_mock = _env_mock_flag()
     provider = os.getenv("LLM_PROVIDER", "openai").lower()
     if provider == "openai":
         return OpenAILLM(
@@ -346,8 +365,10 @@ class SparkLLM:
         self,
         temperature: float = 0.7,
         max_tokens: int = 4096,
-        use_mock: bool = False,
+        use_mock: bool | None = None,
     ):
+        if use_mock is None:
+            use_mock = _env_mock_flag()
         self.app_id = os.getenv("SPARK_APP_ID", "")
         self.api_key = os.getenv("SPARK_API_KEY", "")
         self.api_secret = os.getenv("SPARK_API_SECRET", "")
@@ -569,12 +590,14 @@ class OpenAILLM:
         self,
         temperature: float = 0.7,
         max_tokens: int = 4096,
-        use_mock: bool = False,
+        use_mock: bool | None = None,
         model: str | None = None,
         api_key: str = "",
         base_url: str = "",
         thinking_enabled: bool = False,
     ):
+        if use_mock is None:
+            use_mock = _env_mock_flag()
         self.base_url = (base_url or os.getenv("DEEPSEEK_BASE_URL", "") or os.getenv("MINIMAX_BASE_URL", "https://api.minimax.cn/v1")).rstrip("/")
         raw_key = api_key or os.getenv("DEEPSEEK_API_KEY", "") or os.getenv("MINIMAX_API_KEY", "")
         self._all_keys = [k.strip() for k in raw_key.split(",") if k.strip()]

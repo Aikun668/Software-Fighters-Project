@@ -53,12 +53,15 @@ class AutoCenter:
         diagnose_agent: DiagnoseAgent | None = None,
         profile_agent: ProfileAgent | None = None,
         visualize_pipeline: VisualizePipeline | None = None,
+        use_mock_llm: bool = False,
     ):
         self.tutor_agent = tutor_agent
         self.solve_agent = solve_agent
         self.diagnose_agent = diagnose_agent
         self.profile_agent = profile_agent
         self.visualize_pipeline = visualize_pipeline
+        # P0-B：未被注入的 Agent 在惰性构造时必须继承本旗标
+        self.use_mock_llm = use_mock_llm
 
     async def execute(self, task: CenterTask, on_token=None) -> CenterResult:
         intent = task.intent
@@ -83,7 +86,7 @@ class AutoCenter:
         style: str,
         on_token=None,
     ) -> CenterResult:
-        agent = self.tutor_agent or TutorAgent()
+        agent = self.tutor_agent or TutorAgent(use_mock_llm=self.use_mock_llm)
         # ── B1：把 on_token 透传给 agent.run，最终到 TutorAgent._respond_node
         # 启动 chat_stream 旁路。None 时维持原非流式路径。
         run_state: dict = {
@@ -157,7 +160,9 @@ class AutoCenter:
             return []
 
         try:
-            pipeline = self.visualize_pipeline or VisualizePipeline()
+            pipeline = self.visualize_pipeline or VisualizePipeline(
+                use_mock_llm=self.use_mock_llm
+            )
             result = await pipeline.run(question=question, answer=answer[:3000])
         except Exception as e:
             logger.warning(f"VisualizePipeline failed (non-blocking): {e}")
@@ -186,7 +191,7 @@ class AutoCenter:
         student_profile: dict,
     ) -> CenterResult:
         topic = task.params.get("topic") or task.input
-        agent = self.diagnose_agent or DiagnoseAgent()
+        agent = self.diagnose_agent or DiagnoseAgent(use_mock_llm=self.use_mock_llm)
         try:
             state = await agent.run({
                 "topic": topic,
@@ -227,7 +232,7 @@ class AutoCenter:
         messages: list[dict],
         student_profile: dict,
     ) -> CenterResult:
-        agent = self.profile_agent or ProfileAgent()
+        agent = self.profile_agent or ProfileAgent(use_mock_llm=self.use_mock_llm)
         try:
             state = await agent.run({
                 "messages": messages or [{"role": "user", "content": task.input}],
@@ -291,7 +296,9 @@ class AutoCenter:
         messages: list[dict],
         student_profile: dict,
     ) -> CenterResult:
-        agent = self.solve_agent or SolveAgent(model_profile=PROFILE_CODE)
+        agent = self.solve_agent or SolveAgent(
+            model_profile=PROFILE_CODE, use_mock_llm=self.use_mock_llm
+        )
         context_parts = []
         for m in messages[-6:]:
             role_label = "学生" if m.get("role") == "user" else "AI"

@@ -20,11 +20,14 @@ class VisualizationCenter:
         mindmap_agent: MindMapAgent | None = None,
         graph_service: GraphService | None = None,
         tutor_agent: "TutorAgent | None" = None,
+        use_mock_llm: bool = False,
     ):
         self.visualize_pipeline = visualize_pipeline
         self.mindmap_agent = mindmap_agent
         self.graph_service = graph_service
         self._tutor_agent = tutor_agent
+        # P0-B：惰性构造的 Agent / Pipeline 继承本旗标
+        self.use_mock_llm = use_mock_llm
 
     async def execute(self, task: CenterTask) -> CenterResult:
         topic = task.params.get("topic") or task.input
@@ -39,7 +42,7 @@ class VisualizationCenter:
             if task.intent == "visualize":
                 try:
                     if self._tutor_agent is None:
-                        self._tutor_agent = TutorAgent()
+                        self._tutor_agent = TutorAgent(use_mock_llm=self.use_mock_llm)
                     tutor = self._tutor_agent
                     try:
                         tutor_state = await asyncio.wait_for(
@@ -61,7 +64,9 @@ class VisualizationCenter:
                         answer = f"用户问题：{task.input}\n（基于问题本身推断可视化需求）"
 
                     async with asyncio.timeout(_VIS_HARD_TIMEOUT):
-                        pipeline = self.visualize_pipeline or VisualizePipeline()
+                        pipeline = self.visualize_pipeline or VisualizePipeline(
+                            use_mock_llm=self.use_mock_llm
+                        )
                         viz_result = await pipeline.run(
                             question=task.input,
                             answer=answer,
@@ -110,7 +115,7 @@ class VisualizationCenter:
                 })
 
             if task.intent == "mindmap":
-                agent = self.mindmap_agent or MindMapAgent()
+                agent = self.mindmap_agent or MindMapAgent(use_mock_llm=self.use_mock_llm)
                 state = await agent.run({
                     "topic": topic,
                     "student_profile": student_profile,

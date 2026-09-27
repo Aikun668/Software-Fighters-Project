@@ -112,19 +112,24 @@ class ChatTaskDispatcher:
         goal_agent: GoalAgent | None = None,
         schedule_agent: ScheduleAgent | None = None,
         adjustment_agent: AdjustmentAgent | None = None,
+        use_mock_llm: bool = False,
     ):
         # AutoCenter 的各 Agent 由其内部惰性默认构造；
         # decompose/layered_explain 仅 PlanCenter/AutoCenter 显式注入时使用
-        self.auto_center = auto_center or AutoCenter()
+        # P0-B：默认构造的 Center 继承本旗标，保证裸构造 dispatcher 也能离线跑
+        self.auto_center = auto_center or AutoCenter(use_mock_llm=use_mock_llm)
         self.plan_center = plan_center or PlanCenter(
             goal_agent=goal_agent,
             decompose_agent=decompose_agent,
             schedule_agent=schedule_agent,
             adjustment_agent=adjustment_agent,
+            use_mock_llm=use_mock_llm,
         )
-        self.resource_center = resource_center or ResourceCenter()
-        self.exercise_center = exercise_center or ExerciseCenter()
-        self.visualization_center = visualization_center or VisualizationCenter()
+        self.resource_center = resource_center or ResourceCenter(use_mock_llm=use_mock_llm)
+        self.exercise_center = exercise_center or ExerciseCenter(use_mock_llm=use_mock_llm)
+        self.visualization_center = visualization_center or VisualizationCenter(
+            use_mock_llm=use_mock_llm
+        )
 
     async def execute(
         self,

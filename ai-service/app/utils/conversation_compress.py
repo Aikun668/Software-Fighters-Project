@@ -41,12 +41,19 @@ def format_messages_for_compress(messages: list[dict]) -> str:
     return "\n".join(lines)
 
 
-async def llm_summarize(existing_summary: str, new_messages_text: str) -> str | None:
-    """用 LLM 对新消息进行增量摘要压缩"""
+async def llm_summarize(
+    existing_summary: str,
+    new_messages_text: str,
+    use_mock: bool | None = None,
+) -> str | None:
+    """用 LLM 对新消息进行增量摘要压缩。
+
+    `use_mock` 由调用方（API 层）按统一开关传入；None 时 create_llm 自行跟随环境。
+    """
     if not new_messages_text.strip():
         return existing_summary or None
 
-    llm = create_llm(temperature=0.2)
+    llm = create_llm(temperature=0.2, use_mock=use_mock)
 
     if existing_summary:
         prompt = (
@@ -68,7 +75,7 @@ async def llm_summarize(existing_summary: str, new_messages_text: str) -> str | 
         if result:
             summary = result.strip()
             if len(summary) > SUMMARY_SELF_COMPRESS_AT:
-                summary = await self_compress(summary)
+                summary = await self_compress(summary, use_mock=use_mock)
             return summary[:SUMMARY_MAX_CHARS]
     except Exception as e:
         logger.warning(f"LLM summarize failed: {e}")
@@ -76,9 +83,9 @@ async def llm_summarize(existing_summary: str, new_messages_text: str) -> str | 
     return existing_summary or None
 
 
-async def self_compress(summary: str) -> str:
+async def self_compress(summary: str, use_mock: bool | None = None) -> str:
     """对过长摘要进行自我压缩"""
-    llm = create_llm(temperature=0.1)
+    llm = create_llm(temperature=0.1, use_mock=use_mock)
     prompt = (
         "你是一个文本压缩助手。请将以下文本压缩到 400 字以内，保留关键信息。\n\n"
         f"{summary}\n\n"

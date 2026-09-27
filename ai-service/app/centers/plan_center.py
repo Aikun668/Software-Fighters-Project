@@ -27,6 +27,7 @@ class PlanCenter:
         step_classifier=None,
         plan_service=None,
         exercise_center=None,
+        use_mock_llm: bool = False,
     ):
         self.goal_agent = goal_agent
         self.decompose_agent = decompose_agent
@@ -36,6 +37,8 @@ class PlanCenter:
         self.step_classifier = step_classifier
         self.plan_service = plan_service or PlanService
         self.exercise_center = exercise_center
+        # P0-B：本 Center 不自行构造 Agent（全部由装配层注入），保留旗标以统一口径。
+        self.use_mock_llm = use_mock_llm
 
     async def execute(self, task: CenterTask) -> CenterResult:
         context = task.context or {}
@@ -610,7 +613,7 @@ class PlanCenter:
     def _exercise_center(self):
         if self.exercise_center is None:
             from app.centers.exercise_center import ExerciseCenter
-            self.exercise_center = ExerciseCenter()
+            self.exercise_center = ExerciseCenter(use_mock_llm=self.use_mock_llm)
         return self.exercise_center
 
     async def regression_check(

@@ -62,10 +62,15 @@ class ChatCenter:
         router_agent: RouterAgent | None = None,
         dispatcher: ChatTaskDispatcher | None = None,
         capability_gate: CapabilityGate | None = None,
+        use_mock_llm: bool = False,
     ):
         self.router_agent = router_agent
         self.dispatcher = dispatcher
         self.capability_gate = capability_gate
+        # P0-B：默认 dispatcher 路径要把旗标透传给 8 Agent + 5 Center。
+        # 不透传时，BaseAgent 的默认 `use_mock_llm=False` 会**显式**阻断环境跟随，
+        # 无 Key 环境在构造期抛 ValueError（见 tests/test_mock_llm_switch_contract.py）。
+        self.use_mock_llm = use_mock_llm
 
     def _get_router(self) -> RouterAgent:
         if self.router_agent is None:
@@ -79,33 +84,39 @@ class ChatCenter:
 
     def _get_dispatcher(self) -> ChatTaskDispatcher:
         if self.dispatcher is None:
-            decompose = DecomposeAgent()
-            goal = GoalAgent()
-            schedule = ScheduleAgent()
-            adjustment = AdjustmentAgent()
-            diagnose = DiagnoseAgent()
-            profile = ProfileAgent()
-            exercise = ExerciseAgent(model_profile=PROFILE_EXERCISE)
-            content = ContentAgent()
+            mock = self.use_mock_llm
+            decompose = DecomposeAgent(use_mock_llm=mock)
+            goal = GoalAgent(use_mock_llm=mock)
+            schedule = ScheduleAgent(use_mock_llm=mock)
+            adjustment = AdjustmentAgent(use_mock_llm=mock)
+            diagnose = DiagnoseAgent(use_mock_llm=mock)
+            profile = ProfileAgent(use_mock_llm=mock)
+            exercise = ExerciseAgent(model_profile=PROFILE_EXERCISE, use_mock_llm=mock)
+            content = ContentAgent(use_mock_llm=mock)
 
             self.dispatcher = ChatTaskDispatcher(
                 auto_center=AutoCenter(
                     diagnose_agent=diagnose,
                     profile_agent=profile,
+                    use_mock_llm=mock,
                 ),
                 plan_center=PlanCenter(
                     goal_agent=goal,
                     decompose_agent=decompose,
                     schedule_agent=schedule,
                     adjustment_agent=adjustment,
+                    use_mock_llm=mock,
                 ),
                 resource_center=ResourceCenter(
                     content_agent=content,
+                    use_mock_llm=mock,
                 ),
                 exercise_center=ExerciseCenter(
                     exercise_agent=exercise,
+                    use_mock_llm=mock,
                 ),
-                visualization_center=VisualizationCenter(),
+                visualization_center=VisualizationCenter(use_mock_llm=mock),
+                use_mock_llm=mock,
             )
         return self.dispatcher
 
