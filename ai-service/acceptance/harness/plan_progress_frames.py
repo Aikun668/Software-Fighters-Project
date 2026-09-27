@@ -62,7 +62,6 @@ def _step(order: int, **over) -> dict:
         "status": "pending",
         "estimated_days": 1,
         "topic_difficulty": 3,
-        "mastery_current": 0.5,
         "review_count": 0,
         "last_review_at": None,
     }
@@ -109,7 +108,6 @@ def _fingerprint(payload: dict) -> str:
     parts.append(f"step_order={step.get('step_order')}")
     parts.append(f"topic={step.get('topic')}")
     parts.append(f"status={step.get('status')}")
-    parts.append(f"mastery_current={step.get('mastery_current')}")
     updates = payload.get("mastery_updates") or {}
     for node in sorted(updates):
         info = updates[node] or {}

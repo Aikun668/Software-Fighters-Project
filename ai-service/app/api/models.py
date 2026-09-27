@@ -221,6 +221,7 @@ class PlanStatusRequest(BaseModel):
     """Java 传入 plan 元数据 + steps 列表，Python 计算 soft_landing + decay"""
     plan: dict = Field(..., description="计划元数据 {id, user_id, status, total_steps, completed_steps, last_activity_at}")
     steps: list[dict] = Field(default_factory=list, description="计划步骤列表")
+    masteries: dict[str, float] = Field(default_factory=dict, description="当前各节点掌握度（掌握度唯一真源，P1 §3.3）")
 
 
 class RegressionCheckRequest(BaseModel):
@@ -229,6 +230,7 @@ class RegressionCheckRequest(BaseModel):
     plan: dict = Field(default_factory=dict, description="计划元数据（Java 传入）")
     steps: list[dict] = Field(default_factory=list, description="计划步骤列表（Java 传入）")
     days_idle: int = Field(default=0, description="计划空闲天数（Java 计算）")
+    masteries: dict[str, float] = Field(default_factory=dict, description="当前各节点掌握度（掌握度唯一真源，P1 §3.3）")
 
 
 class ReviewScheduleRequest(BaseModel):

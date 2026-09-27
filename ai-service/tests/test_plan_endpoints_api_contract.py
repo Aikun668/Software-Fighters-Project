@@ -351,7 +351,6 @@ class TestProgressContract:
             "knowledge_node_id": "n2",
             "status": "completed",
             "score": 0.8,
-            "mastery_current": 0.62,
             "activity_type": "exercise",
             "duration_minutes": 30,
         }
@@ -381,7 +380,7 @@ class TestProgressContract:
         data = r.json()["data"]
         assert data["updated_step"]["step_order"] == 1
         assert data["updated_step"]["knowledge_node_id"] == "n1"
-        assert data["updated_step"]["mastery_current"] == 0.6
+        assert data["mastery_updates"]["n1"]["new_mastery"] == 0.6
         assert data["mastery_updates"]["n1"]["event_type"] == "resource_viewed"
         assert data["mastery_updates"]["n1"]["old_mastery"] == 0.5
 
@@ -636,6 +635,7 @@ class TestPlanStatusContract:
         """PL-A27: paused + days_idle=5 → soft_landing（warmup）+ days_idle 注入。"""
         r = client.post("/internal/plans/7/status", json={
             "plan": self._plan_with_activity(), "steps": self._steps(),
+            "masteries": {"n1": 1.0},
         })
         assert r.status_code == 200
         data = r.json()["data"]
@@ -661,20 +661,21 @@ class TestPlanStatusContract:
         }
 
     def test_a28_steps_payload_and_decayed_mastery(self, client):
-        """PL-A28: steps 只回 7 个固定字段；paused/in_progress 且 days_idle>0 才加 decayed_mastery。"""
+        """PL-A28: steps 只回 7 个固定字段（步骤快照 mastery_current 不再回传）；paused/in_progress 且 days_idle>0 才加 decayed_mastery。"""
         r = client.post("/internal/plans/7/status", json={
             "plan": self._plan_with_activity(), "steps": self._steps(),
+            "masteries": {"n1": 1.0},
         })
         assert r.status_code == 200
         data = r.json()["data"]
         assert list(data["steps"][0].keys()) == [
             "id", "step_order", "topic", "knowledge_node_id", "status",
-            "topic_difficulty", "mastery_current", "decayed_mastery",
+            "topic_difficulty", "decayed_mastery",
         ]
         assert data["steps"][0]["decayed_mastery"] == 0.32
         assert data["steps"][1] == {
             "id": 2, "step_order": 2, "topic": "循环", "knowledge_node_id": "n2",
-            "status": "pending", "topic_difficulty": 3, "mastery_current": 0.5,
+            "status": "pending", "topic_difficulty": 3,
         }
 
     def test_a29_active_plan_has_no_soft_landing(self, client):
@@ -682,6 +683,7 @@ class TestPlanStatusContract:
         r = client.post("/internal/plans/7/status", json={
             "plan": self._plan_with_activity(status="active"),
             "steps": [_step(1, topic="变量", status="in_progress", mastery_current=1.0)],
+            "masteries": {"n1": 1.0},
         })
         assert r.status_code == 200
         data = r.json()["data"]
@@ -1003,8 +1005,8 @@ class TestRegressionCheckContract:
     def test_a48_single_node_failure_degrades(self, client):
         """PL-A48: 单个节点出题异常 → 跳过该节点，其余节点照常返回。"""
         steps = [
-            _step(1, topic="变量", status="paused", mastery_current=0.2, difficulty=3),
-            _step(2, topic="循环", status="paused", mastery_current=0.2, difficulty=5),
+            _step(1, topic="变量", status="paused", difficulty=3),
+            _step(2, topic="循环", status="paused", difficulty=5),
         ]
         ctx, calls = self._agent_stub({
             "循环": RuntimeError("llm down"),
@@ -1013,6 +1015,7 @@ class TestRegressionCheckContract:
         with ctx:
             r = client.post("/internal/plans/7/regression-check", json={
                 "user_id": 1, "plan": _plan(), "steps": steps, "days_idle": 10,
+                "masteries": {"n1": 0.2, "n2": 0.2},
             })
         assert r.status_code == 200
         data = r.json()["data"]
@@ -1024,8 +1027,7 @@ class TestRegressionCheckContract:
 
     def test_a49_grading_updates_mastery_and_reorders(self, client):
         """PL-A49: 阶段2 判分（choice + 简答）→ 掌握度更新 + 重排 + after_fail。"""
-        steps = [_step(1, topic="变量", status="paused", mastery_current=0.5,
-                       knowledge_node_id="n1")]
+        steps = [_step(1, topic="变量", status="paused", knowledge_node_id="n1")]
 
         def _fake_choice(user_answer, correct_answer, choices=None, multi=False, points=1):
             return {"earned": 1.0}
@@ -1043,6 +1045,7 @@ class TestRegressionCheckContract:
                 "plan": _plan(),
                 "steps": steps,
                 "days_idle": 10,
+                "masteries": {"n1": 0.5},
                 "answers": [
                     {"topic": "变量", "question_type": "choice",
                      "user_answer": "A", "correct_answer": "A", "choices": ["A", "B"]},
@@ -1059,18 +1062,17 @@ class TestRegressionCheckContract:
             "变量": {
                 "previous_mastery": 0.5,
                 "new_mastery": 0.58,
-                "review_count": 1,
                 "step_id": 1,
             },
         }
         assert data["reordered_steps"] == [
-            {"step_order": 1, "topic": "变量", "status": "review", "mastery_current": None},
-            {"step_order": 2, "topic": "变量", "status": "paused", "mastery_current": 0.5},
+            {"step_order": 1, "topic": "变量", "status": "review"},
+            {"step_order": 2, "topic": "变量", "status": "paused"},
         ]
 
     def test_a50_all_pass_skips_reorder(self, client):
         """PL-A50: 无衰减 → reordered_steps=None + after_pass；avg>=0.6 走 exercise_done。"""
-        steps = [_step(1, topic="变量", status="completed", mastery_current=0.5,
+        steps = [_step(1, topic="变量", status="completed",
                        knowledge_node_id="n1")]
 
         def _fake_choice(user_answer, correct_answer, choices=None, multi=False, points=1):
@@ -1083,6 +1085,7 @@ class TestRegressionCheckContract:
                 "plan": _plan(),
                 "steps": steps,
                 "days_idle": 30,
+                "masteries": {"n1": 0.5},
                 "answers": [{"topic": "变量", "question_type": "choice",
                              "user_answer": "A", "correct_answer": "A"}],
             })
@@ -1371,7 +1374,7 @@ class TestPlanCenterEntries:
             masteries={"n2": 0.5}, step_id=0, step_order=2, status="completed",
             score=0.8, activity_type="exercise", duration_minutes=30,
         )
-        assert result["updated_step"]["mastery_current"] == 0.62
+        assert result["mastery_updates"]["n2"]["new_mastery"] == 0.62
         assert result["mastery_updates"]["n2"]["delta"] == 0.12
         assert result["progress_pct"] == 33
 
@@ -1413,8 +1416,8 @@ class TestPlanCenterEntries:
                 status="paused", total_steps=1, completed_steps=0,
                 last_activity_at=(datetime.now(timezone.utc) - timedelta(days=5)).isoformat(),
             ),
-            steps=[_step(1, topic="变量", status="paused", difficulty=5,
-                         mastery_current=1.0)],
+            steps=[_step(1, topic="变量", status="paused", difficulty=5)],
+            masteries={"n1": 1.0},
         )
         assert result["days_idle"] == 5
         assert result["soft_landing"]["days_idle"] == 5
@@ -1469,8 +1472,9 @@ class TestPlanCenterEntries:
         center = Center(exercise_center=stub)
         result = await center.regression_check(
             plan_id=7, plan=_plan(),
-            steps=[_step(1, topic="变量", status="paused", mastery_current=1.0, difficulty=5)],
+            steps=[_step(1, topic="变量", status="paused", difficulty=5)],
             days_idle=5, answers=None,
+            masteries={"n1": 1.0},
         )
         assert stub.warmup_calls == [{"node_names": ["变量"]}]
         assert result == {
@@ -1494,11 +1498,12 @@ class TestPlanCenterEntries:
             with _patch_method(ev, "grade_choice", _fake_choice):
                 result = await center.regression_check(
                     plan_id=7, plan=_plan(),
-                    steps=[_step(1, topic="变量", status="paused", mastery_current=0.5,
+                    steps=[_step(1, topic="变量", status="paused",
                                  knowledge_node_id="n1")],
                     days_idle=10,
                     answers=[{"topic": "变量", "question_type": "choice",
                               "user_answer": "A", "correct_answer": "A"}],
+                    masteries={"n1": 0.5},
                 )
         assert result["message"] == RETURN_MESSAGES["after_fail"]
         assert result["mastery_updates"]["变量"]["new_mastery"] == 0.7

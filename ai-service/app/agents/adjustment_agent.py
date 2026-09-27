@@ -25,9 +25,8 @@ class AdjustmentAgent:
         paused_steps = [
             {
                 "topic": s.get("topic", ""),
-                "mastery_current": mastery_vector.get(s.get("topic", ""), 0.3),
+                "mastery": mastery_vector.get(s.get("topic", ""), 0.0),
                 "topic_difficulty": 3,
-                "review_count": 0,
             }
             for s in plan_steps
         ]

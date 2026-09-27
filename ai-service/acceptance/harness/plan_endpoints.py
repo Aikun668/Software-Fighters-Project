@@ -92,7 +92,7 @@ PAUSED_PLAN = lambda: _plan(  # noqa: E731
     last_activity_at=IDLE_ANCHOR,
 )
 PAUSED_STEPS = lambda: [  # noqa: E731
-    _step(1, topic="变量", status="paused", topic_difficulty=5, mastery_current=1.0),
+    _step(1, topic="变量", status="paused", topic_difficulty=5),
     _step(2, topic="循环"),
 ]
 
@@ -111,14 +111,14 @@ CASES = [
     ("node-status-change", "/internal/plans/7/node-status-change", {
         "node_id": "n1", "old_status": "pending", "new_status": "forgotten",
         "plan": _plan(total_steps=2, completed_steps=0),
-        "steps": [_step(1, topic="变量", mastery_current=1.0), _step(2, topic="循环")],
-        "masteries": {},
+        "steps": [_step(1, topic="变量"), _step(2, topic="循环")],
+        "masteries": {"n1": 1.0},
     }),
     ("status", "/internal/plans/7/status", {
-        "plan": PAUSED_PLAN(), "steps": PAUSED_STEPS(),
+        "plan": PAUSED_PLAN(), "steps": PAUSED_STEPS(), "masteries": {"n1": 1.0},
     }),
     ("status-legacy", "/internal/plans/status", {
-        "plan": PAUSED_PLAN(), "steps": PAUSED_STEPS(),
+        "plan": PAUSED_PLAN(), "steps": PAUSED_STEPS(), "masteries": {"n1": 1.0},
     }),
     ("review-schedule", "/internal/plans/7/review-schedule", {
         "days_ahead": 7,
@@ -139,15 +139,13 @@ CASES = [
     }),
     ("regression-warmup", "/internal/plans/7/regression-check", {
         "user_id": 1, "plan": _plan(),
-        "steps": [_step(1, topic="变量", status="paused", topic_difficulty=5,
-                        mastery_current=1.0)],
-        "days_idle": 5,
+        "steps": [_step(1, topic="变量", status="paused", topic_difficulty=5)],
+        "days_idle": 5, "masteries": {"n1": 1.0},
     }),
     ("regression-graded", "/internal/plans/7/regression-check", {
         "user_id": 1, "plan": _plan(),
-        "steps": [_step(1, topic="变量", status="paused", mastery_current=0.5,
-                        knowledge_node_id="n1")],
-        "days_idle": 10,
+        "steps": [_step(1, topic="变量", status="paused", knowledge_node_id="n1")],
+        "days_idle": 10, "masteries": {"n1": 0.5},
         "answers": [{"topic": "变量", "question_type": "choice",
                      "user_answer": "A", "correct_answer": "A"}],
     }),

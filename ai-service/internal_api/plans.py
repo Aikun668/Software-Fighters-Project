@@ -178,10 +178,10 @@ async def on_node_status_change(plan_id: int, body: NodeStatusChangeRequest):
 
 @router.post("/plans/{plan_id}/status")
 async def get_plan_status(plan_id: int, body: PlanStatusRequest):
-    """查询计划状态（含软着陆触发检测）。Java 传入 plan + steps 数据。"""
+    """查询计划状态（含软着陆触发检测）。Java 传入 plan + steps + masteries 数据。"""
     try:
         return api.api_success(await api._get_plan_center().plan_status(
-            plan=body.plan, steps=body.steps,
+            plan=body.plan, steps=body.steps, masteries=body.masteries or {},
         ))
     except PlanNotFoundError as e:
         return api.api_error(ErrorCode.NOT_FOUND, str(e), status_code=404)
@@ -198,7 +198,7 @@ async def get_plan_status_legacy(body: PlanStatusRequest):
     """
     try:
         return api.api_success(await api._get_plan_center().plan_status(
-            plan=body.plan, steps=body.steps,
+            plan=body.plan, steps=body.steps, masteries=body.masteries or {},
         ))
     except PlanNotFoundError as e:
         return api.api_error(ErrorCode.NOT_FOUND, str(e), status_code=404)
@@ -219,6 +219,7 @@ async def regression_check(plan_id: int, body: RegressionCheckRequest):
             steps=body.steps,
             days_idle=body.days_idle,
             answers=body.answers,
+            masteries=body.masteries or {},
         )
         return api.api_success(result)
     except PlanNotFoundError as e:

@@ -380,18 +380,24 @@ class PlanCenter:
                 start = today
         return max((today - start).days, 0)
 
-    async def plan_status(self, *, plan: dict, steps: list[dict]) -> dict:
-        """计划状态 payload：软着陆检测 + 步骤衰减 + 里程碑进度。"""
+    async def plan_status(
+        self, *, plan: dict, steps: list[dict], masteries: dict | None = None,
+    ) -> dict:
+        """计划状态 payload：软着陆检测 + 步骤衰减 + 里程碑进度。
+
+        掌握度唯一真源 = 传入的 masteries（按 knowledge_node_id 键），P1 §3.3。
+        """
         if not plan:
             raise PlanNotFoundError("计划不存在")
 
+        masteries = masteries or {}
         days_idle = self._days_idle(plan)
         paused_steps = [s for s in steps if s.get("status") in ("paused", "in_progress")]
 
         soft_landing = None
         if plan.get("status") == "paused" and days_idle > 0:
             soft_landing = self.plan_service.soft_landing(
-                [self._decay_input(s) for s in paused_steps], days_idle,
+                [self._decay_input(s, masteries) for s in paused_steps], days_idle,
             )
             soft_landing["days_idle"] = days_idle
 
@@ -407,7 +413,7 @@ class PlanCenter:
             "days_idle": days_idle,
             "soft_landing": soft_landing,
             "steps": [
-                self._status_step_entry(s, days_idle) for s in steps
+                self._status_step_entry(s, days_idle, masteries) for s in steps
             ],
             "next_milestone": next_milestone,
             "milestone_progress": self.plan_service.build_milestone_progress(
@@ -427,15 +433,17 @@ class PlanCenter:
         return (datetime.now(timezone.utc) - dt).days
 
     @staticmethod
-    def _decay_input(step: dict) -> dict:
+    def _decay_input(step: dict, masteries: dict) -> dict:
+        """衰减输入 + 从真源 masteries 取掌握度（步骤上的 mastery_current 不参与计算，P1 §3.3）。"""
+        node_id = step.get("knowledge_node_id") or ""
         return {
             "topic": step.get("topic"),
-            "mastery_current": step.get("mastery_current") or 0,
+            "mastery": masteries.get(node_id, 0.0) if node_id else 0.0,
             "topic_difficulty": step.get("topic_difficulty") or 3,
             "review_count": step.get("review_count") or 0,
         }
 
-    def _status_step_entry(self, step: dict, days_idle: int) -> dict:
+    def _status_step_entry(self, step: dict, days_idle: int, masteries: dict) -> dict:
         entry = {
             "id": step.get("id"),
             "step_order": step.get("step_order"),
@@ -443,12 +451,12 @@ class PlanCenter:
             "knowledge_node_id": step.get("knowledge_node_id"),
             "status": step.get("status"),
             "topic_difficulty": step.get("topic_difficulty"),
-            "mastery_current": step.get("mastery_current"),
         }
         if step.get("status") in ("paused", "in_progress") and days_idle > 0:
+            data = self._decay_input(step, masteries)
             entry["decayed_mastery"] = self.plan_service.estimate_decay(
-                step.get("mastery_current") or 0, days_idle,
-                step.get("topic_difficulty") or 3, step.get("review_count") or 0,
+                data["mastery"], days_idle,
+                data["topic_difficulty"], data["review_count"],
             )
         return entry
 
@@ -514,7 +522,6 @@ class PlanCenter:
                 **target_step,
                 "status": status,
                 **({"score": score} if score is not None else {}),
-                "mastery_current": new_mastery,
                 "activity_type": activity_type,
                 "duration_minutes": duration_minutes,
             }
@@ -530,7 +537,6 @@ class PlanCenter:
                 "knowledge_node_id": knowledge_node_id,
                 "status": status,
                 "score": score,
-                "mastery_current": new_mastery,
                 "activity_type": activity_type,
                 "duration_minutes": duration_minutes,
             },
@@ -628,17 +634,22 @@ class PlanCenter:
         steps: list[dict],
         days_idle: int,
         answers: list[dict] | None,
+        masteries: dict | None = None,
     ) -> dict:
-        """回归检测管线：出题（跨域 warmup）→ 判分 → 重排。"""
+        """回归检测管线：出题（跨域 warmup）→ 判分 → 重排。
+
+        掌握度唯一真源 = 传入的 masteries（按 knowledge_node_id 键），P1 §3.3。
+        """
         if not plan:
             raise PlanNotFoundError("计划不存在")
 
+        masteries = masteries or {}
         if not answers:
-            return await self._regression_warmup(plan_id, steps, days_idle)
-        return await self._regression_grade(plan_id, steps, days_idle, answers)
+            return await self._regression_warmup(plan_id, steps, days_idle, masteries)
+        return await self._regression_grade(plan_id, steps, days_idle, answers, masteries)
 
     async def _regression_warmup(
-        self, plan_id: int, steps: list[dict], days_idle: int,
+        self, plan_id: int, steps: list[dict], days_idle: int, masteries: dict,
     ) -> dict:
         paused_steps = [s for s in steps if s.get("status") in ("paused", "in_progress")]
         if not paused_steps:
@@ -648,7 +659,7 @@ class PlanCenter:
             }
 
         landing = self.plan_service.soft_landing(
-            [self._decay_input(s) for s in paused_steps], days_idle,
+            [self._decay_input(s, masteries) for s in paused_steps], days_idle,
         )
         questions = []
         if landing["strategy"] != "continue":
@@ -666,10 +677,11 @@ class PlanCenter:
 
     async def _regression_grade(
         self, plan_id: int, steps: list[dict], days_idle: int, answers: list[dict],
+        masteries: dict,
     ) -> dict:
         from app.services.evaluation_service import grade_choice, grade_short_answer
 
-        decay_results = self._decay_results(steps, days_idle)
+        decay_results = self._decay_results(steps, days_idle, masteries)
 
         answers_by_topic: dict[str, list[dict]] = {}
         for ans in answers:
@@ -693,7 +705,9 @@ class PlanCenter:
             avg_score = sum(scores) / len(scores) if scores else 0
             for step in steps:
                 if step.get("topic") == topic:
-                    mastery_updates[topic] = self._grade_mastery_update(step, avg_score)
+                    mastery_updates[topic] = self._grade_mastery_update(
+                        step, avg_score, masteries,
+                    )
 
         return {
             "plan_id": plan_id,
@@ -707,22 +721,25 @@ class PlanCenter:
             "reordered_steps": self._reorder(steps, decay_results, days_idle),
         }
 
-    def _decay_results(self, steps: list[dict], days_idle: int) -> dict:
+    def _decay_results(self, steps: list[dict], days_idle: int, masteries: dict) -> dict:
         decay_results = {}
         for step in steps:
             if step.get("status") not in ("paused", "in_progress"):
                 continue
-            data = self._decay_input(step)
+            data = self._decay_input(step, masteries)
             decayed = self.plan_service.estimate_decay(
-                data["mastery_current"], days_idle,
+                data["mastery"], days_idle,
                 data["topic_difficulty"], data["review_count"],
             )
             if decayed < 0.6:
                 decay_results[data["topic"]] = "review" if decayed < 0.3 else "review_light"
         return decay_results
 
-    def _grade_mastery_update(self, step: dict, avg_score: float) -> dict:
-        previous = step.get("mastery_current") or 0
+    def _grade_mastery_update(
+        self, step: dict, avg_score: float, masteries: dict,
+    ) -> dict:
+        node_id = step.get("knowledge_node_id") or ""
+        previous = masteries.get(node_id, 0.0) if node_id else 0.0
         if avg_score >= 0.6:
             new_mastery = self.plan_service.update_mastery(previous, "exercise_done", avg_score)
         else:
@@ -730,7 +747,6 @@ class PlanCenter:
         return {
             "previous_mastery": previous,
             "new_mastery": new_mastery,
-            "review_count": (step.get("review_count") or 0) + 1,
             "step_id": step.get("id"),
         }
 
@@ -742,7 +758,6 @@ class PlanCenter:
                 "topic": s.get("topic"), "status": s.get("status"),
                 "step_order": s.get("step_order"),
                 "knowledge_node_id": s.get("knowledge_node_id") or "",
-                "mastery_current": s.get("mastery_current"),
                 "topic_difficulty": s.get("topic_difficulty"),
             }
             for s in steps
@@ -755,7 +770,6 @@ class PlanCenter:
         return [
             {
                 "step_order": i + 1, "topic": r.get("topic"), "status": r.get("status"),
-                "mastery_current": r.get("mastery_current"),
             }
             for i, r in enumerate(reordered)
         ]

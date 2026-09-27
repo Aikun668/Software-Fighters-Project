@@ -278,36 +278,31 @@ public class PythonClient {
     // createPlan 在 Python 端不存在，已移除
     // 计划创建统一走 createPlanFromPath（Python 内部已包含路径生成）
 
-    /** 查询计划状态（含软着陆触发检测） */
-    public Map<String, Object> getPlanStatus(Map<String, Object> plan, List<Map<String, Object>> steps) {
-        Map<String, Object> request = new HashMap<>();
-        request.put("plan", plan != null ? plan : new HashMap<>());
-        request.put("steps", steps != null ? steps : new ArrayList<>());
-        return doPost(baseUrl + "/plans/status", request);
-    }
-
     // updatePlanProgress、resumePlan 在 Python 端不存在，已移除
     // 进度更新走 regressionCheck 和 NodeMasteryController.upsert
 
     /**
-     * 回归检测管线，POST body 传 {user_id, answers, plan, steps, days_idle}
+     * 回归检测管线，POST body 传 {user_id, answers, plan, steps, days_idle, masteries}
      * 阶段1（无answers）: 出题 → 返回warmup题目
      * 阶段2（有answers）: 判分 + 重排 → 返回重排后的步骤
      * @param plan 计划元数据（Java 传入），可为 null
      * @param steps 计划步骤列表（Java 传入），可为 null
      * @param daysIdle 计划空闲天数（Java 计算），默认 0
+     * @param masteries 各节点掌握度（掌握度唯一真源，P1 §3.3）
      */
     public Map<String, Object> regressionCheck(Long planId, Long userId,
                                                 List<Map<String, Object>> answers,
                                                 Map<String, Object> plan,
                                                 List<Map<String, Object>> steps,
-                                                int daysIdle) {
+                                                int daysIdle,
+                                                Map<String, Float> masteries) {
         Map<String, Object> request = new HashMap<>();
         request.put("user_id", userId);
         request.put("answers", answers != null ? answers : new ArrayList<>());
         request.put("plan", plan != null ? plan : new HashMap<>());
         request.put("steps", steps != null ? steps : new ArrayList<>());
         request.put("days_idle", daysIdle);
+        request.put("masteries", masteries != null ? masteries : new HashMap<>());
         return doPost(baseUrl + "/plans/" + planId + "/regression-check", request);
     }
 
@@ -508,10 +503,12 @@ public class PythonClient {
 
     /** 查询计划状态（新路径：/plans/{plan_id}/status），含软着陆触发检测 */
     public Map<String, Object> getPlanStatusById(Long planId, Map<String, Object> plan,
-                                                   List<Map<String, Object>> steps) {
+                                                   List<Map<String, Object>> steps,
+                                                   Map<String, Float> masteries) {
         Map<String, Object> request = new HashMap<>();
         request.put("plan", plan != null ? plan : new HashMap<>());
         request.put("steps", steps != null ? steps : new ArrayList<>());
+        request.put("masteries", masteries != null ? masteries : new HashMap<>());
         return doPost(baseUrl + "/plans/" + planId + "/status", request);
     }
 

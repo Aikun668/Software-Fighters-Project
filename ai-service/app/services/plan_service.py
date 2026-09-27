@@ -51,7 +51,7 @@ class PlanService:
         decay_results = {}
         for s in paused_steps:
             topic_name = _step_attr(s, "topic", "")
-            mastery = _step_attr(s, "mastery_current", 0) or 0
+            mastery = _step_attr(s, "mastery", 0) or 0
             difficulty = _step_attr(s, "topic_difficulty", 3) or 3
             review_count = _step_attr(s, "review_count", 0) or 0
 
@@ -69,7 +69,7 @@ class PlanService:
         def _get_step_data(topic_name: str):
             for s in paused_steps:
                 if _step_attr(s, "topic", "") == topic_name:
-                    return (_step_attr(s, "mastery_current", 0) or 0,
+                    return (_step_attr(s, "mastery", 0) or 0,
                             _step_attr(s, "topic_difficulty", 3) or 3)
             return 0, 3
 

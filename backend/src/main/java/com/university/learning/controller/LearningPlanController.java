@@ -250,8 +250,10 @@ public class LearningPlanController {
 
             Map<String, Object> planData = planToMap(plan);
             List<Map<String, Object>> stepsData = stepsToMapList(steps);
+            Map<String, Float> masteries = buildMasteryMap(userId, plan.getCourseId());
 
-            Map<String, Object> status = pythonClient.getPlanStatusById(planId, planData, stepsData);
+            Map<String, Object> status = pythonClient.getPlanStatusById(planId, planData, stepsData,
+                    masteries);
             return Result.ok(status);
         } catch (Exception e) {
             return Result.fail(e.getMessage());
@@ -329,9 +331,10 @@ public class LearningPlanController {
             Map<String, Object> planData = planToMap(plan);
             List<Map<String, Object>> stepsData = stepsToMapList(steps);
             int daysIdle = body.getDays_idle() != null ? body.getDays_idle() : 0;
+            Map<String, Float> masteries = buildMasteryMap(userId, plan.getCourseId());
 
             Map<String, Object> result = pythonClient.regressionCheck(planId, userId,
-                    body.getAnswers(), planData, stepsData, daysIdle);
+                    body.getAnswers(), planData, stepsData, daysIdle, masteries);
             return Result.ok(result);
         } catch (Exception e) {
             return Result.fail(e.getMessage());

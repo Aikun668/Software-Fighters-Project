@@ -161,7 +161,7 @@ class TestPlanRoutesThroughRealCenter:
             })
 
         assert ok.status_code == 200
-        assert ok.json()["data"]["updated_step"]["mastery_current"] == 0.62
+        assert ok.json()["data"]["mastery_updates"]["n2"]["new_mastery"] == 0.62
         assert ok.json()["data"]["progress_pct"] == 33
         assert missing.status_code == 404
         assert missing.json()["error"] == "步骤 step_id=99 step_order=88 不存在"
@@ -195,10 +195,10 @@ class TestPlanRoutesThroughRealCenter:
             "plan": _plan(status="paused", total_steps=2, completed_steps=1,
                           last_activity_at=IDLE_ANCHOR),
             "steps": [
-                _step(1, topic="变量", status="paused", topic_difficulty=5,
-                      mastery_current=1.0),
+                _step(1, topic="变量", status="paused", topic_difficulty=5),
                 _step(2, topic="循环"),
             ],
+            "masteries": {"n1": 1.0},
         }
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(internal_api, "_get_plan_center", _real_center)
@@ -267,9 +267,8 @@ class TestCrossDomainRoutes:
             response = await async_client.post(
                 "/internal/plans/7/regression-check", json={
                     "user_id": 1, "plan": _plan(),
-                    "steps": [_step(1, topic="变量", status="paused", topic_difficulty=5,
-                                    mastery_current=1.0)],
-                    "days_idle": 5,
+                    "steps": [_step(1, topic="变量", status="paused", topic_difficulty=5)],
+                    "days_idle": 5, "masteries": {"n1": 1.0},
                 })
 
         assert response.status_code == 200
@@ -285,9 +284,9 @@ class TestCrossDomainRoutes:
             response = await async_client.post(
                 "/internal/plans/7/regression-check", json={
                     "user_id": 1, "plan": _plan(),
-                    "steps": [_step(1, topic="变量", status="paused", mastery_current=0.5,
+                    "steps": [_step(1, topic="变量", status="paused",
                                     knowledge_node_id="n1")],
-                    "days_idle": 10,
+                    "days_idle": 10, "masteries": {"n1": 0.5},
                     "answers": [{"topic": "变量", "question_type": "choice",
                                  "user_answer": "A", "correct_answer": "A"}],
                 })
