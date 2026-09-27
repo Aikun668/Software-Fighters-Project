@@ -54,8 +54,9 @@ def ai_service_dir() -> Path:
 # 拆包前抄下来的对外契约（golden）
 # ═══════════════════════════════════════════════════════════════════
 
-# 49 条路由：(方法, 完整路径)。拆包不得增删任何一条。
+# 50 条路由：(方法, 完整路径)。拆包不得增删任何一条。
 # P2 Task 2 有意扩展一次：+ `POST /internal/evidence/apply`（`LearningEvidence` 记账）。
+# P2 Task 3 有意扩展一次：+ `POST /internal/snapshot`（`LearningSnapshot` 只读读模型）。
 GOLDEN_ROUTES = frozenset({
     ("POST", "/internal/profile/chat"),
     ("POST", "/internal/profile/workflow/status"),
@@ -106,9 +107,10 @@ GOLDEN_ROUTES = frozenset({
     ("POST", "/internal/inquiry/resolve/plan"),
     ("POST", "/internal/eval/judge"),
     ("POST", "/internal/evidence/apply"),
+    ("POST", "/internal/snapshot"),
 })
 
-# 路由处理函数名（49 个装饰器 + `_unified_chat` 实现，共 50）。
+# 路由处理函数名（50 个装饰器 + `_unified_chat` 实现，共 51）。
 # 既有测试用 `getattr(internal_api, name)` / `inspect.getsource(...)` 引用它们，
 # 拆包后必须仍是包属性。
 ROUTE_FUNCTIONS = [
@@ -128,7 +130,7 @@ ROUTE_FUNCTIONS = [
     "update_plan_progress", "on_node_status_change", "get_plan_status",
     "get_plan_status_legacy", "regression_check", "get_review_schedule",
     "inquiry_resolve", "inquiry_resolve_plan", "eval_judge",
-    "apply_learning_evidence",
+    "apply_learning_evidence", "get_learning_snapshot",
 ]
 
 # 18 个惰性单例工厂 → 状态变量名（与 test_singleton_assembly_contract 同源）。
@@ -165,7 +167,7 @@ SINGLETON_OF = {
 # 拆包后应存在的域模块（不含 `__init__.py`）。
 DOMAIN_MODULES = [
     "profile", "resources", "tutor", "chat", "exercise",
-    "graph", "plans", "inquiry", "eval_api", "evidence", "_helpers",
+    "graph", "plans", "inquiry", "eval_api", "evidence", "snapshot", "_helpers",
 ]
 
 # 子模块内必须以 `api.` 限定访问的可注入名（裸名会导致注入点静默失效）。

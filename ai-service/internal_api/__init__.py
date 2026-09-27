@@ -438,6 +438,7 @@ from . import (  # noqa: E402
     plans,
     profile,
     resources,
+    snapshot,
     tutor,
 )
 
@@ -451,6 +452,7 @@ router.include_router(plans.router)
 router.include_router(inquiry.router)
 router.include_router(eval_api.router)
 router.include_router(evidence.router)
+router.include_router(snapshot.router)
 
 # ── re-export ────────────────────────────────────────────────────
 # 既有测试以 `getattr(internal_api, name)` / `inspect.getsource(...)` 引用路由函数；
@@ -509,4 +511,5 @@ from .resources import (  # noqa: E402
     export_pptx,
     resources_generate,
 )
+from .snapshot import get_learning_snapshot  # noqa: E402
 from .tutor import tutor_chat  # noqa: E402

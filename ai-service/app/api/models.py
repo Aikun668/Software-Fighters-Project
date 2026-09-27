@@ -245,6 +245,34 @@ class EvidenceApplyRequest(BaseModel):
     current_mastery: float = Field(default=0.0, ge=0.0, le=1.0, description="该节点当前掌握度（唯一真源在 Java）")
 
 
+class LearningSnapshotRequest(BaseModel):
+    """组装只读读模型 `LearningSnapshot`（P1 §二）。
+
+    零状态：上下文全部由请求体携带，Python 不读 DB、不调 Java、不落库、不改计划或掌握度。
+    """
+
+    student_id: int = Field(..., ge=1, description="学生 ID")
+    course_id: str = Field(..., min_length=1, description="课程 ID")
+    plan: dict = Field(
+        default_factory=dict,
+        description="计划元数据 {id, title, status, last_activity_at}；空 dict = 无进行中计划",
+    )
+    steps: list[dict] = Field(default_factory=list, description="计划步骤列表（Java 传入）")
+    masteries: dict[str, float] = Field(
+        default_factory=dict, description="各节点掌握度（唯一真源，P1 §3.3）",
+    )
+    recent_evidence: list[LearningEvidence] = Field(
+        default_factory=list, description="最近学习证据，只含已落库可追溯记录（P1 §2.4）",
+    )
+    student_profile: dict = Field(
+        default_factory=dict, description="学生画像（Java 传入；读模型只取必要字段，P1 §2.5）",
+    )
+    recent_records: list[dict] = Field(
+        default_factory=list, description="近期练习记录（画像富化输入）",
+    )
+    session_analysis: dict = Field(default_factory=dict, description="Phase C 分析结果（画像富化输入）")
+
+
 # ── Plans ────────────────────────────────────────────────────────
 
 class CreatePlanFromPathRequest(BaseModel):
