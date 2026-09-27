@@ -387,7 +387,7 @@ class PlanService:
 
         for s in affected_steps:
             old_step_status = s.get("status", "")
-            current_mastery = masteries.get(node_id, s.get("mastery_current", 0.5))
+            current_mastery = masteries.get(node_id, 0.0)
 
             if new_status == "mastered":
                 new_step_status = "completed"

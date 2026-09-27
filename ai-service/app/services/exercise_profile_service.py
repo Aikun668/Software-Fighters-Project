@@ -74,7 +74,8 @@ def enrich_profile(
         nid = pn.get("knowledge_node_id", "")
         acc = pn.get("accuracy", 0)
         # Simple mapping: accuracy-based level
-        if acc >= 80:
+        # 阈值与 P1 §3.4 的 proficient 下界 0.6 / mastered 下界 0.85 对齐（百分制）
+        if acc >= 85:
             level = "proficient"
         elif acc >= 60:
             level = "developing"

@@ -375,6 +375,7 @@ class TestProgressContract:
         """PL-A11: step_id=1 命中第一个 step（step_id 优先于 step_order）。"""
         r = client.post("/internal/plans/7/progress", json=self._body(
             step_id=1, step_order=3, score=None, activity_type="study",
+            masteries={"n1": 0.5},
         ))
         assert r.status_code == 200
         data = r.json()["data"]
@@ -462,7 +463,9 @@ class TestNodeStatusChangeContract:
 
     def test_a18_mastered_marks_step_completed(self, client):
         """PL-A18: mastered → mark_completed + 步骤置 completed。"""
-        r = client.post("/internal/plans/7/node-status-change", json=self._body())
+        r = client.post("/internal/plans/7/node-status-change", json=self._body(
+            masteries={"n1": 0.5},
+        ))
         assert r.status_code == 200
         data = r.json()["data"]
         assert list(data.keys()) == [
@@ -489,10 +492,13 @@ class TestNodeStatusChangeContract:
         assert data["summary"] == "节点状态变更影响 1 个计划步骤"
 
     def test_a19_forgotten_schedules_review_with_decay(self, client):
-        """PL-A19: forgotten → schedule_review + decayed_mastery（days_since_review=14）。"""
-        steps = [_step(1, topic="变量", mastery_current=1.0), _step(2, topic="循环")]
+        """PL-A19: forgotten → schedule_review + decayed_mastery（days_since_review=14）。
+
+        掌握度输入只走 masteries（P1 §3.3：步骤 mastery_current 是展示快照，不作计算输入）。
+        """
+        steps = [_step(1, topic="变量"), _step(2, topic="循环")]
         r = client.post("/internal/plans/7/node-status-change", json=self._body(
-            new_status="forgotten", steps=steps,
+            new_status="forgotten", steps=steps, masteries={"n1": 1.0},
         ))
         assert r.status_code == 200
         data = r.json()["data"]
@@ -1280,9 +1286,9 @@ class TestPlanServicePureHelpers:
         assert noop["updated_steps"][0]["status"] == "in_progress"
 
         forgotten = svc.apply_node_status_change(
-            steps=[_step(1, topic="变量", mastery_current=1.0)], node_id="n1",
+            steps=[_step(1, topic="变量")], node_id="n1",
             new_status="forgotten", old_status="pending",
-            masteries={}, plan_status="active",
+            masteries={"n1": 1.0}, plan_status="active",
         )
         assert forgotten["plan_actions"][0]["decayed_mastery"] == 0.25
         assert forgotten["updated_steps"][0]["status"] == "review"

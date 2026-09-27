@@ -495,7 +495,7 @@ class PlanCenter:
 
         masteries = masteries or {}
         knowledge_node_id = target_step.get("knowledge_node_id", "")
-        old_mastery = self._old_mastery(masteries, target_step, knowledge_node_id)
+        old_mastery = self._old_mastery(masteries, knowledge_node_id)
         event_type = "exercise_done" if activity_type in ("exercise", "quiz") else "resource_viewed"
         new_mastery = self.plan_service.update_mastery(old_mastery, event_type, score=score)
 
@@ -543,10 +543,14 @@ class PlanCenter:
         }
 
     @staticmethod
-    def _old_mastery(masteries: dict, step: dict, knowledge_node_id: str) -> float:
+    def _old_mastery(masteries: dict, knowledge_node_id: str) -> float:
+        """掌握度唯一真源 = 传入的 masteries；无记录 = 未学习 = 0.0（P1 §3.4）。
+
+        步骤上的 mastery_current 是冗余快照，只用于展示，不作计算输入（P1 §3.3）。
+        """
         if not knowledge_node_id:
-            return 0.5
-        return masteries.get(knowledge_node_id, step.get("mastery_current", 0.5))
+            return 0.0
+        return masteries.get(knowledge_node_id, 0.0)
 
     async def node_status_change(
         self,
