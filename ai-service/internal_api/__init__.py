@@ -431,6 +431,7 @@ router = APIRouter(prefix="/internal")
 from . import (  # noqa: E402
     chat,
     eval_api,
+    evidence,
     exercise,
     graph,
     inquiry,
@@ -449,6 +450,7 @@ router.include_router(graph.router)
 router.include_router(plans.router)
 router.include_router(inquiry.router)
 router.include_router(eval_api.router)
+router.include_router(evidence.router)
 
 # ── re-export ────────────────────────────────────────────────────
 # 既有测试以 `getattr(internal_api, name)` / `inspect.getsource(...)` 引用路由函数；
@@ -456,6 +458,7 @@ router.include_router(eval_api.router)
 from ._helpers import _sse_stream_chunks  # noqa: E402,F401
 from .chat import _unified_chat, get_conversation_summary, unified_chat  # noqa: E402
 from .eval_api import JudgeRequest, eval_judge  # noqa: E402
+from .evidence import apply_learning_evidence  # noqa: E402
 from .exercise import (  # noqa: E402
     analyze_session,
     categorize_exercises,

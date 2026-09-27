@@ -157,8 +157,9 @@ class GraphNodesRequest(BaseModel):
 class MasteryEvent(BaseModel):
     node_id: str = Field(..., min_length=1, description="知识图谱节点 ID")
     event_type: Literal[
-        "resource_viewed", "exercise_done", "exercise_failed", "tutor_question_asked"
-    ] = Field(..., description="学习事件类型")
+        "resource_viewed", "exercise_done", "exercise_failed",
+        "tutor_question_asked", "manual_correction",
+    ] = Field(..., description="学习事件类型（P1 §4.2：现有 4 值 + 人工纠正）")
     score: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="分数 (exercise_done 时需传)")
 
 
@@ -206,6 +207,42 @@ class GraphMermaidRequest(BaseModel):
 class GraphLayeredRequest(BaseModel):
     course_id: str = Field(default="ai_intro", description="课程 ID")
     masteries: dict[str, float] = Field(default_factory=dict, description="各节点掌握度")
+
+
+# ── Learning Evidence (P1 §四，P2 Task 2) ─────────────────────────
+
+EvidenceType = Literal[
+    "resource_viewed", "exercise_done", "exercise_failed",
+    "tutor_question_asked", "manual_correction",
+]
+SourceAction = Literal["exercise", "plan", "resource", "tutor", "manual"]
+EffectHint = EvidenceType
+
+
+class LearningEvidence(BaseModel):
+    """学习证据（P1 §4.1 十二字段）。跨域组合合法性由 evidence_contract 校验。"""
+
+    evidence_id: str = Field(..., min_length=1, description="证据唯一标识（UUID 或 source_action:record_id:node_id）")
+    student_id: int = Field(..., ge=1, description="学生 ID")
+    course_id: str = Field(..., min_length=1, description="课程 ID")
+    node_id: str = Field(..., min_length=1, description="知识图谱节点 ID；无归属用保留值 __none__，不得为 null")
+    type: EvidenceType = Field(..., description="证据类型（P1 §4.2）")
+    occurred_at: str = Field(..., min_length=1, description="学生动作发生时刻（ISO8601，非入库时刻）")
+    source_action: SourceAction = Field(..., description="证据来源（P1 §4.3）")
+    source_record_id: str = Field(..., min_length=1, description="产生记录的业务域 id，幂等键的一半")
+    score_or_result: float | bool | str | None = Field(default=None, description="分数/对错/结果摘要")
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0, description="置信度（人工纠正 = 1.0）")
+    effect_hint: EffectHint | None = Field(
+        default=None, description="建议怎样影响状态，不是前端最终值",
+    )
+    explanation: str = Field(..., min_length=1, description="必须能解释为什么有这条记录")
+
+
+class EvidenceApplyRequest(BaseModel):
+    """提交证据并计算掌握度变化。Java 传入当前掌握度，Python 只算不落库。"""
+
+    evidence: LearningEvidence = Field(..., description="待记账的学习证据")
+    current_mastery: float = Field(default=0.0, ge=0.0, le=1.0, description="该节点当前掌握度（唯一真源在 Java）")
 
 
 # ── Plans ────────────────────────────────────────────────────────
