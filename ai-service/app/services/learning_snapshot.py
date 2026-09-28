@@ -11,7 +11,8 @@
 - 掌握度增量算法 → `PlanService.update_mastery`（本模块只读，不算）；
 - 复习窗口 → 复用 `PlanService.get_half_life` + `PlanService.estimate_decay`
   与 `get_review_schedule` 的间隔公式（不另立阈值）；
-- 画像富化 → `exercise_profile_service.enrich_profile`（纯计算，无 LLM）。
+- 画像富化 → `exercise_profile_service.enrich_profile`（纯计算，无 LLM）；
+- 试点范围 → `app.services.pilot_scope`（唯一真源，**不得在此重写白名单**）。
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ import logging
 from datetime import datetime, timezone
 
 from app.services import mastery_scale
+from app.services import pilot_scope
 from app.services.exercise_profile_service import enrich_profile
 from app.services.next_action import build_next_action
 from app.services.plan_service import PlanService
@@ -432,6 +434,22 @@ def build_snapshot(
         current_node_id=(current_node or {}).get("node_id"),
     )
 
+    # P1 §五 的 next_action（Task 4）。入参全部复用上面的既有计算结果，
+    # 图谱边由 API 层随 `graph_nodes` 一并传入（零新增 IO）。
+    next_action = build_next_action(
+        active_plan=active_plan,
+        current_node=current_node,
+        mastery=mastery,
+        recent_evidence=evidence,
+        steps=steps,
+        graph_edges=graph_edges,
+        masteries=masteries,
+    )
+    # 试点闸门（P2 Task 5 / 总纲 §5.5 第 1 条）：白名单外课程降级为旧行为 ——
+    # 只置空建议，其余 9 键照常计算。判定是纯集合成员测试，不产生任何 IO。
+    if not pilot_scope.is_pilot_course(course_id):
+        next_action = None
+
     return {
         "student_id": student_id,
         "course_id": course_id,
@@ -445,15 +463,5 @@ def build_snapshot(
             plan=plan, masteries=masteries, profile_context=profile_context,
             graph_nodes=graph_nodes, active_plan=active_plan, mastery=mastery,
         ),
-        # P1 §五 的 next_action（Task 4）。入参全部复用上面的既有计算结果，
-        # 图谱边由 API 层随 `graph_nodes` 一并传入（零新增 IO）。
-        "next_action": build_next_action(
-            active_plan=active_plan,
-            current_node=current_node,
-            mastery=mastery,
-            recent_evidence=evidence,
-            steps=steps,
-            graph_edges=graph_edges,
-            masteries=masteries,
-        ),
+        "next_action": next_action,
     }
