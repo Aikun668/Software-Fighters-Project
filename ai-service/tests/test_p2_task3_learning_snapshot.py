@@ -409,13 +409,19 @@ class TestReadOnlyNature:
         assert payload == before, "请求体被就地修改 —— 违反只读性质"
 
     @pytest.mark.asyncio
-    async def test_snap_next_action_is_none_until_task4(self, client):
-        """Task 3 阶段 `next_action` 固定 null（P1 §五 由 Task 4 落地）。"""
+    async def test_snap_next_action_populated_by_task4(self, client):
+        """Task 4 落地后 `next_action` 不再是 null。
+
+        本载荷：当前步骤节点 `ml_basics`（`reason=current_step_node`）+ `mastery.level`
+        = `learning` → 命中 P1 §5.3 行 2「该复习了」→ `review_current_node`。
+        键的存在性由 `test_snap_contract_key_set_is_frozen` 继续冻结。
+        """
         data = _echo_payload(client.post(SNAPSHOT_URL, json=_payload(
             plan=_plan(), steps=[_step()], masteries={"ml_basics": 0.4},
         )))
         assert "next_action" in data
-        assert data["next_action"] is None
+        assert data["next_action"] is not None
+        assert data["next_action"]["action_kind"] == "review_current_node"
 
     @pytest.mark.asyncio
     async def test_snap_contract_key_set_is_frozen(self, client):

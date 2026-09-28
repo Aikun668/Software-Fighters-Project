@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 
 from app.services import mastery_scale
 from app.services.exercise_profile_service import enrich_profile
+from app.services.next_action import build_next_action
 from app.services.plan_service import PlanService
 
 logger = logging.getLogger("learning_snapshot")
@@ -408,6 +409,7 @@ def build_snapshot(
     recent_records: list[dict],
     session_analysis: dict,
     graph_nodes: list[dict] | None = None,
+    graph_edges: list[dict] | None = None,
     recommended: list[dict] | None = None,
     now: datetime | None = None,
 ) -> dict:
@@ -443,6 +445,15 @@ def build_snapshot(
             plan=plan, masteries=masteries, profile_context=profile_context,
             graph_nodes=graph_nodes, active_plan=active_plan, mastery=mastery,
         ),
-        # P1 §五 的 next_action 由 Task 4 落地；本任务固定 None。
-        "next_action": None,
+        # P1 §五 的 next_action（Task 4）。入参全部复用上面的既有计算结果，
+        # 图谱边由 API 层随 `graph_nodes` 一并传入（零新增 IO）。
+        "next_action": build_next_action(
+            active_plan=active_plan,
+            current_node=current_node,
+            mastery=mastery,
+            recent_evidence=evidence,
+            steps=steps,
+            graph_edges=graph_edges,
+            masteries=masteries,
+        ),
     }
