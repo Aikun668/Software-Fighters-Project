@@ -576,6 +576,42 @@ public class PythonClient {
         return doPost(baseUrl + "/plans/" + planId + "/node-status-change", request);
     }
 
+    // ==================== 学习快照 ====================
+
+    /**
+     * 组装只读学习快照（LearningSnapshot，P1 §二）。
+     *
+     * <p>Python 侧零状态：上下文全部由本方法携带，Python 不读 DB、不落库。
+     * 图谱节点 / 推荐序列由 Python 路由层自行补齐，Java 不复制图谱推理规则。</p>
+     *
+     * @param studentId      登录态用户 ID
+     * @param courseId       课程 ID
+     * @param plan           计划元数据 {id, title, status, last_activity_at}；无进行中计划传空 map
+     * @param steps          计划步骤列表
+     * @param masteries      节点掌握度（唯一真源 node_masteries）
+     * @param studentProfile 学生画像（复用 rawProfileJson 转 map）；缺画像传空 map
+     * @return Python 响应信封 {success, data:{十键快照}}
+     */
+    public Map<String, Object> getLearningSnapshot(Long studentId, String courseId,
+                                                    Map<String, Object> plan,
+                                                    List<Map<String, Object>> steps,
+                                                    Map<String, Float> masteries,
+                                                    Map<String, Object> studentProfile) {
+        Map<String, Object> request = new HashMap<>();
+        request.put("student_id", studentId);
+        request.put("course_id", courseId);
+        request.put("plan", plan != null ? plan : new HashMap<>());
+        request.put("steps", steps != null ? steps : new ArrayList<>());
+        request.put("masteries", masteries != null ? masteries : new HashMap<>());
+        // 证据来源（learning_records / learning_activities）无 node_id / course_id，
+        // 不满足 P1 可追溯契约，故按已批准口径传空列表，并在交付声明中登记缺口。
+        request.put("recent_evidence", new ArrayList<>());
+        request.put("student_profile", studentProfile != null ? studentProfile : new HashMap<>());
+        request.put("recent_records", new ArrayList<>());
+        request.put("session_analysis", new HashMap<>());
+        return doPost(baseUrl + "/snapshot", request);
+    }
+
     // ==================== 资源导出 ====================
 
     /** 根据 content_blocks 导出 PDF 文件 */
