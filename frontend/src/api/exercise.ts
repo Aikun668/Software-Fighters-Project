@@ -21,7 +21,7 @@ export const generateExercise = (data: ExerciseRequest): Promise<Response> => {
  * @param data - 批改请求
  */
 export const gradeExercise = (data: ExerciseGradeRequest): Promise<ExerciseGradeResponse> => {
-  return api.post('/api/exercise/grade', data)
+  return api.post('/exercise/grade', data)
 }
 
 /**
@@ -29,5 +29,5 @@ export const gradeExercise = (data: ExerciseGradeRequest): Promise<ExerciseGrade
  * @param evaluationResults - 评估结果
  */
 export const generateEvaluationReport = (evaluationResults: Record<string, { score: number; total: number }>): Promise<void> => {
-  return api.post('/api/exercise/report', { evaluation_results: evaluationResults })
+  return api.post('/exercise/report', { evaluation_results: evaluationResults })
 }

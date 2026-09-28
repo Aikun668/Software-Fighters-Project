@@ -7,7 +7,7 @@ import type { NodeMastery } from './types'
  * @param courseId - 课程ID
  */
 export const getUserCourseMasteries = (userId: number, courseId: string): Promise<NodeMastery[]> => {
-  return api.get('/api/node-masteries', { userId, courseId })
+  return api.get('/node-masteries', { userId, courseId })
 }
 
 /**
@@ -16,7 +16,7 @@ export const getUserCourseMasteries = (userId: number, courseId: string): Promis
  * @param userId - 用户ID
  */
 export const getNodeMastery = (nodeId: string, userId: number): Promise<NodeMastery> => {
-  return api.get(`/api/node-masteries/${nodeId}`, { userId })
+  return api.get(`/node-masteries/${nodeId}`, { userId })
 }
 
 /**
@@ -30,7 +30,7 @@ export const updateNodeMastery = (nodeId: string, data: {
   mastery: number
   review_count: number
 }): Promise<NodeMastery> => {
-  return api.put(`/api/node-masteries/${nodeId}`, data)
+  return api.put(`/node-masteries/${nodeId}`, data)
 }
 
 /**
@@ -39,5 +39,5 @@ export const updateNodeMastery = (nodeId: string, data: {
  * @param courseId - 课程ID
  */
 export const getMasteryDistributionStats = (userId: number, courseId: string): Promise<Record<string, number>> => {
-  return api.get('/api/node-masteries/distribution', { userId, courseId })
+  return api.get('/node-masteries/distribution', { userId, courseId })
 }

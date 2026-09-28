@@ -5,7 +5,7 @@ import type { LearningRecord, RecordStats } from './types'
  * 获取我的学习记录
  */
 export const getMyRecords = (): Promise<LearningRecord[]> => {
-  return api.get('/api/record/list')
+  return api.get('/record/list')
 }
 
 /**
@@ -13,7 +13,7 @@ export const getMyRecords = (): Promise<LearningRecord[]> => {
  * @param type - 记录类型
  */
 export const getRecordsByType = (type: 'course_doc' | 'mind_map' | 'exercise' | 'reading' | 'code_practice'): Promise<LearningRecord[]> => {
-  return api.get(`/api/record/list/${type}`)
+  return api.get(`/record/list/${type}`)
 }
 
 /**
@@ -21,12 +21,12 @@ export const getRecordsByType = (type: 'course_doc' | 'mind_map' | 'exercise' | 
  * @param resourceId - 资源ID
  */
 export const getResourceRecord = (resourceId: number): Promise<LearningRecord> => {
-  return api.get(`/api/record/resource/${resourceId}`)
+  return api.get(`/record/resource/${resourceId}`)
 }
 
 /**
  * 获取学习统计
  */
 export const getRecordStats = (): Promise<RecordStats> => {
-  return api.get('/api/record/stats')
+  return api.get('/record/stats')
 }

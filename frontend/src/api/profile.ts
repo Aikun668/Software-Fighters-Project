@@ -20,7 +20,7 @@ export const profileChat = (data: ProfileChatRequest): Promise<Response> => {
  * 获取画像完整度
  */
 export const getProfileStatus = (): Promise<ProfileStatus> => {
-  return api.get('/api/profile/status')
+  return api.get('/profile/status')
 }
 
 /**
@@ -28,5 +28,5 @@ export const getProfileStatus = (): Promise<ProfileStatus> => {
  * @param userId - 用户ID
  */
 export const getUserProfile = (userId: number): Promise<UserProfile> => {
-  return api.get(`/api/profile/${userId}`)
+  return api.get(`/profile/${userId}`)
 }

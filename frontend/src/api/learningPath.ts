@@ -5,5 +5,5 @@ import api from '@/utils/request'
  * @param userId - 用户ID
  */
 export const getLearningPath = (userId: number): Promise<any> => {
-  return api.get(`/api/path/${userId}`)
+  return api.get(`/path/${userId}`)
 }

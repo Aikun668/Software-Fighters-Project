@@ -9,7 +9,7 @@ export const uploadFile = (file: File): Promise<FileUploadResponse> => {
   const formData = new FormData()
   formData.append('file', file)
   
-  return api.post('/api/file/upload', formData, {
+  return api.post('/file/upload', formData, {
     headers: {
       'Content-Type': 'multipart/form-data'
     }
@@ -21,7 +21,7 @@ export const uploadFile = (file: File): Promise<FileUploadResponse> => {
  * @param fileId - 文件ID
  */
 export const getFileUrl = (fileId: number): Promise<string> => {
-  return api.get(`/api/file/url/${fileId}`)
+  return api.get(`/file/url/${fileId}`)
 }
 
 /**
@@ -29,5 +29,5 @@ export const getFileUrl = (fileId: number): Promise<string> => {
  * @param fileId - 文件ID
  */
 export const deleteFile = (fileId: number): Promise<void> => {
-  return api.delete(`/api/file/${fileId}`)
+  return api.delete(`/file/${fileId}`)
 }

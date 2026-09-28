@@ -6,7 +6,7 @@ import type { LearningActivity, ScoreTrendItem } from './types'
  * @param data - 活动数据
  */
 export const recordLearningActivity = (data: LearningActivity): Promise<LearningActivity> => {
-  return api.post('/api/learning-activities', data)
+  return api.post('/learning-activities', data)
 }
 
 /**
@@ -16,7 +16,7 @@ export const recordLearningActivity = (data: LearningActivity): Promise<Learning
  */
 export const getRecentActivities = (userId: number, limit?: number): Promise<LearningActivity[]> => {
   const params = limit ? { userId, limit } : { userId }
-  return api.get('/api/learning-activities', params)
+  return api.get('/learning-activities', params)
 }
 
 /**
@@ -24,7 +24,7 @@ export const getRecentActivities = (userId: number, limit?: number): Promise<Lea
  * @param userId - 用户ID
  */
 export const getActivityStats = (userId: number): Promise<Record<string, number>> => {
-  return api.get('/api/learning-activities/stats', { userId })
+  return api.get('/learning-activities/stats', { userId })
 }
 
 /**
@@ -34,7 +34,7 @@ export const getActivityStats = (userId: number): Promise<Record<string, number>
  */
 export const getScoreTrend = (userId: number, days?: number): Promise<ScoreTrendItem[]> => {
   const params = days ? { userId, days } : { userId }
-  return api.get('/api/learning-activities/score-trend', params)
+  return api.get('/learning-activities/score-trend', params)
 }
 
 /**
@@ -42,5 +42,5 @@ export const getScoreTrend = (userId: number, days?: number): Promise<ScoreTrend
  * @param userId - 用户ID
  */
 export const getExerciseCount = (userId: number): Promise<{ count: number }> => {
-  return api.get('/api/learning-activities/count-exercises', { userId })
+  return api.get('/learning-activities/count-exercises', { userId })
 }

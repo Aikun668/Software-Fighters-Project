@@ -8,7 +8,7 @@ import type { KnowledgeGraph, KnowledgeNode } from './types'
  */
 export const getKnowledgeGraph = (courseId: string, userId?: number): Promise<KnowledgeGraph> => {
   const params = userId ? { userId } : {}
-  return api.get(`/api/knowledge-graph/${courseId}`, params)
+  return api.get(`/knowledge-graph/${courseId}`, params)
 }
 
 /**
@@ -22,7 +22,7 @@ export const getNodeDetail = (
   nodeId: string,
   params?: { userId?: number; totalExercises?: number; lastPracticed?: string }
 ): Promise<KnowledgeNode> => {
-  return api.get(`/api/knowledge-graph/${courseId}/nodes/${nodeId}`, params)
+  return api.get(`/knowledge-graph/${courseId}/nodes/${nodeId}`, params)
 }
 
 /**
@@ -31,5 +31,5 @@ export const getNodeDetail = (
  * @param userId - 用户ID
  */
 export const getMasteryDistribution = (courseId: string, userId: number): Promise<Record<string, number>> => {
-  return api.get(`/api/knowledge-graph/masteries/${courseId}`, { userId })
+  return api.get(`/knowledge-graph/masteries/${courseId}`, { userId })
 }

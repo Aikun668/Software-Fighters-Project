@@ -80,14 +80,14 @@ export const parseSSEStream = (
  * 获取会话列表
  */
 export const getConversations = (): Promise<Conversation[]> => {
-  return api.get('/api/conversations/mine')
+  return api.get('/conversations/mine')
 }
 
 /**
  * 创建会话
  */
 export const createConversation = (): Promise<Conversation> => {
-  return api.post('/api/conversations', {})
+  return api.post('/conversations', {})
 }
 
 /**
@@ -97,7 +97,7 @@ export const createConversation = (): Promise<Conversation> => {
  */
 export const getConversationDetail = (id: number, userId?: number): Promise<Conversation> => {
   const params = userId ? { userId } : {}
-  return api.get(`/api/conversations/${id}`, params)
+  return api.get(`/conversations/${id}`, params)
 }
 
 /**
@@ -106,7 +106,7 @@ export const getConversationDetail = (id: number, userId?: number): Promise<Conv
  * @param data - 更新数据
  */
 export const updateConversation = (id: number, data: { title?: string; status?: string }): Promise<Conversation> => {
-  return api.put(`/api/conversations/${id}`, data)
+  return api.put(`/conversations/${id}`, data)
 }
 
 /**
@@ -115,7 +115,7 @@ export const updateConversation = (id: number, data: { title?: string; status?: 
  * @param params - 查询参数
  */
 export const getConversationMessages = (id: number, params?: { mode?: string; limit?: number }): Promise<Message[]> => {
-  return api.get(`/api/conversations/${id}/messages`, params)
+  return api.get(`/conversations/${id}/messages`, params)
 }
 
 /**
@@ -124,7 +124,7 @@ export const getConversationMessages = (id: number, params?: { mode?: string; li
  * @param params - 查询参数
  */
 export const getRawMessages = (id: number, params?: { offset?: number; limit?: number }): Promise<Message[]> => {
-  return api.get(`/api/conversations/${id}/messages/raw`, params)
+  return api.get(`/conversations/${id}/messages/raw`, params)
 }
 
 /**
@@ -133,7 +133,7 @@ export const getRawMessages = (id: number, params?: { offset?: number; limit?: n
  * @param data - 消息数据
  */
 export const saveMessage = (id: number, data: { user_message: string; assistant_message: string }): Promise<void> => {
-  return api.post(`/api/conversations/${id}/messages`, data)
+  return api.post(`/conversations/${id}/messages`, data)
 }
 
 /**
@@ -141,7 +141,7 @@ export const saveMessage = (id: number, data: { user_message: string; assistant_
  * @param id - 会话ID
  */
 export const endConversation = (id: number): Promise<void> => {
-  return api.post(`/api/conversations/${id}/end`)
+  return api.post(`/conversations/${id}/end`)
 }
 
 /**
@@ -149,5 +149,5 @@ export const endConversation = (id: number): Promise<void> => {
  * @param id - 会话ID
  */
 export const deleteConversation = (id: number): Promise<void> => {
-  return api.delete(`/api/conversations/${id}`)
+  return api.delete(`/conversations/${id}`)
 }

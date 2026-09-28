@@ -20,7 +20,7 @@ export const generateResource = (topic: string): Promise<Response> => {
  * 获取我的资源列表
  */
 export const getMyResources = (): Promise<Resource[]> => {
-  return api.get('/api/resources/list')
+  return api.get('/resources/list')
 }
 
 /**
@@ -28,7 +28,7 @@ export const getMyResources = (): Promise<Resource[]> => {
  * @param type - 资源类型
  */
 export const getResourcesByType = (type: 'course_doc' | 'mind_map' | 'exercise' | 'reading' | 'code_practice'): Promise<Resource[]> => {
-  return api.get(`/api/resources/list/${type}`)
+  return api.get(`/resources/list/${type}`)
 }
 
 /**
@@ -36,7 +36,7 @@ export const getResourcesByType = (type: 'course_doc' | 'mind_map' | 'exercise' 
  * @param resourceId - 资源ID
  */
 export const getResourceDetail = (resourceId: number): Promise<Resource> => {
-  return api.get(`/api/resources/${resourceId}`)
+  return api.get(`/resources/${resourceId}`)
 }
 
 /**
@@ -44,7 +44,7 @@ export const getResourceDetail = (resourceId: number): Promise<Resource> => {
  * @param resourceId - 资源ID
  */
 export const deleteResource = (resourceId: number): Promise<void> => {
-  return api.delete(`/api/resources/${resourceId}`)
+  return api.delete(`/resources/${resourceId}`)
 }
 
 /**
@@ -60,7 +60,7 @@ export const exportPPTX = (data: {
     language?: string
   }>
 }): Promise<Blob> => {
-  return api.post('/api/resources/export-pptx', data, {
+  return api.post('/resources/export-pptx', data, {
     responseType: 'blob'
   })
 }
