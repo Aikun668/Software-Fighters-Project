@@ -290,27 +290,29 @@ public class LearningPlanController {
      */
     @Operation(summary = "更新步骤进度", description = "更新步骤进度并计算掌握度变化")
     @PostMapping("/api/plans/{planId}/progress")
+    @Transactional(rollbackFor = Exception.class)
     public Result updateProgress(@PathVariable Long planId, @RequestBody ProgressUpdateRequest body) {
-        try {
-            Long userId = UserHolder.getUser().getId();
-            LearningPlan plan = planService.getById(planId);
-            if (plan == null) {
-                return Result.fail(404, "计划不存在");
-            }
-            List<PlanStep> steps = stepService.listByPlanId(planId);
-
-            Map<String, Object> planData = planToMap(plan);
-            List<Map<String, Object>> stepsData = stepsToMapList(steps);
-            Map<String, Float> masteries = buildMasteryMap(userId, plan.getCourseId());
-
-            Map<String, Object> result = pythonClient.updatePlanProgress(planId, planData, stepsData,
-                    body.getStep_id(), body.getStep_order() != null ? body.getStep_order() : 0,
-                    body.getStatus(), body.getActivity_type(), body.getScore(),
-                    body.getDuration_minutes(), masteries);
-            return Result.ok(result);
-        } catch (Exception e) {
-            return Result.fail(e.getMessage());
+        Long userId = UserHolder.getUser().getId();
+        LearningPlan plan = planService.getById(planId);
+        if (plan == null) {
+            return Result.fail(404, "计划不存在");
         }
+        List<PlanStep> steps = stepService.listByPlanId(planId);
+
+        Map<String, Object> planData = planToMap(plan);
+        List<Map<String, Object>> stepsData = stepsToMapList(steps);
+        Map<String, Float> masteries = buildMasteryMap(userId, plan.getCourseId());
+
+        Map<String, Object> result = pythonClient.updatePlanProgress(planId, userId, planData, stepsData,
+                body.getStep_id(), body.getStep_order() != null ? body.getStep_order() : 0,
+                body.getStatus(), body.getActivity_type(), body.getScore(),
+                body.getDuration_minutes(), masteries);
+
+        // Python 只计算，Java 落库：把 mastery_updates 的 new_mastery 写入唯一事实源
+        int applied = masteryService.applyMasteryUpdates(userId, plan.getCourseId(), extractMasteryUpdates(result));
+        log.info("计划进度掌握度已落库: planId={}, userId={}, 节点数={}", planId, userId, applied);
+
+        return Result.ok(result);
     }
 
     /**
@@ -428,6 +430,25 @@ public class LearningPlanController {
             map.put(nm.getNodeId(), nm.getMastery() != null ? nm.getMastery() : 0f);
         }
         return map;
+    }
+
+    /**
+     * 取出 Python 响应信封 {success, data:{...}} 中 data.mastery_updates。
+     * Python 业务失败或无 mastery_updates 时返回空 map（不落库）。
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> extractMasteryUpdates(Map<String, Object> pythonResponse) {
+        if (pythonResponse == null || Boolean.FALSE.equals(pythonResponse.get("success"))) {
+            log.warn("Python 未返回成功响应，跳过掌握度落库: {}", pythonResponse);
+            return Collections.emptyMap();
+        }
+        Object data = pythonResponse.get("data");
+        if (!(data instanceof Map)) {
+            log.warn("Python 响应缺少 data 字段，跳过掌握度落库");
+            return Collections.emptyMap();
+        }
+        Object updates = ((Map<String, Object>) data).get("mastery_updates");
+        return updates instanceof Map ? (Map<String, Object>) updates : Collections.emptyMap();
     }
 
     private int toInt(Object value, int defaultValue) {

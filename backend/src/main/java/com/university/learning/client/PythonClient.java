@@ -278,8 +278,8 @@ public class PythonClient {
     // createPlan 在 Python 端不存在，已移除
     // 计划创建统一走 createPlanFromPath（Python 内部已包含路径生成）
 
-    // updatePlanProgress、resumePlan 在 Python 端不存在，已移除
-    // 进度更新走 regressionCheck 和 NodeMasteryController.upsert
+    // resumePlan 在 Python 端不存在，已移除
+    // 进度更新走 updatePlanProgress（见本类 updatePlanProgress 方法）
 
     /**
      * 回归检测管线，POST body 传 {user_id, answers, plan, steps, days_idle, masteries}
@@ -539,13 +539,15 @@ public class PythonClient {
     }
 
     /** 更新步骤进度 + 计算掌握度变化 */
-    public Map<String, Object> updatePlanProgress(Long planId, Map<String, Object> plan,
+    public Map<String, Object> updatePlanProgress(Long planId, Long userId,
+                                                   Map<String, Object> plan,
                                                    List<Map<String, Object>> steps,
                                                    Long stepId, int stepOrder,
                                                    String status, String activityType,
                                                    Float score, Integer durationMinutes,
                                                    Map<String, Float> masteries) {
         Map<String, Object> request = new HashMap<>();
+        request.put("user_id", userId);
         request.put("plan", plan != null ? plan : new HashMap<>());
         request.put("steps", steps != null ? steps : new ArrayList<>());
         request.put("step_id", stepId != null ? stepId : 0);

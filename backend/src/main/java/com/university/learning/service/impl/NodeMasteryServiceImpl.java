@@ -48,24 +48,52 @@ public class NodeMasteryServiceImpl extends ServiceImpl<NodeMasteryMapper, NodeM
         );
 
         if (existing != null) {
-            // 更新已有记录
+            // 更新已有记录；reviewCount 为 null 表示调用方无该数据，保持已有值不动
             existing.setMastery(mastery);
-            existing.setReviewCount(reviewCount);
+            if (reviewCount != null) {
+                existing.setReviewCount(reviewCount);
+            }
             existing.setLastReviewAt(LocalDateTime.now());
             this.updateById(existing);
             return existing;
         }
 
-        // 插入新记录
+        // 插入新记录；无 reviewCount 来源时用明确初始值 0
         NodeMastery nm = new NodeMastery()
                 .setUserId(userId)
                 .setNodeId(nodeId)
                 .setCourseId(courseId)
                 .setMastery(mastery)
-                .setReviewCount(reviewCount)
+                .setReviewCount(reviewCount != null ? reviewCount : 0)
                 .setLastReviewAt(LocalDateTime.now());
         this.save(nm);
         return nm;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int applyMasteryUpdates(Long userId, String courseId, Map<String, Object> masteryUpdates) {
+        if (masteryUpdates == null || masteryUpdates.isEmpty()) {
+            return 0;
+        }
+        int applied = 0;
+        for (Map.Entry<String, Object> entry : masteryUpdates.entrySet()) {
+            String nodeId = entry.getKey();
+            if (nodeId == null || nodeId.isBlank() || !(entry.getValue() instanceof Map)) {
+                continue;
+            }
+            Object newMastery = ((Map<?, ?>) entry.getValue()).get("new_mastery");
+            if (!(newMastery instanceof Number)) {
+                continue;
+            }
+            // reviewCount 无 Python 来源，传 null 以保持已有值
+            this.upsert(userId, nodeId, courseId, ((Number) newMastery).floatValue(), null);
+            applied++;
+        }
+        if (applied == 0) {
+            throw new IllegalStateException("mastery_updates 非空但无有效 new_mastery，未落库任何节点");
+        }
+        return applied;
     }
 
     @Override
