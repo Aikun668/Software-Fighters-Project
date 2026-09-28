@@ -92,6 +92,24 @@ request.interceptors.response.use(
 )
 
 /**
+ * 从异常中取出可展示的消息。
+ * 响应拦截器失败分支会 reject 后端的普通对象（信封）而非 Error 实例，
+ * 直接 String(error) 会得到 "[object Object]"。
+ */
+const resolveErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) {
+    return error.message
+  }
+  if (typeof error === 'object' && error !== null) {
+    const message = (error as { message?: unknown }).message
+    if (typeof message === 'string' && message) {
+      return message
+    }
+  }
+  return String(error)
+}
+
+/**
  * 请求方法封装
  */
 const api = {
@@ -117,4 +135,4 @@ const api = {
 }
 
 export default api
-export { request }
+export { request, resolveErrorMessage }
