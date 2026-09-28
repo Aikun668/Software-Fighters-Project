@@ -141,8 +141,14 @@ def _node_name(node_id: str, graph_nodes: list[dict]) -> str:
     return node_id
 
 
-def _review_due_candidates(steps: list[dict], now: datetime) -> list[tuple[float, str]]:
+def _review_due_candidates(
+    steps: list[dict], masteries: dict[str, float], now: datetime,
+) -> list[tuple[float, str]]:
     """已过复习窗口的节点 → `[(超期天数, node_id)]`，最紧急在前。
+
+    衰减输入**只走请求级 map**（`masteries`，即 `node_masteries` 真源）：缺失 / 非数值
+    记 `0.0`（未学习），**不读 `plan_steps.mastery_current` 快照**（D2 冻结：快照字段
+    保留展示、不作计算输入，P1 §3.3 / P2 Task 1.5）。
 
     **与 `get_review_schedule` 同源但更严**（有意为之，非漂移）：
 
@@ -188,7 +194,8 @@ def _review_due_candidates(steps: list[dict], now: datetime) -> list[tuple[float
         if days_since < interval:
             continue
 
-        mastery = _step_attr(step, "mastery_current", 0) or 0
+        raw = (masteries or {}).get(node_id)
+        mastery = float(raw) if isinstance(raw, (int, float)) and not isinstance(raw, bool) else 0.0
         decayed = PlanService.estimate_decay(mastery, days_since, difficulty, review_count)
         if decayed >= REVIEW_DECAY_FLOOR:
             continue
@@ -232,7 +239,7 @@ def _build_current_node(
                     "reason": REASON_CURRENT_STEP_NODE}
 
     # 2. 复习到期
-    overdue = _review_due_candidates(steps, now)
+    overdue = _review_due_candidates(steps, masteries, now)
     if overdue:
         node_id = overdue[0][1]
         return {"node_id": node_id, "name": _node_name(node_id, graph_nodes),

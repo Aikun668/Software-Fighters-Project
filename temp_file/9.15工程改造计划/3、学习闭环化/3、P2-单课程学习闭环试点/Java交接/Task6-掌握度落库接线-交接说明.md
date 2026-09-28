@@ -259,3 +259,70 @@ curl -X POST "http://localhost:8080/api/plans/<planId>/progress" \
 - [ ] `reviewCount` 处理已决（保原值 or 新口径，二选一并写明）
 - [ ] 已确认知悉 §四.1 的 nodeId-only 覆盖风险
 - [ ] A7 真实 HTTP 已执行 / 已标注「未执行（取决于 Java 落地）」
+- [ ] （可选，见 §十）已决定是否同批收敛 `review-schedule` 端点的 D2 口径
+
+---
+
+## 十、同批可选收敛项：`review-schedule` 端点仍读 `plan_steps.mastery_current`
+
+> 本项**不是 Task 6 的验收内容**，不阻塞 A7。单独列出是因为它与 Task 6 同属「掌握度真源口径」，
+> 且**必须与 Java 侧改动同批发布**，做成跨批半成品会造成行为倒退（见下方「为什么不能只改 Python」）。
+
+### 10.1 问题
+
+`ai-service/app/services/plan_service.py:214`（`get_review_schedule`）把步骤上的冗余快照
+当作衰减计算输入：
+
+```python
+mastery = _step_attr(step, "mastery_current", 0) or 0      # ← 违 D2 冻结
+decayed = PlanService.estimate_decay(mastery, days_since, difficulty, review_count)
+```
+
+**判据**：D2 冻结（P1 §3.3 / P2 Task 1.5 / 决策点 3）—— `plan_steps.mastery_*` **只作展示、不作任何
+计算输入**；一切用于计算的掌握度必须取自请求级 `node_masteries` 映射。
+**归属**：P2 之前即存在的历史违例（P2 本轮只碰到 `plan_service.py` 的 `:54 / :72 / :390`，未碰 `:214`），
+无既有测试锁定该行为。
+**对照**：同仓正确样板是 `app/centers/plan_center.py:439-444 _decay_input` 与
+`app/services/learning_snapshot.py:_weakest_node`，均走 `masteries.get(node_id, 0.0)`。
+
+### 10.2 为什么不能只改 Python（**这是必须与 Java 同批的原因**）
+
+`review-schedule` 是**跨服务端点**，掌握度真源只存在于 Java：
+
+```
+LearningPlanController.java:348-360  →  PythonClient.java:314  →  POST /internal/plans/{id}/review-schedule
+        只传 steps + daysAhead
+ReviewScheduleRequest（app/api/models.py:301-304）  只有 steps / days_ahead，**没有 masteries 字段**
+```
+
+若只在 Python 侧改成「只读 `masteries`」，而 Java 不传该字段，则 `masteries` 恒为 `{}`
+→ 所有节点衰减输入 `= 0.0` → `estimate_decay(0.0, …) = 0.0 < 0.7` **恒成立**
+→ **该端点会把每一个终态步骤都报成「该复习」**。即：在 Java 落地前发布 Python 改动 = 净倒退。
+
+### 10.3 同批落地方案（仅 3 处，与 Task 6 一起做）
+
+| # | 文件 | 改动 |
+| --- | --- | --- |
+| 1 | `app/api/models.py:301` `ReviewScheduleRequest` | 新增 `masteries: dict[str, float] = Field(default_factory=dict)` |
+| 2 | `app/services/plan_service.py:202` `get_review_schedule` | 增参 `masteries: dict | None = None`；`:214` 改 `mastery = (masteries or {}).get(node_id, 0.0)`（镜像 `plan_center._decay_input`） |
+| 3 | `app/centers/plan_center.py:463` `review_schedule` | 透传 `masteries` 给 `get_review_schedule` |
+| 4 | `internal_api/plans.py:235` 路由 | 透传 `body.masteries or {}` |
+
+Java 侧配套（**与 Task 6 的两次落库改动同一提交**）：
+
+| # | 文件 | 改动 |
+| --- | --- | --- |
+| 5 | `LearningPlanController.java:348-360` | 取 `node_masteries`（Task 6 已引入的 `masteryService` 字段即可复用）→ 塞进 payload |
+| 6 | `PythonClient.java:314` `getReviewSchedule` | 增参 `Map<String,Object> masteries` → 写入 `request` |
+
+### 10.4 验收
+
+- 现有契约测试不受影响：`ReviewScheduleRequest` 新字段有默认值，旧调用方仍 200；
+- 新增一条负向验证：`masteries = {}` 时**不得**列出全部终态步骤（防「恒 0.0」复活）；
+- `plan_service.py:214` 改动后，`REVIEW_DECAY_FLOOR = 0.7` 与 `learning_snapshot` 同源关系不变。
+
+### 10.5 如果本批不做
+
+则**登记**，并明确：`review-schedule` 端点与 `learning_snapshot` 的 `review_due` 分支**掌握度来源不同**
+（前者读步骤快照、后者读真源），二者结论在「步骤快照陈旧但 `node_masteries` 已更新」时会分歧。
+**这不是本批验收缺陷**，但需在 P3/P4 收口时一并处理，避免长期双真源。

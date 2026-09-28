@@ -472,7 +472,7 @@ class TestCurrentNodePriority:
             mastery_current=0.6, topic_difficulty=3, review_count=0,
         )
         data = _echo_payload(client.post(SNAPSHOT_URL, json=_payload(
-            plan={}, steps=[review_step], masteries={"ml_basics": 0.05},
+            plan={}, steps=[review_step], masteries={"dl_basics": 0.9, "ml_basics": 0.05},
         )))
         assert data["current_node"]["node_id"] == "dl_basics"
         assert data["current_node"]["reason"] == "review_due"
@@ -485,10 +485,14 @@ class TestCurrentNodePriority:
           `get_review_schedule` 无此道，见 `learning_snapshot._review_due_candidates` docstring）；
         - 衰减闸门：`decayed >= REVIEW_DECAY_FLOOR` → 还记得，不算到期（与 plan_service 同源）。
         日期与掌握度都由 `PlanService` 公式反推，不写死日历日。
+
+        两闸共用同一份 `masteries`（`dl_basics=0.9`），唯一变量是 `last_review_at`，
+        因此哪一道断掉是**唯一可归因**的。
         """
         from app.services.plan_service import PlanService
 
         assert PlanService.get_half_life(3, 0) == 7.0  # 公式真源，防实现漂移
+        healthy = {"dl_basics": 0.9, "ml_basics": 0.05}
         now = datetime.now(timezone.utc)
 
         # 闸门 A：间隔未到（days_since=0 < interval=1）
@@ -498,7 +502,7 @@ class TestCurrentNodePriority:
             mastery_current=0.6, topic_difficulty=3, review_count=0,
         )
         data = _echo_payload(client.post(SNAPSHOT_URL, json=_payload(
-            plan={}, steps=[gate_a], masteries={"ml_basics": 0.05},
+            plan={}, steps=[gate_a], masteries=healthy,
         )))
         assert data["current_node"]["node_id"] == "ml_basics"
         assert data["current_node"]["reason"] == "weakest"
@@ -511,7 +515,7 @@ class TestCurrentNodePriority:
             mastery_current=0.9, topic_difficulty=3, review_count=0,
         )
         data = _echo_payload(client.post(SNAPSHOT_URL, json=_payload(
-            plan={}, steps=[gate_b], masteries={"ml_basics": 0.05},
+            plan={}, steps=[gate_b], masteries=healthy,
         )))
         assert data["current_node"]["node_id"] == "ml_basics"
         assert data["current_node"]["reason"] == "weakest"
