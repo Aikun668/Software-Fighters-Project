@@ -285,7 +285,7 @@ HTTP 400
 {"error": "count must be an integer between 1 and 20"}
 
 HTTP 500
-{"error": "LLM call failed: Spark WebSocket timeout"}
+{"error": "LLM call failed: upstream request timeout"}
 ```
 
 ---
@@ -295,8 +295,8 @@ HTTP 500
 | 项 | 值 |
 |----|-----|
 | 基址 | `http://127.0.0.1:8001` |
-| LLM 提供者 | 讯飞星火 (WebSocket) / OpenAI 兼容 (HTTP)，通过 `LLM_PROVIDER` 环境变量切换 |
-| Mock 模式 | `USE_MOCK_LLM=true` 时使用内置 mock 回复，不走真实 LLM |
+| LLM 提供者 | OpenAI 兼容 HTTP（MiniMax / Qwen / Ollama 等），经 `DEEPSEEK_API_KEY` + `DEEPSEEK_BASE_URL` 配置 |
+| Mock 模式 | `AI_SERVICE_MOCK_LLM=true` 时使用内置 mock 回复，不走真实 LLM |
 | 向量库 | ChromaDB (BGE-small-zh-v1.5, 512维)，10 份知识文档，93 个向量块 |
 | 数据库 | MySQL (计划迁移 SQLite) |
 | 健康检查 | `GET /health` → `{"status":"ok","db":"connected"}` |

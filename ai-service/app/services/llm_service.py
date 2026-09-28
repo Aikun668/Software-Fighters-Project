@@ -1,11 +1,7 @@
 """
 LLM Provider 策略模式
 
-支持两种后端：
-  - Spark WebSocket API (讯飞星火)
-  - OpenAI 兼容 HTTP API (MiniMax/Qwen/Ollama 等)
-
-通过 LLM_PROVIDER 环境变量切换，Agent 层无感知。
+唯一后端：OpenAI 兼容 HTTP API (MiniMax/Qwen/Ollama 等)。
 
 Per-agent 模型选择：
   - ModelConfig: 单次 LLM 调用的参数集（model, temperature, max_tokens, thinking_enabled）
@@ -17,18 +13,10 @@ import asyncio
 import os
 import random
 import json
-import hmac
-import hashlib
-import base64
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
-from time import mktime
 from typing import AsyncGenerator, Any
-from urllib.parse import urlparse, urlencode
-from wsgiref.handlers import format_date_time
 
-import websockets
 import aiohttp
 
 logger = logging.getLogger(__name__)
@@ -318,264 +306,26 @@ def create_llm(
     base_url: str = "",
     thinking_enabled: bool = False,
 ) -> Any:
-    """LLM Provider 工厂——根据 LLM_PROVIDER 环境变量选择后端。
-
-    LLM_PROVIDER=spark   → SparkLLM (讯飞 WebSocket)
-    LLM_PROVIDER=openai  → OpenAILLM (OpenAI 兼容 HTTP)
+    """LLM Provider 工厂——统一返回 OpenAI 兼容 HTTP 后端。
 
     Args:
         use_mock: `True`/`False` 显式指定（显式优先）；`None`（默认）时读统一
             环境开关 `_env_mock_flag()` —— 保证"未显式传参"的路径也能离线构造。
-        model: 模型名称，仅 OpenAI 兼容后端使用。None 时使用 MINIMAX_MODEL_CHAT 环境变量。
+        model: 模型名称。None 时使用 MINIMAX_MODEL_CHAT 环境变量。
         api_key: 非空时优先于 MINIMAX_API_KEY 环境变量。
         base_url: 非空时优先于 MINIMAX_BASE_URL 环境变量。
     """
     if use_mock is None:
         use_mock = _env_mock_flag()
-    provider = os.getenv("LLM_PROVIDER", "openai").lower()
-    if provider == "openai":
-        return OpenAILLM(
-            temperature=temperature,
-            max_tokens=max_tokens,
-            use_mock=use_mock,
-            model=model,
-            api_key=api_key,
-            base_url=base_url,
-            thinking_enabled=thinking_enabled,
-        )
-    return SparkLLM(
+    return OpenAILLM(
         temperature=temperature,
         max_tokens=max_tokens,
         use_mock=use_mock,
+        model=model,
+        api_key=api_key,
+        base_url=base_url,
+        thinking_enabled=thinking_enabled,
     )
-
-
-# ═══════════════════════════════════════════════════════════════
-# Spark Provider (WebSocket)
-# ═══════════════════════════════════════════════════════════════
-
-
-class SparkLLM:
-    """讯飞星火大模型 API 封装（WebSocket 协议）"""
-
-    SPARK_WS_URL = "wss://spark-api.xf-yun.com/v4.0/chat"
-    SPARK_DOMAIN = "4.0Ultra"
-
-    def __init__(
-        self,
-        temperature: float = 0.7,
-        max_tokens: int = 4096,
-        use_mock: bool | None = None,
-    ):
-        if use_mock is None:
-            use_mock = _env_mock_flag()
-        self.app_id = os.getenv("SPARK_APP_ID", "")
-        self.api_key = os.getenv("SPARK_API_KEY", "")
-        self.api_secret = os.getenv("SPARK_API_SECRET", "")
-        self.temperature = temperature
-        self.max_tokens = max_tokens
-        self.use_mock = use_mock
-
-        if not use_mock and (
-            not self.app_id or not self.api_key or not self.api_secret
-        ):
-            raise ValueError(
-                "SPARK_APP_ID, SPARK_API_KEY, and SPARK_API_SECRET "
-                "must be set in .env when use_mock=False"
-            )
-
-    # ── WebSocket auth ──────────────────────────────────────────
-
-    def _build_ws_url(self) -> str:
-        """构建带签名的 WebSocket 连接 URL"""
-        url = urlparse(self.SPARK_WS_URL)
-        host = url.netloc
-        path = url.path
-
-        # RFC 1123 时间戳（与官方 SDK 一致的 wsgiref 实现）
-        date_str = format_date_time(mktime(datetime.now().timetuple()))
-
-        # 签名原文
-        signature_origin = (
-            f"host: {host}\n"
-            f"date: {date_str}\n"
-            f"GET {path} HTTP/1.1"
-        )
-
-        signature = base64.b64encode(
-            hmac.new(
-                self.api_secret.encode("utf-8"),
-                signature_origin.encode("utf-8"),
-                digestmod=hashlib.sha256,
-            ).digest()
-        ).decode("utf-8")
-
-        authorization_origin = (
-            f'api_key="{self.api_key}", '
-            f'algorithm="hmac-sha256", '
-            f'headers="host date request-line", '
-            f'signature="{signature}"'
-        )
-        authorization = base64.b64encode(
-            authorization_origin.encode("utf-8")
-        ).decode("utf-8")
-
-        params = urlencode({
-            "authorization": authorization,
-            "date": date_str,
-            "host": host,
-        })
-
-        return f"{self.SPARK_WS_URL}?{params}"
-
-    def _build_request(self, messages: list[dict]) -> dict:
-        """构建 WebSocket 请求帧"""
-        return {
-            "header": {"app_id": self.app_id},
-            "parameter": {
-                "chat": {
-                    "domain": self.SPARK_DOMAIN,
-                    "temperature": self.temperature,
-                    "max_tokens": self.max_tokens,
-                }
-            },
-            "payload": {
-                "message": {
-                    "text": messages,
-                }
-            },
-        }
-
-    # ── public API ──────────────────────────────────────────────
-
-    async def chat(
-        self,
-        messages: list[dict],
-        system_prompt: str = "",
-    ) -> str:
-        """非流式对话，收集完整回复后返回"""
-        if self.use_mock:
-            return self._mock_response(messages)
-
-        full_messages = self._build_messages(messages, system_prompt)
-        ws_url = self._build_ws_url()
-        request = self._build_request(full_messages)
-
-        last_error = None
-        async with _llm_semaphore:
-            for attempt in range(_MAX_RETRIES + 1):
-                try:
-                    async with asyncio.timeout(180.0):
-                        async with websockets.connect(ws_url, max_size=10 * 1024 * 1024, open_timeout=30.0) as ws:
-                            await ws.send(json.dumps(request))
-                            full_text = ""
-                            async for raw in ws:
-                                data = json.loads(raw)
-                                code = data.get("header", {}).get("code", 1)
-                                if code != 0:
-                                    msg = data.get("header", {}).get("message", "unknown")
-                                    raise RuntimeError(f"Spark WebSocket error {code}: {msg}")
-                                choices = (
-                                    data.get("payload", {})
-                                    .get("choices", {})
-                                    .get("text", [])
-                                )
-                                for choice in choices:
-                                    full_text += choice.get("content", "")
-                                status = data.get("header", {}).get("status", 2)
-                                if status == 2:
-                                    break
-                            return full_text
-                except asyncio.TimeoutError:
-                    logger.error("Spark WebSocket timeout after 120s")
-                    raise RuntimeError("Spark WebSocket timeout: LLM did not respond within 120s")
-                except (OSError, websockets.ConnectionClosed) as e:
-                    last_error = e
-                    if attempt < _MAX_RETRIES:
-                        logger.warning(f"Spark WebSocket error (attempt {attempt+1}), retrying: {e}")
-                        await asyncio.sleep(1.0)
-
-        logger.error(f"Spark WebSocket connection failed after {_MAX_RETRIES+1} attempts: {last_error}")
-        raise RuntimeError(f"Spark WebSocket connection failed: {last_error}")
-
-    async def chat_stream(
-        self,
-        messages: list[dict],
-        system_prompt: str = "",
-    ) -> AsyncGenerator[str, None]:
-        """流式对话，逐 token 返回"""
-        if self.use_mock:
-            for token in self._mock_stream_response(messages):
-                yield token
-                await asyncio.sleep(0.05)
-            return
-
-        full_messages = self._build_messages(messages, system_prompt)
-        ws_url = self._build_ws_url()
-        request = self._build_request(full_messages)
-
-        async with _llm_stream_semaphore:
-            try:
-                async with asyncio.timeout(180.0):
-                    async with websockets.connect(ws_url, max_size=10 * 1024 * 1024, open_timeout=30.0) as ws:
-                        await ws.send(json.dumps(request))
-                        async for raw in ws:
-                            data = json.loads(raw)
-                            code = data.get("header", {}).get("code", 1)
-                            if code != 0:
-                                msg = data.get("header", {}).get("message", "unknown")
-                                raise RuntimeError(f"Spark WebSocket error {code}: {msg}")
-                            choices = (
-                                data.get("payload", {})
-                                .get("choices", {})
-                                .get("text", [])
-                            )
-                            for choice in choices:
-                                content = choice.get("content", "")
-                                if content:
-                                    yield content
-                            status = data.get("header", {}).get("status", 2)
-                            if status == 2:
-                                break
-            except asyncio.TimeoutError:
-                logger.error("Spark WebSocket stream timeout after 120s")
-                raise RuntimeError("Spark WebSocket stream timeout: LLM did not respond within 120s")
-            except (OSError, websockets.ConnectionClosed) as e:
-                logger.error(f"Spark WebSocket stream connection error: {e}")
-                raise RuntimeError(f"Spark WebSocket connection failed: {e}")
-
-    # ── internal helpers ────────────────────────────────────────
-
-    def _build_messages(
-        self, messages: list[dict], system_prompt: str
-    ) -> list[dict]:
-        """构建消息列表，在开头插入 system prompt"""
-        if system_prompt:
-            return [{"role": "system", "content": system_prompt}] + list(messages)
-        return list(messages)
-
-    def _mock_response(self, messages: list[dict]) -> str:
-        """Mock 非流式回复（用于画像提取测试）"""
-        return (
-            '{"updates": {'
-            '"knowledge_base": 30, '
-            '"learning_goal": "掌握机器学习与深度学习基础", '
-            '"interest_direction": ["机器学习"], '
-            '"weak_points": ["数学基础薄弱"], '
-            '"cognitive_style": null, '
-            '"learning_pace": null'
-            '}}'
-        )
-
-    def _mock_stream_response(self, messages: list[dict]) -> list[str]:
-        """Mock 流式回复（用于对话测试）"""
-        response = (
-            "你好！很高兴和你交流。从你刚才的描述来看，"
-            "你已经有一定的编程基础了，这对学习AI领域非常有帮助。"
-            "能跟我说说，你对AI的哪个方向最感兴趣呢？"
-            "比如是想做图像识别、自然语言处理，还是数据科学方面？"
-        )
-        return list(response)
 
 
 # ═══════════════════════════════════════════════════════════════

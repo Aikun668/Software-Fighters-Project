@@ -55,9 +55,6 @@ CONVERSATION_COMPRESS = AI_SERVICE_DIR / "app" / "utils" / "conversation_compres
 _LLM_CREDENTIAL_ENVS = (
     "DEEPSEEK_API_KEY",
     "MINIMAX_API_KEY",
-    "SPARK_APP_ID",
-    "SPARK_API_KEY",
-    "SPARK_API_SECRET",
 )
 
 # 决策 2：归一为 AI_SERVICE_MOCK_LLM，USE_MOCK_LLM 作过渡期兼容别名。
