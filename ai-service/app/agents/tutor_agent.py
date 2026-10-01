@@ -12,6 +12,7 @@ from app.services.llm_service import PROFILE_DIRECTOR, OpenAILLM
 from app.services.context_builder import ContextBuilder
 from app.services.response_sanity import SanityVerdict, run_with_sanity_check
 from app.services.summary_maintainer import SummaryMaintainer
+from app.utils.multimodal import build_multimodal_message
 from app.utils.prompt_loader import build_prompt, interpolate_variables
 
 logger = logging.getLogger(__name__)
@@ -52,6 +53,7 @@ class TutorState(TypedDict, total=False):
     retry_count: int
     style: str                   # "standard" | "socratic"
     socratic_round: int          # 苏格拉底追问轮次（0-based）
+    images: list[str]            # 当前轮用户上传的图片（data URI / http URL）
 
 
 @kb_verify(fields=["response"])
@@ -101,6 +103,40 @@ class TutorAgent(BaseAgent):
             f"(head={len(head)}, tail={len(tail)})"
         )
         return head + tail
+
+    @staticmethod
+    def _attach_images(
+        messages: list[dict], current_message: str, images: list[str]
+    ) -> list[dict]:
+        """把本轮上传的图片合并进最后一条 user 消息，升级为图文多模态 content。
+
+        只替换与 current_message 完全一致的最后一条 user 消息；找不到时
+        （上下文截断等边缘情况）把图文消息追加到末尾，保证图片不丢。
+        图片校验（MIME 白名单 / SSRF 拦截）由 build_multimodal_message 负责，
+        被拒绝的图片会被静默跳过。
+        """
+        multimodal = build_multimodal_message(current_message, images)
+        if multimodal.get("content") == current_message:
+            # 所有图片都被校验拒绝，退化为纯文本，保持消息列表不变
+            return messages
+
+        for i in range(len(messages) - 1, -1, -1):
+            msg = messages[i]
+            if (
+                msg.get("role") == "user"
+                and msg.get("content") == current_message
+            ):
+                out = list(messages)
+                out[i] = {"role": "user", "content": multimodal["content"]}
+                logger.info(
+                    "Attached %d image(s) to current user message", len(images)
+                )
+                return out
+
+        logger.warning(
+            "Current user message not found in context; appending multimodal message"
+        )
+        return messages + [multimodal]
 
     # ── RAG query construction ──────────────────────────────────
 
@@ -350,6 +386,12 @@ class TutorAgent(BaseAgent):
         truncated = self._truncate_messages(built_context.messages())
         system_with_context = built_context.system_prompt()
 
+        # ── 多模态：本轮有上传图片时，把最后一条 user 消息升级为图文 content ──
+        # 只注入当轮图片，历史轮次的图片不重发（省 token 且 Java 不回传旧图）。
+        images = state.get("images") or []
+        if images and current_message:
+            truncated = self._attach_images(truncated, current_message, images)
+
         # ── SSE token 流（B1）：上层传入 on_token 时，在 chat_stream 推
         # chunk 时同步回调 on_token。**只调一次 chat_stream**，sanity
         # check 复用同一个累积的 response 字符串。
@@ -357,13 +399,23 @@ class TutorAgent(BaseAgent):
         # —— 见 `base_agent.current_on_token` 的说明。
         on_token = current_on_token.get()
 
+        # 只有第一次尝试允许走 SSE token 旁路。
+        #
+        # sanity 重试会用相同的上下文再生成一次，若重试也推 token，前端会把
+        # 同一段正文**逐字收到两遍**（用户看到重复内容），随后还要按终态裁决
+        # 决定保留或丢弃。因此重试仅用于重新取得候选文本，不再外流：
+        # 第一次的 token 已构成用户可见正文，重试结果只作为「正文是否可用」的判据。
+        attempt = {"n": 0}
+
         async def generate_once(_context):
             response = ""
+            attempt["n"] += 1
+            stream_to_client = on_token is not None and attempt["n"] == 1
             async for chunk in self.llm.chat_stream(
                 truncated, system_prompt=system_with_context
             ):
                 response += chunk
-                if on_token is not None:
+                if stream_to_client:
                     try:
                         await on_token(chunk)
                     except Exception:

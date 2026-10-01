@@ -11,6 +11,11 @@ export const sendMessageStream = async (data: {
   message: string
   conversation_id: number | null
   messages: Array<{ role: 'user' | 'assistant'; content: string }>
+  mode?: 'auto' | 'plan' | 'resource' | 'exercise'
+  images?: string[]
+  /** 本轮图片对应的 file_info.id，后端据此把图片持久化到消息表（预签名 URL 会过期） */
+  image_file_ids?: number[]
+  style?: 'standard' | 'socratic'
 }): Promise<ReadableStream> => {
   console.log('[SSE] 准备发送请求:', {
     url: `${import.meta.env.VITE_API_BASE_URL || '/api'}/api/chat`,
@@ -65,7 +70,7 @@ export const sendMessageStream = async (data: {
  * 流在无终态事件下关闭时补一次 onDone，保证调用方状态一定收敛。
  * @param stream - 数据流
  * @param onData - 数据回调
- * @param onDone - 完成回调
+ * @param onDone - 完成回调，参数为后端返回的会话 ID；没有会话 ID 时为 null
  * @param onError - 错误回调
  * @param onProgress - 进度回调（阶段 D）：后端 `progress` 事件表示"正在执行某步骤"，
  *   只用于展示**进度文案**；**绝不可**当作正文追加（正文只来自 token/content 事件）。
@@ -73,7 +78,7 @@ export const sendMessageStream = async (data: {
 export const parseSSEStream = async (
   stream: ReadableStream,
   onData: (delta: string, mode: string) => void,
-  onDone: () => void,
+  onDone: (conversationId: number | null) => void,
   onError?: (error: Error) => void,
   onProgress?: (progress: {
     stage: string
@@ -181,7 +186,7 @@ export const parseSSEStream = async (
             case 'done':
               console.log('[SSE] 流结束:', data)
               terminated = true
-              onDone()
+              onDone(typeof data.conversation_id === 'number' ? data.conversation_id : null)
               return
             case 'error': {
               // 错误也是终态：触发 onError 后立即停止，后续 done 不再触发 onDone
@@ -215,7 +220,7 @@ export const parseSSEStream = async (
     // 流结束：未收到任何终态事件时补一次 done，保证调用方状态收敛
     if (!terminated) {
       console.log('[SSE] 流式传输完成（未收到显式 done，本地收敛）')
-      onDone()
+      onDone(null)
     }
   } catch (error) {
     console.error('[SSE] 流式传输发生错误:', error)

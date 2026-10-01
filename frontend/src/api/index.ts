@@ -22,6 +22,9 @@ export * from './knowledgeGraph'
 // 学习计划接口
 export * from './plans'
 
+// 学习快照接口
+export * from './learningSnapshot'
+
 // 学习记录接口
 export * from './records'
 

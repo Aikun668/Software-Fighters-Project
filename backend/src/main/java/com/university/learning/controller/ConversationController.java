@@ -5,6 +5,7 @@ import com.university.learning.common.Result;
 import com.university.learning.entity.Conversation;
 import com.university.learning.entity.Message;
 import com.university.learning.service.IConversationService;
+import com.university.learning.service.IFileInfoService;
 import com.university.learning.service.IMessageService;
 import com.university.learning.utils.UserHolder;
 import io.swagger.v3.oas.annotations.Operation;
@@ -12,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -23,6 +25,7 @@ public class ConversationController {
 
     private final IConversationService conversationService;
     private final IMessageService messageService;
+    private final IFileInfoService fileInfoService;
     private final PythonClient pythonClient;
 
     @Operation(summary = "创建新会话")
@@ -72,6 +75,7 @@ public class ConversationController {
         } else {
             messages = messageService.listByConversationId(id);
         }
+        attachImageUrls(messages);
         return Result.ok(messages);
     }
 
@@ -81,7 +85,36 @@ public class ConversationController {
                                  @RequestParam(defaultValue = "0") int offset,
                                  @RequestParam(defaultValue = "200") int limit) {
         List<Message> messages = messageService.listByConversationIdRaw(id, offset, limit);
+        attachImageUrls(messages);
         return Result.ok(messages);
+    }
+
+    /**
+     * 用落库的 imageFileIds 重新签发图片 URL。
+     *
+     * 数据库只存 file_info.id，不存预签名 URL（URL 7 天过期），
+     * 所以每次回读都在这里重新签名，历史图片才不会失效。
+     * 单个文件缺失或 MinIO 异常不影响整条消息的回读。
+     */
+    private void attachImageUrls(List<Message> messages) {
+        for (Message message : messages) {
+            List<Long> fileIds = message.getImageFileIds();
+            if (fileIds == null || fileIds.isEmpty()) {
+                continue;
+            }
+            List<String> urls = new ArrayList<>(fileIds.size());
+            for (Long fileId : fileIds) {
+                if (fileId == null) {
+                    continue;
+                }
+                try {
+                    urls.add(fileInfoService.getFileUrl(fileId));
+                } catch (Exception e) {
+                    log.warn("历史图片签名失败，跳过: messageId={}, fileId={}", message.getId(), fileId, e);
+                }
+            }
+            message.setImages(urls);
+        }
     }
 
     @Operation(summary = "批量保存消息", description = "手动保存用户消息和 AI 回复")

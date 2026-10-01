@@ -8,6 +8,9 @@
 
 截断判定刻意保守（避免误伤列表/代码/无句号结尾的正常回答）：
 只认未闭合代码围栏、悬空连接标点（，、：；等）与未闭合括号三类强信号。
+
+语言一致性检查只在"用户未指定输出语言"时生效：用户明确要求
+"用英文写""输出不要中文"时，回答全英文属于正确履约，不得判为异常。
 """
 
 import json
@@ -40,6 +43,37 @@ _DANGLING_END_RE = re.compile(r"[，、：；,;\-（【\[\{]$")
 _FRAGMENT_SPLIT_RE = re.compile(r"[。！？!?\n；;，,]+")
 
 _CJK_RE = re.compile(r"[\u4e00-\u9fff]")
+
+# 用户显式要求外语输出的信号。
+#
+# 语言一致性检查的前提是「提问语言 = 期望回答语言」，一旦用户明确要求
+# 换语言（"用英文写""输出不要中文""translate into English"），该前提就不成立：
+# 此时回答全英文是**正确履约**，不是异常。缺失这些豁免会导致
+# 「要求英文作文」这类请求被确定性误杀（两轮重试必然同样失败，正文被整体丢弃）。
+_LANG_OVERRIDE_RE = re.compile(
+    r"(用|以|使用|改为|换成|输出|回答|回复|写|翻译成|翻成)\s*"
+    r"(纯\s*)?(英文|英语|中文|汉语|日文|日语|法文|法语|德文|德语|韩文|韩语|西班牙文|西班牙语)"
+    r"|(英文|英语|中文|汉语|日文|日语|法文|法语|德文|德语|韩文|韩语)\s*(输出|作答|回复|回答|写作)"
+    # 「帮我写一段英文自我介绍」这类动词与语言词被量词隔开的形态
+    r"|(写|来|生成|输出|回答|回复)[^。！？\n]{0,8}?(英文|英语|日文|日语|法文|法语|德文|德语)"
+    r"|不要(用)?(中文|英文|英语|汉语)"
+    r"|(纯|全|只用|仅用)\s*(英文|英语|中文|汉语|日文|日语)"
+    r"|in\s+english|in\s+chinese|english\s+only|translate\s+(in)?to\s+english"
+    r"|no\s+chinese|only\s+english",
+    re.IGNORECASE,
+)
+
+
+def _requests_language_override(request_message: str) -> bool:
+    """用户是否在请求里显式指定了输出语言。
+
+    命中时跳过语言一致性检查——回答跟随用户指定的语言即视为正常。
+    判定刻意保守：只认明确的语言指令措辞，避免把
+    「中文里顺带提到英文术语」这类普通提问误判成换语言要求。
+    """
+    if not request_message:
+        return False
+    return bool(_LANG_OVERRIDE_RE.search(request_message))
 
 
 class SanityVerdict(str, Enum):
@@ -130,7 +164,11 @@ def _is_truncated(text: str) -> bool:
 
 
 def _has_language_mismatch(text: str, request_message: str) -> bool:
-    # 仅防守"中文提问收到无中文长篇拉丁散文"这一高置信情形
+    # 仅防守"中文提问收到无中文长篇拉丁散文"这一高置信情形。
+    # 用户显式指定输出语言时该前提不成立，直接放行（否则"要求英文作文"
+    # 会被确定性误杀：重试上下文相同，两轮必然同为英文，正文被整体丢弃）。
+    if _requests_language_override(request_message):
+        return False
     if not request_message or len(_CJK_RE.findall(request_message)) < 2:
         return False
     stripped = text.strip()

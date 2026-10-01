@@ -65,12 +65,14 @@ public class ChatController {
         Conversation conversation = getOrCreateConversation(userId, conversationId, message);
         final Long finalConvId = conversation.getId();
 
-        // 2. 保存用户消息
+        // 2. 保存用户消息（同时把本轮图片的 file_info.id 落库，
+        //    否则历史回读时用户上传的图片永久丢失）
         messageService.save(new Message()
                 .setConversationId(finalConvId)
                 .setRole("user")
                 .setContent(message)
-                .setMode("chat"));
+                .setMode("chat")
+                .setImageFileIds(request.getImage_file_ids()));
 
         // 3. 加载历史消息作为上下文
         List<Map<String, Object>> history = loadHistory(finalConvId, 50);

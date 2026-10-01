@@ -297,12 +297,21 @@ public class LearningPlanController {
         if (plan == null) {
             return Result.fail(404, "计划不存在");
         }
+        // 权限检查：确保计划所有者才能修改自己的计划
+        if (!plan.getUserId().equals(userId)) {
+            return Result.fail(403, "无权访问该计划");
+        }
         List<PlanStep> steps = stepService.listByPlanId(planId);
 
         Map<String, Object> planData = planToMap(plan);
         List<Map<String, Object>> stepsData = stepsToMapList(steps);
         Map<String, Float> masteries = buildMasteryMap(userId, plan.getCourseId());
 
+        // TODO: 前端目前固定提交 score: 1（满分），但缺乏真实的学习证据支撑（练习答题、资源完成等）。
+        // 这会让掌握度计算基于虚假高分。需要决策：
+        // 方案 A：要求前端接入真实 score 源（来自练习系统、资源系统等）
+        // 方案 B：后端拒绝高分提交（如 score > 0.9）并要求真实证据
+        // 方案 C：后端对高分标记"缺真实证据"，在快照的 freshness 里提示用户
         Map<String, Object> result = pythonClient.updatePlanProgress(planId, userId, planData, stepsData,
                 body.getStep_id(), body.getStep_order() != null ? body.getStep_order() : 0,
                 body.getStatus(), body.getActivity_type(), body.getScore(),
@@ -311,6 +320,30 @@ public class LearningPlanController {
         // Python 只计算，Java 落库：把 mastery_updates 的 new_mastery 写入唯一事实源
         int applied = masteryService.applyMasteryUpdates(userId, plan.getCourseId(), extractMasteryUpdates(result));
         log.info("计划进度掌握度已落库: planId={}, userId={}, 节点数={}", planId, userId, applied);
+
+        // 同步更新计划步骤状态和计划主表的完成进度
+        // Python 响应是 {success, data:{...}} 信封，业务字段在 data 下
+        Map<String, Object> progressPayload = extractDataMap(result);
+
+        // 只定位被本次动作修改的那一步：step_id 优先，其次 step_order（与 Python find_step 口径一致）
+        Long targetStepId = resolveTargetStepId(steps, body.getStep_id(), body.getStep_order());
+        String targetStatus = extractTargetStepStatus(progressPayload, steps, targetStepId);
+        if (targetStepId != null && targetStatus != null) {
+            stepService.updateById(new PlanStep().setId(targetStepId).setStatus(targetStatus));
+            log.info("计划步骤状态已同步: planId={}, stepId={}, status={}", planId, targetStepId, targetStatus);
+        } else {
+            log.warn("未能定位目标步骤，跳过步骤状态同步: planId={}, stepId={}, stepOrder={}",
+                    planId, body.getStep_id(), body.getStep_order());
+        }
+
+        Integer completedSteps = toInt(progressPayload.get("completed_steps"), -1);
+        if (completedSteps >= 0) {
+            plan.setCompletedSteps(completedSteps);
+            plan.setLastActivityAt(java.time.LocalDateTime.now());
+            planService.updateById(plan);
+        } else {
+            log.warn("Python 响应缺少 completed_steps，跳过计划主表同步: planId={}", planId);
+        }
 
         return Result.ok(result);
     }
@@ -327,6 +360,10 @@ public class LearningPlanController {
             LearningPlan plan = planService.getById(planId);
             if (plan == null) {
                 return Result.fail(404, "计划不存在");
+            }
+            // 权限检查：确保计划所有者才能修改自己的计划
+            if (!plan.getUserId().equals(userId)) {
+                return Result.fail(403, "无权访问该计划");
             }
             List<PlanStep> steps = stepService.listByPlanId(planId);
 
@@ -438,17 +475,69 @@ public class LearningPlanController {
      */
     @SuppressWarnings("unchecked")
     private Map<String, Object> extractMasteryUpdates(Map<String, Object> pythonResponse) {
+        Object updates = extractDataMap(pythonResponse).get("mastery_updates");
+        return updates instanceof Map ? (Map<String, Object>) updates : Collections.emptyMap();
+    }
+
+    /** 拆开 {success, data} 信封；失败或缺 data 时返回空 map */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> extractDataMap(Map<String, Object> pythonResponse) {
         if (pythonResponse == null || Boolean.FALSE.equals(pythonResponse.get("success"))) {
-            log.warn("Python 未返回成功响应，跳过掌握度落库: {}", pythonResponse);
+            log.warn("Python 未返回成功响应，跳过落库: {}", pythonResponse);
             return Collections.emptyMap();
         }
         Object data = pythonResponse.get("data");
         if (!(data instanceof Map)) {
-            log.warn("Python 响应缺少 data 字段，跳过掌握度落库");
+            log.warn("Python 响应缺少 data 字段，跳过落库");
             return Collections.emptyMap();
         }
-        Object updates = ((Map<String, Object>) data).get("mastery_updates");
-        return updates instanceof Map ? (Map<String, Object>) updates : Collections.emptyMap();
+        return (Map<String, Object>) data;
+    }
+
+    /** 定位目标步骤：step_id 优先，其次 step_order（与 Python find_step 口径一致） */
+    private Long resolveTargetStepId(List<PlanStep> steps, Long stepId, Integer stepOrder) {
+        for (PlanStep s : steps) {
+            if (stepId != null && stepId > 0 && stepId.equals(s.getId())) {
+                return s.getId();
+            }
+            if (stepOrder != null && stepOrder > 0 && stepOrder.equals(s.getOrder())) {
+                return s.getId();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 取本次动作后目标步骤的最终状态。
+     * Python 回显的 updated_steps 是服务端权威值；仅当它整体缺失时才退回本地库当前状态，
+     * 以免用过期状态覆盖刚刚算出的结果。
+     */
+    @SuppressWarnings("unchecked")
+    private String extractTargetStepStatus(Map<String, Object> payload, List<PlanStep> steps, Long targetStepId) {
+        if (targetStepId == null) {
+            return null;
+        }
+        Object raw = payload.get("updated_steps");
+        if (raw instanceof List) {
+            for (Object item : (List<Object>) raw) {
+                if (item instanceof Map) {
+                    Map<String, Object> stepMap = (Map<String, Object>) item;
+                    Object idObj = stepMap.get("id");
+                    if (idObj instanceof Number && targetStepId.equals(((Number) idObj).longValue())) {
+                        Object status = stepMap.get("status");
+                        if (status instanceof String) {
+                            return (String) status;
+                        }
+                    }
+                }
+            }
+            return null;
+        }
+        return steps.stream()
+                .filter(s -> targetStepId.equals(s.getId()))
+                .map(PlanStep::getStatus)
+                .findFirst()
+                .orElse(null);
     }
 
     private int toInt(Object value, int defaultValue) {

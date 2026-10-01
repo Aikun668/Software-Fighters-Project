@@ -1,34 +1,147 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from 'vue'
-import { ArrowUp, BookOpen, ChevronDown, Paperclip, Sparkles } from '@lucide/vue'
+import { computed, inject, nextTick, ref, watch } from 'vue'
+import { BookOpen, Sparkles } from '@lucide/vue'
 import { useRoute, useRouter } from 'vue-router'
 import { sendMessageStream, parseSSEStream } from '@/api/chat'
-
-interface ChatMessage {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  /** 后端返回的真实错误信息；有值时不得用任何本地内容顶替 */
-  error?: string
-  streaming?: boolean
-}
+import { getConversationMessages } from '@/api/conversations'
+import { uploadFile } from '@/api/files'
+import { resolveErrorMessage } from '@/utils/request'
+import ChatComposer from '@/components/chat/ChatComposer.vue'
+import ChatThread from '@/components/chat/ChatThread.vue'
+import type { ChatAttachment, ChatMessage, ChatMode, ChatStyle } from '@/components/chat/chat-types'
 
 const router = useRouter()
 const route = useRoute()
 const prompt = ref('')
 const messages = ref<ChatMessage[]>([])
+const currentConversationId = ref<number | null>(null)
 const sending = ref(false)
 /** 阶段 D：当前执行进度文案（来自后端 `progress` 事件；先按占位文案展示） */
 const progressText = ref('')
 const resourceMode = computed(() => route.query.mode === 'resource')
 const conversationStarted = computed(() => messages.value.length > 0)
+const selectedMode = ref<ChatMode>(resourceMode.value ? 'resource' : 'auto')
+const selectedStyle = ref<ChatStyle>('standard')
+const attachments = ref<ChatAttachment[]>([])
+const uploadingFile = ref(false)
+const uploadError = ref('')
+const modeOptions: Array<{ value: ChatMode; label: string }> = [
+  { value: 'auto', label: '自动' },
+  { value: 'plan', label: '学习规划' },
+  { value: 'resource', label: '资源生成' },
+  { value: 'exercise', label: '练习生成' },
+]
+const styleOptions: Array<{ value: ChatStyle; label: string }> = [
+  { value: 'standard', label: '标准答疑' },
+  { value: 'socratic', label: '苏格拉底式' },
+]
+const selectedModeLabel = computed(() => modeOptions.find((item) => item.value === selectedMode.value)?.label ?? '自动')
+const selectedStyleLabel = computed(() => styleOptions.find((item) => item.value === selectedStyle.value)?.label ?? '标准答疑')
 const suggestions = [
   { label: '梳理 Transformer 学习路径', icon: Sparkles, path: '/learning-path' },
   { label: '生成一组专项练习', icon: BookOpen, path: '/exercise' },
   { label: '解释反向传播', icon: BookOpen, path: '/learning-resource-network' },
 ]
+const refreshConversations = inject<() => void>('refreshConversations')
+
+const chooseMode = (mode: ChatMode) => {
+  selectedMode.value = mode
+}
+
+const chooseStyle = (style: ChatStyle) => {
+  selectedStyle.value = style
+}
+
+/** 单个附件体积上限，与后端 multipart 上限保持一致（20MB） */
+const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
+
+/** 剪贴板截图常常没有文件名，按 MIME 兜底一个可读名字 */
+const fallbackAttachmentName = (file: File) => {
+  if (file.name && file.name.trim()) return file.name
+  const ext = file.type.split('/')[1] || 'png'
+  return `粘贴的附件-${new Date().toLocaleTimeString('zh-CN', { hour12: false })}.${ext}`
+}
+
+/**
+ * 上传一个或多个附件（文件选择、粘贴、拖拽共用）。
+ *
+ * 附件不限类型：任何文件都能上传进附件条。只有图片会被标记为
+ * `isImage`，发送时作为多模态输入放进 `images`；其他附件仍随消息上传，
+ * 只是 AI 当前只消费图片。
+ *
+ * 逐个串行上传：任一失败只记录错误并继续处理后面的文件，
+ * 已成功的条目保留在附件条里，避免一次失败把整批都丢掉。
+ */
+const handleFileUploads = async (files: File[]) => {
+  if (!files.length) return
+  uploadError.value = ''
+
+  const accepted: File[] = []
+  for (const file of files) {
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      uploadError.value = '附件过大，请控制在 20MB 以内'
+      continue
+    }
+    accepted.push(file)
+  }
+  if (!accepted.length) return
+
+  uploadingFile.value = true
+  try {
+    for (const file of accepted) {
+      try {
+        const result = await uploadFile(file)
+        attachments.value.push({
+          fileId: result.fileId,
+          name: result.originalName || fallbackAttachmentName(file),
+          url: result.url,
+          isImage: file.type.startsWith('image/'),
+        })
+      } catch (error) {
+        // 拦截器 reject 的是后端信封对象而非 Error 实例，
+        // 直接读 error.message 会拿到 undefined 并退化成误导性的兜底文案。
+        uploadError.value = resolveErrorMessage(error)
+      }
+    }
+  } finally {
+    uploadingFile.value = false
+  }
+}
+
+const removeAttachment = (fileId: number) => {
+  attachments.value = attachments.value.filter((item) => item.fileId !== fileId)
+}
 
 const findMessage = (id: string) => messages.value.find((m) => m.id === id)
+
+const openConversation = async (id: number) => {
+  if (sending.value) return
+
+  try {
+    const history = await getConversationMessages(id)
+    messages.value = history.map((message) => ({
+      id: `m-${message.id}`,
+      role: message.role === 'assistant' ? 'assistant' : 'user',
+      content: message.content ?? '',
+      // 后端已按落库的 fileId 重新签发 URL；丢掉它会让历史图片永远不显示
+      images: message.images ?? [],
+    }))
+    currentConversationId.value = id
+    progressText.value = ''
+    // 打开历史会话总是跳到最新消息
+    followOutput.value = true
+    await scrollToEnd(true)
+  } catch (error) {
+    console.error('加载会话消息失败', error)
+  }
+}
+
+const startNewConversation = () => {
+  if (sending.value) return
+  messages.value = []
+  currentConversationId.value = null
+  progressText.value = ''
+}
 
 /**
  * 已完成的对话历史：只收完整且有正文的 user/assistant 轮次。
@@ -55,10 +168,29 @@ const buildHistory = () => {
   return history
 }
 
-const scrollToEnd = async () => {
+/**
+ * 是否跟随流式输出自动贴底。
+ *
+ * 用户往上翻看历史时必须保持不动，否则每个 token 都会把他拽回底部
+ * （表现为"划都划不上去"）。只有原本就在底部时才继续跟随。
+ */
+const followOutput = ref(true)
+
+/** 消息滚动容器的宿主组件；根元素即 .chat-scroll-region */
+const threadRef = ref<{ $el: HTMLElement } | null>(null)
+
+const scrollToEnd = async (force = false) => {
   await nextTick()
-  const list = document.querySelector('.conversation-list')
+  if (!force && !followOutput.value) return
+  // 用组件根元素而不是全局 document 查询：后者拿不到未挂载的实例，
+  // 多实例时还可能滚错容器。
+  const list = threadRef.value?.$el
   if (list) list.scrollTop = list.scrollHeight
+}
+
+/** 打开历史会话时强制贴底；用户手动滚动时更新跟随状态 */
+const handleScrollState = (atBottom: boolean) => {
+  followOutput.value = atBottom
 }
 
 const failMessage = (id: string, error: unknown) => {
@@ -71,29 +203,54 @@ const failMessage = (id: string, error: unknown) => {
   sending.value = false
 }
 
+/** 只发附件不打字时的占位提问：Python 侧 message 有 min_length=1 约束，空串会被拒 */
+const ATTACHMENT_ONLY_PROMPT = '请看我上传的附件'
+
 const send = async () => {
   const text = prompt.value.trim()
-  if (!text || sending.value) return
+  // 只有图片能作为多模态内容送给 AI；其他附件随消息上传但不进 images
+  const imageAttachments = attachments.value.filter((item) => item.isImage)
+  const images = imageAttachments.map((item) => item.url)
+  // 同时上报 fileId，后端据此把图片持久化到消息表（URL 会过期，不能存）
+  const imageFileIds = imageAttachments.map((item) => item.fileId)
+  const hasAttachments = attachments.value.length > 0
+  // 允许"只发图片/附件"：粘贴截图后直接回车是最自然的用法
+  if ((!text && !hasAttachments) || sending.value) return
 
+  const outgoing = text || ATTACHMENT_ONLY_PROMPT
   prompt.value = ''
   const history = buildHistory()
-  messages.value.push({ id: `u-${Date.now()}`, role: 'user', content: text })
+  messages.value.push({ id: `u-${Date.now()}`, role: 'user', content: outgoing, images })
   const assistantId = `a-${Date.now()}`
   messages.value.push({ id: assistantId, role: 'assistant', content: '', streaming: true })
   sending.value = true
   progressText.value = ''
-  await scrollToEnd()
+  // 自己发消息时重新跟随输出
+  followOutput.value = true
+  await scrollToEnd(true)
 
   try {
-    const stream = await sendMessageStream({ message: text, conversation_id: null, messages: history })
+    const request: Parameters<typeof sendMessageStream>[0] = {
+      message: outgoing,
+      conversation_id: currentConversationId.value,
+      messages: history,
+    }
+    if (selectedMode.value !== 'auto') request.mode = selectedMode.value
+    if (selectedStyle.value !== 'standard') request.style = selectedStyle.value
+    if (images.length) request.images = images
+    if (imageFileIds.length) request.image_file_ids = imageFileIds
+
+    const stream = await sendMessageStream(request)
     await parseSSEStream(
       stream,
       (delta) => {
         const msg = findMessage(assistantId)
         if (msg) msg.content += delta
+        // 用户往上翻时不得抢滚动
         void scrollToEnd()
       },
-      () => {
+      (conversationId) => {
+        if (conversationId !== null) currentConversationId.value = conversationId
         const msg = findMessage(assistantId)
         if (msg) {
           msg.streaming = false
@@ -103,6 +260,8 @@ const send = async () => {
         }
         progressText.value = ''
         sending.value = false
+        attachments.value = []
+        refreshConversations?.()
       },
       (error) => {
         failMessage(assistantId, error)
@@ -117,75 +276,98 @@ const send = async () => {
   }
   await scrollToEnd()
 }
+
+const routeConversationId = (value: unknown) => {
+  const raw = Array.isArray(value) ? value[0] : value
+  const id = Number(raw)
+  return Number.isInteger(id) && id > 0 ? id : null
+}
+
+watch(
+  () => route.query.conversationId,
+  (value) => {
+    const id = routeConversationId(value)
+    if (id === null) {
+      startNewConversation()
+    } else {
+      void openConversation(id)
+    }
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
   <section class="chat-page">
-    <div class="chat-content">
-      <div v-if="!conversationStarted" class="chat-heading">
-        <span class="heading-mark"><BookOpen :size="26" :stroke-width="1.25" /></span>
-        <div>
-          <h1>{{ resourceMode ? '想生成什么学习资料？' : '下午好——今天想研究什么？' }}</h1>
-          <p>{{ resourceMode ? '告诉我主题、难度和格式，我会整理成适合你的学习资源。' : '我是你的 AI 学习伙伴，随时为你答疑解惑、规划路径、陪伴进步。' }}</p>
+    <div class="chat-content" :class="{ 'in-conversation': conversationStarted }">
+      <ChatThread
+        ref="threadRef"
+        class="chat-thread"
+        :conversation-started="conversationStarted"
+        :resource-mode="resourceMode"
+        :messages="messages"
+        :progress-text="progressText"
+        @scroll-state="handleScrollState"
+        @image-loaded="scrollToEnd()"
+      />
+      <div class="composer-dock">
+        <ChatComposer
+          v-model:prompt="prompt"
+          :resource-mode="resourceMode"
+          :selected-mode-label="selectedModeLabel"
+          :selected-style-label="selectedStyleLabel"
+          :mode-options="modeOptions"
+          :style-options="styleOptions"
+          :attachments="attachments"
+          :upload-error="uploadError"
+          :uploading-file="uploadingFile"
+          :sending="sending"
+          @send="send"
+          @choose-mode="chooseMode"
+          @choose-style="chooseStyle"
+          @remove-attachment="removeAttachment"
+          @upload-files="handleFileUploads"
+        />
+      </div>
+      <div v-if="!conversationStarted" class="quick-asks" aria-label="学习入口">
+        <span class="asks-divider" aria-hidden="true"><i />试试问我<i /></span>
+        <div class="ask-links">
+          <template v-for="(item, index) in suggestions" :key="item.label">
+            <span v-if="index > 0" class="ask-dot">·</span>
+            <button type="button" class="quick-ask" @click="router.push(item.path)">{{ item.label }}</button>
+          </template>
         </div>
       </div>
-
-      <div v-if="!conversationStarted" class="suggestions" aria-label="学习入口">
-        <button v-for="item in suggestions" :key="item.label" class="suggestion-row" @click="router.push(item.path)">
-          <component :is="item.icon" :size="22" :stroke-width="1.35" />
-          <span>{{ item.label }}</span>
-          <span class="row-arrow">→</span>
-        </button>
-      </div>
-
-      <div v-if="conversationStarted" class="conversation-list">
-        <div
-          v-for="msg in messages"
-          :key="msg.id"
-          :class="['msg-row', `msg-${msg.role}`]"
-        >
-          <div class="msg-bubble">
-            <template v-if="msg.role === 'assistant'">
-              <p v-if="msg.content" class="msg-text">{{ msg.content }}<span v-if="msg.streaming" class="stream-cursor">▍</span></p>
-              <p v-else-if="msg.streaming && !msg.error" class="msg-pending">{{ progressText || '正在思考…' }}</p>
-              <p v-if="msg.streaming && msg.content && progressText" class="msg-pending">{{ progressText }}</p>
-              <p v-if="msg.error" class="msg-error">{{ msg.error }}</p>
-            </template>
-            <p v-else class="msg-text">{{ msg.content }}</p>
-          </div>
-        </div>
-      </div>
-
-      <div class="composer">
-        <textarea v-model="prompt" rows="4" :placeholder="resourceMode ? '输入主题，我生成学习资料...' : '向我提问，或粘贴学习内容...'" @keydown.enter.exact.prevent="send" />
-        <div class="composer-toolbar">
-          <button class="toolbar-select"><Sparkles :size="16" :stroke-width="1.45" />{{ resourceMode ? '资源生成' : '自动' }} <ChevronDown :size="14" /></button>
-          <button><Paperclip :size="17" :stroke-width="1.45" />附件</button>
-          <button><BookOpen :size="17" :stroke-width="1.45" />学习方式 <ChevronDown :size="14" /></button>
-          <button class="send-button" aria-label="发送" :disabled="sending" @click="send"><ArrowUp :size="20" :stroke-width="1.6" /></button>
-        </div>
-      </div>
-      <p class="input-hint">按 Enter 发送，Shift + Enter 换行</p>
     </div>
   </section>
 </template>
 
 <style scoped>
-.chat-page { min-height: 100vh; display: flex; justify-content: center; padding: 0 40px; }.chat-content { width: min(920px, 100%); padding-top: 22vh; display: flex; flex-direction: column; min-height: 100vh; }.heading-mark { display: grid; place-items: center; margin-top: 9px; color: var(--ink); }.chat-heading { display: flex; align-items: flex-start; gap: 18px; }.chat-heading h1 { margin: 0; font-family: var(--font-display); font-size: clamp(34px, 4vw, 52px); font-weight: 500; letter-spacing: -.04em; line-height: 1.18; }.chat-heading p { margin: 14px 0 0; color: var(--muted); font-size: 15px; }.suggestions { margin: 50px 0 68px; border-top: 1px solid var(--line); }.suggestion-row { display: flex; align-items: center; gap: 17px; width: 100%; min-height: 64px; padding: 0 9px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer; text-align: left; font-size: 15px; }.suggestion-row:hover { background: rgba(255,255,255,.42); }.suggestion-row svg { color: var(--muted); }.row-arrow { margin-left: auto; color: var(--muted); font-size: 23px; font-weight: 300; }.composer { overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,254,250,.72); box-shadow: 0 10px 28px rgba(122,105,82,.05); }.composer textarea { display: block; width: 100%; min-height: 155px; padding: 21px 23px; resize: vertical; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 15px; }.composer textarea::placeholder { color: var(--soft-muted); }.composer-toolbar { display: flex; align-items: center; gap: 26px; min-height: 64px; padding: 0 18px 0 21px; border-top: 1px solid var(--line); }.composer-toolbar button { display: inline-flex; align-items: center; gap: 7px; border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 13px; }.composer-toolbar button:hover { color: var(--ink); }.toolbar-select { padding-right: 17px !important; border-right: 1px solid var(--line) !important; }.send-button { justify-content: center; width: 40px; height: 40px; margin-left: auto; border-radius: 50% !important; background: var(--clay) !important; color: #fffaf6 !important; }.send-button:hover { background: #b97c65 !important; }.send-button:disabled { opacity: .55; cursor: not-allowed; }
-/* ── 对话态 ─────────────────────────────────────────────── */
-.chat-content.in-conversation, .chat-content:has(.conversation-list) { padding-top: 6vh; }
-.conversation-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 18px; padding: 8px 2px 24px; margin-bottom: 16px; }
-.msg-row { display: flex; }
-.msg-user { justify-content: flex-end; }
-.msg-assistant { justify-content: flex-start; }
-.msg-bubble { max-width: 78%; padding: 13px 17px; border-radius: 14px; font-size: 15px; line-height: 1.65; }
-.msg-user .msg-bubble { background: var(--clay); color: #fffaf6; border-bottom-right-radius: 4px; }
-.msg-assistant .msg-bubble { background: rgba(255,254,250,.85); border: 1px solid var(--line); color: var(--ink); border-bottom-left-radius: 4px; }
-.msg-text { margin: 0; white-space: pre-wrap; word-break: break-word; }
-.msg-error { margin: 0; color: #b4483c; font-size: 14px; }
-.msg-pending { margin: 0; color: var(--muted); }
-.stream-cursor { display: inline-block; margin-left: 1px; color: var(--clay); animation: blink 1s steps(2) infinite; }
-@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-.input-hint { margin: 12px 3px 28px; color: var(--muted); font-size: 12px; }
-@media (max-width: 900px) { .chat-page { padding: 0 24px; }.chat-content { padding-top: 13vh; }.chat-heading h1 { font-size: 36px; }.suggestions { margin: 38px 0 46px; } }
+.chat-page { height: 100%; min-height: 0; display: flex; justify-content: center; overflow: hidden; padding: 0 24px; }
+.chat-content { width: 100%; max-width: 960px; height: 100%; min-height: 0; display: flex; flex-direction: column; }
+/* 空态整组居中（标题→输入框→快捷提问），Composer 落在屏幕中央。
+   空态垂直节奏全部参数化，微调只改这里 */
+.chat-content:not(.in-conversation) {
+  --empty-title-size: clamp(32px, 2.7vw, 50px);      /* 主标题 */
+  --empty-subtitle-size: clamp(14px, 1.05vw, 17px);  /* 副标题 */
+  --empty-title-gap: 26px;                           /* 标题 → 副标题 */
+  --empty-heading-to-composer: 56px;                 /* 副标题 → 输入框 */
+  --empty-composer-to-divider: 64px;                 /* 输入框 → “试试问我” */
+  --empty-divider-to-asks: 26px;                     /* “试试问我” → 快捷提问行 */
+  justify-content: safe center;
+  overflow-y: auto;
+}
+.chat-content:not(.in-conversation) .chat-thread { flex: 0 0 auto; }
+.chat-content.in-conversation { padding-top: 18px; }
+.composer-dock { position: relative; z-index: 1; flex: 0 0 auto; padding: 10px 0 16px; background: linear-gradient(to bottom, rgba(252,251,247,0), rgba(252,251,247,.96) 24%, var(--page) 58%); }
+/* 输入框下方：“—— 试试问我 ——” 分隔标注 + 单行淡色快捷提问（· 分隔） */
+.quick-asks { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: var(--empty-divider-to-asks, 26px); width: 100%; margin-top: var(--empty-composer-to-divider, 64px); }
+.asks-divider { display: inline-flex; align-items: center; gap: 14px; color: var(--soft-muted); font-size: 13px; letter-spacing: .06em; }
+.asks-divider i { display: inline-block; width: 36px; height: 1px; background: var(--line); }
+.ask-links { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px 14px; }
+.quick-ask { border: 0; background: transparent; padding: 4px 2px; color: var(--soft-muted); cursor: pointer; font-size: 14px; }
+.quick-ask:hover { color: var(--ink); }
+.ask-dot { color: var(--soft-muted); font-size: 16px; line-height: 1; }
+@media (max-width: 900px) { .chat-page { padding: 0 16px; } }
+@media (max-width: 620px) { .chat-page { padding: 0 12px; } }
 </style>

@@ -93,6 +93,7 @@ class AutoCenter:
             "messages": messages,
             "student_profile": student_profile,
             "style": style,
+            "images": (task.context or {}).get("images") or [],
             "conversation_id": (task.context or {}).get("conversation_id"),
         }
         if on_token is not None:

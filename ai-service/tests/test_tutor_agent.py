@@ -357,3 +357,118 @@ class TestTruncationWithMultimodal:
         assert len(result) == MAX_MESSAGES
         last_user = [m for m in result if m["role"] == "user"][-1]
         assert isinstance(last_user["content"], list)  # content 仍是数组
+
+
+# ═══════════════════════════════════════════════════════════════
+# sanity 重试与 SSE token 旁路的交互
+#
+# 线上回归：截断/语言等检查触发重试时，第一次的 token 已经推给前端；
+# 若重试也推，前端会逐字收到同一段正文两遍（实测 2.00x 重复）。
+# 约定：只有第一次尝试允许外流 token，重试仅用于重新取得候选文本。
+# ═══════════════════════════════════════════════════════════════
+
+class TestSanityRetryDoesNotDuplicateTokens:
+    @staticmethod
+    def _agent_with_stream(chunks_by_attempt):
+        """构造 TutorAgent，chat_stream 按第几次调用返回不同文本。"""
+        calls = {"n": 0}
+
+        with patch("app.agents.base_agent.create_llm", return_value=AsyncMock()):
+            agent = TutorAgent(use_mock_llm=True)
+
+        async def stream(_messages, system_prompt=""):
+            idx = min(calls["n"], len(chunks_by_attempt) - 1)
+            calls["n"] += 1
+            for chunk in chunks_by_attempt[idx]:
+                yield chunk
+
+        agent.llm.chat_stream = stream
+        return agent, calls
+
+    @pytest.mark.asyncio
+    async def test_retry_does_not_push_tokens_twice(self, monkeypatch):
+        """被 sanity 拦截时，前端只在第一轮收到一次正文，不因重试重复。"""
+        text = (
+            "A process is the basic unit of resource allocation in an operating "
+            "system. It owns an isolated address space, while threads share the "
+            "resources of their parent process and communicate more cheaply."
+        )
+        agent, calls = self._agent_with_stream([[text], [text]])
+
+        class _Router:
+            def classify(self, *a, **k):
+                return "general"
+
+            def should_inject_kb(self, *a, **k):
+                return False
+
+            def should_inject_analogy(self, *a, **k):
+                return False
+
+        async def clear_clarity(_m):
+            return {"has_clear_goal": True, "has_blocker": False, "needs_clarification": False}
+
+        import app.agents.tutor_agent as ta
+
+        pushed: list[str] = []
+
+        async def on_token(chunk):
+            pushed.append(chunk)
+
+        with patch.object(ta, "get_domain_classifier", lambda: _Router()), \
+             patch.object(agent, "_classify_clarity", clear_clarity):
+            state = await agent.run({
+                # 中文提问 + 纯英文回答 → 命中 language_mismatch，必然重试
+                "messages": [{"role": "user", "content": "什么是进程？请解释一下"}],
+                "student_profile": {},
+                "knowledge_context": "",
+                "_on_token": on_token,
+            })
+
+        assert calls["n"] == 2, "该输入应触发一次重试"
+        streamed = "".join(pushed)
+        assert streamed.count(text) == 1, "重试不得把同一段正文再推一遍"
+        assert len(streamed) == len(text), "推送总长度应与单次回答一致（无重复）"
+        # 拦截语义不变：正文不进入 response，错误码上抛
+        assert state.get("response") == ""
+        assert state.get("sanity_error_code") == "LANGUAGE_MISMATCH"
+
+    @pytest.mark.asyncio
+    async def test_accepted_first_attempt_streams_exactly_once(self, monkeypatch):
+        """正常放行时，正文只推送一次且完整。"""
+        text = "进程是操作系统进行资源分配的基本单位，它拥有独立的地址空间。"
+        agent, calls = self._agent_with_stream([[text]])
+
+        class _Router:
+            def classify(self, *a, **k):
+                return "general"
+
+            def should_inject_kb(self, *a, **k):
+                return False
+
+            def should_inject_analogy(self, *a, **k):
+                return False
+
+        async def clear_clarity(_m):
+            return {"has_clear_goal": True, "has_blocker": False, "needs_clarification": False}
+
+        import app.agents.tutor_agent as ta
+
+        pushed: list[str] = []
+
+        async def on_token(chunk):
+            pushed.append(chunk)
+
+        with patch.object(ta, "get_domain_classifier", lambda: _Router()), \
+             patch.object(agent, "_classify_clarity", clear_clarity):
+            state = await agent.run({
+                "messages": [{"role": "user", "content": "什么是进程？"}],
+                "student_profile": {},
+                "knowledge_context": "",
+                "_on_token": on_token,
+            })
+
+        assert calls["n"] == 1
+        assert "".join(pushed) == text
+        assert state.get("response") == text
+        assert state.get("sanity_error_code") is None

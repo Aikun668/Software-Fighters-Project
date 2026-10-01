@@ -51,7 +51,11 @@ python -m acceptance.harness.plan_endpoints after
 | `graph/` `plan/` | 图谱/计划域收口前后 |
 | `error/` | 错误帧、excinfo、全局 500 信封 |
 | `assembly/` | 装配抽取前后 |
+| `learning/` | 学习快照域基线 |
+| `chat/` `profile/` | 聊天进度帧、画像流水线 |
 | `multimodal/` `pkg/` | 多模态、package 契约 |
-| `misc/` | final 基线、task3 hashes、`server_output.log`、`rg-sse.txt` |
+| `misc/` | final 基线、task3 hashes、`server_output.log`、`rg-sse.txt`、服务启动日志 |
+
+> 根目录的走散 `_accept_*.txt` / `server_*.log` 一律归入对应分类；同名重复副本（`*_after2`、`*_a2`）与逐字节重复项直接丢弃。
 
 `snapshots/` 已在 `ai-service/.gitignore` 中忽略（只保留 `harness/` 脚本进版本库）。若这些快照此前已被 git 跟踪，需执行 `git rm -r --cached acceptance/snapshots/` 才会真正从仓库移除。

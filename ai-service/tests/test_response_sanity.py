@@ -89,6 +89,105 @@ class TestMechanicalChecks:
 
 
 # ═══════════════════════════════════════════════════════════════
+# 语言一致性检查的豁免：用户显式指定输出语言时不得判为不一致
+#
+# 线上回归（会话 75「写一篇 what matters to you」）：用户要求
+# "输出不要中文，直接纯英文"，模型正确输出纯英文，却被 language_mismatch
+# 判为异常；由于重试上下文完全相同，两轮必然同为英文，正文被整体丢弃，
+# 表现为该问题 100% 答不出来。
+# ═══════════════════════════════════════════════════════════════
+
+ENGLISH_ESSAY = (
+    "What Matters to Me\n\n"
+    "When asked what matters most to me, the answer comes easily: the people who "
+    "stand beside me and the chance to keep growing. In a world that often measures "
+    "success by grades and titles, I have learned that what truly matters is "
+    "connection and purpose. Family and friends shape who we are, and personal "
+    "growth gives life meaning. It is not the destination but the journey that counts."
+)
+
+
+class TestExplicitLanguageOverride:
+    """用户明确要求外语输出时，全外文回答属于正确履约。"""
+
+    @pytest.mark.parametrize(
+        "request_message",
+        [
+            # 线上真实触发语句
+            "下面生成一篇纯六级的作文，就是针对上面这个，输出不要中文，直接纯英文。",
+            "用英文回答这个问题",
+            "请以英文写一篇关于环保的作文",
+            "翻译成英文",
+            "帮我写一段英文自我介绍",
+            "回答不要用中文",
+            "纯英文输出",
+            "english only please",
+            "translate into English",
+            "no chinese, just english",
+        ],
+    )
+    def test_english_answer_accepted_when_language_requested(self, request_message):
+        r = check_response(ENGLISH_ESSAY, request_message)
+        assert r.verdict is SanityVerdict.ACCEPT, (
+            f"用户已指定输出语言，纯英文回答不应被判为异常：{request_message!r}"
+        )
+        # 检查器不得改写正文
+        assert r.text == ENGLISH_ESSAY
+
+    def test_override_survives_retry_orchestration(self):
+        """端到端复现：修复前该请求两轮重试后必然返回 USER_SAFE_ERROR。"""
+        import asyncio
+
+        async def generate(_context):
+            return ENGLISH_ESSAY
+
+        outcome = asyncio.run(
+            run_with_sanity_check(
+                generate,
+                {"q": 1},
+                request_message="下面生成一篇纯六级的作文，输出不要中文，直接纯英文。",
+                max_attempts=2,
+            )
+        )
+        assert outcome.verdict is SanityVerdict.ACCEPT
+        assert outcome.text == ENGLISH_ESSAY
+        assert outcome.attempts == 1
+
+    def test_chinese_answer_also_fine_when_override_present(self):
+        """豁免是"不检查"，不是"要求英文"：要求英文但答了中文也不由本检查拦截。"""
+        text = (
+            "进程是操作系统进行资源分配的基本单位，它拥有独立的地址空间，"
+            "线程则是 CPU 调度的基本单位，同一进程内的线程共享内存资源。"
+        )
+        r = check_response(text, "用英文回答：什么是进程？")
+        assert r.verdict is SanityVerdict.ACCEPT
+
+    # ── 反向防护：普通提问不得因豁免被放行 ──
+
+    def test_mismatch_still_caught_without_override(self):
+        """没有语言指令时，中文提问收到纯英文长篇仍应拦截。"""
+        r = check_response(ENGLISH_ESSAY, "什么是进程？请解释一下")
+        assert r.verdict is SanityVerdict.RETRY_ONCE
+        assert r.reason == "language_mismatch"
+
+    def test_mentioning_english_term_is_not_an_override(self):
+        """中文提问里顺带提到英文术语，不构成换语言要求。"""
+        r = check_response(ENGLISH_ESSAY, "请解释一下 Python 的 GIL 机制")
+        assert r.verdict is SanityVerdict.RETRY_ONCE
+        assert r.reason == "language_mismatch"
+
+    def test_chinese_answer_with_english_words_accepted(self):
+        """中英混排的正常回答不受任何影响。"""
+        text = (
+            "Python 的 GIL 是全局解释器锁（Global Interpreter Lock），"
+            "它保证同一时刻只有一个线程执行 Python 字节码，"
+            "因此多线程在 CPU 密集场景下无法真正并行。"
+        )
+        r = check_response(text, "请解释一下 Python 的 GIL 机制")
+        assert r.verdict is SanityVerdict.ACCEPT
+
+
+# ═══════════════════════════════════════════════════════════════
 # 误伤防护：正常形态不得被拦截
 # ═══════════════════════════════════════════════════════════════
 

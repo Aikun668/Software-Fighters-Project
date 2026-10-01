@@ -40,11 +40,12 @@ public class NodeMasteryServiceImpl extends ServiceImpl<NodeMasteryMapper, NodeM
     @Override
     @Transactional(rollbackFor = Exception.class)
     public NodeMastery upsert(Long userId, String nodeId, String courseId, Float mastery, Integer reviewCount) {
-        // 查找已存在的记录
+        // 查找已存在的记录（需包含 courseId，防止跨课程串账）
         NodeMastery existing = this.getOne(
                 new LambdaQueryWrapper<NodeMastery>()
                         .eq(NodeMastery::getUserId, userId)
                         .eq(NodeMastery::getNodeId, nodeId)
+                        .eq(NodeMastery::getCourseId, courseId)
         );
 
         if (existing != null) {

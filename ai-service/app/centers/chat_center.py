@@ -292,6 +292,7 @@ class ChatCenter:
         user_id: int,
         conversation_id: str | None = None,
         style: str = "standard",
+        images: list[str] | None = None,
     ) -> AsyncIterator[StreamEvent]:
         """统一聊天唯一业务入口（Task 2 收口）。
 
@@ -304,11 +305,15 @@ class ChatCenter:
            └─ primary/related/broad → knowledge_candidates_event
         5. 多 done 收敛为唯一 done（失败补 error,缺 done 补 done）
         6. 消费端取消时取消 ChatTaskDispatcher 任务并回收
+
+        images: 用户上传的图片（data URI / http URL），随 context 下发；
+        仅 tutor 答疑链路消费（见 auto_center / tutor_agent）。
         """
         messages = list(history or []) + [{"role": "user", "content": message}]
         context = {
             "messages": messages,
             "style": style,
+            "images": list(images or []),
             "user_id": user_id,
             "conversation_id": conversation_id,
         }

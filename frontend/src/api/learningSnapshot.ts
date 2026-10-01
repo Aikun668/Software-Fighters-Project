@@ -69,12 +69,47 @@ export interface LearningSnapshot {
   current_node: LearningCurrentNodeSnapshot | null
   mastery: LearningMasterySnapshot
   recent_evidence: Array<Record<string, unknown>>
-  profile_context: Record<string, unknown> | null
+  profile_context?: Record<string, unknown> | null
   freshness: LearningFreshnessSnapshot
   next_action?: LearningNextAction | null
 }
 
+interface LearningSnapshotEnvelope {
+  success?: boolean
+  data?: LearningSnapshot | null
+}
+
+const isLearningSnapshot = (value: unknown): value is LearningSnapshot => {
+  if (!value || typeof value !== 'object') return false
+
+  const candidate = value as Record<string, unknown>
+  return typeof candidate.student_id === 'number' && typeof candidate.course_id === 'string'
+}
+
+/**
+ * Java 外层结果已由 request 工具拆掉；这里再拆掉 Python 桥接保留的
+ * { success, data: 学习快照 } 外壳，页面始终只拿到真正的学习快照。
+ */
+const unwrapLearningSnapshot = (
+  response: LearningSnapshot | LearningSnapshotEnvelope,
+): LearningSnapshot => {
+  if (isLearningSnapshot(response)) return response
+
+  if (
+    response &&
+    typeof response === 'object' &&
+    'data' in response &&
+    isLearningSnapshot(response.data)
+  ) {
+    return response.data
+  }
+
+  throw new Error('学习快照接口返回格式不正确')
+}
+
 /** 读取 Java 桥接的只读学习快照；前端不拼装学习状态，也不访问 Python 内部接口。 */
 export const getLearningSnapshot = (courseId: string): Promise<LearningSnapshot> => {
-  return api.get('/learning-snapshot', { courseId })
+  return api
+    .get<LearningSnapshot | LearningSnapshotEnvelope>('/learning-snapshot', { courseId })
+    .then(unwrapLearningSnapshot)
 }

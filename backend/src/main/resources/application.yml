@@ -1,9 +1,23 @@
 server:
   port: 8080
+  tomcat:
+    # 超过 multipart 上限时仍要把可读的错误响应写回客户端。
+    # 默认 2MB 会让 Tomcat 在吞掉请求体前直接重置连接，
+    # 前端只能看到网络错误而非下方 MaxUploadSizeExceededException 的提示。
+    max-swallow-size: 30MB
 
 spring:
   application:
     name: learning-platform
+
+  servlet:
+    multipart:
+      # 默认上限为 1MB，手机截图/相机照片普遍超过该值，
+      # 导致 /api/file/upload 在进入 Controller 之前就抛
+      # MaxUploadSizeExceededException，前端只能看到"上传失败"。
+      max-file-size: 20MB
+      max-request-size: 25MB
+      file-size-threshold: 512KB
 
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver

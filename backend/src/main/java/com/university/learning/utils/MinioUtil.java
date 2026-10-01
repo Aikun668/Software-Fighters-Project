@@ -46,6 +46,17 @@ public class MinioUtil {
      * 上传文件
      */
     public void uploadFile(MultipartFile file, String objectName) {
+        uploadFile(file, objectName, file.getContentType());
+    }
+
+    /**
+     * 上传文件（显式指定 content-type）
+     *
+     * content-type 由调用方归一化后传入：剪贴板/拖拽得到的是 blob，
+     * MultipartFile#getContentType() 可能为 null，直接透传给 MinIO 会让
+     * 预签名 URL 返回的文件失去图片类型，前端再取用时按二进制下载。
+     */
+    public void uploadFile(MultipartFile file, String objectName, String contentType) {
         try {
             createBucket();
 
@@ -54,7 +65,7 @@ public class MinioUtil {
                             .bucket(minioConfig.getBucketName())
                             .object(objectName)
                             .stream(file.getInputStream(), file.getSize(), -1)
-                            .contentType(file.getContentType())
+                            .contentType(contentType)
                             .build()
             );
 

@@ -3,6 +3,7 @@ package com.university.learning.common;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 /**
  * 全局异常处理器：兜底未在 Controller try-catch 中处理的异常，
@@ -17,6 +18,18 @@ public class GlobalExceptionHandler {
     public Result handleAIServiceException(AIServiceException e) {
         log.error("AI服务调用异常", e);
         return Result.fail(502, "AI服务暂时不可用，请稍后重试");
+    }
+
+    /**
+     * 上传文件超过 multipart 上限。
+     * 该异常在进入 Controller 之前由 DispatcherServlet 抛出，
+     * 若不单独处理就会被下面的 RuntimeException/Exception 兜底成
+     * "服务器内部错误"，前端无法得知是体积超限。
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public Result handleMaxUploadSizeExceeded(MaxUploadSizeExceededException e) {
+        log.warn("上传文件超过大小限制", e);
+        return Result.fail(413, "文件过大，单个文件请控制在 20MB 以内");
     }
 
     /** 未预期的运行时异常（代码 bug，非 AI 服务故障） */

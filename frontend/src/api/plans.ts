@@ -11,7 +11,7 @@ export const createPlan = (data: {
   title: string
   steps: PlanStep[]
 }): Promise<LearningPlan> => {
-  return api.post('/api/plans', data)
+  return api.post('/plans', data)
 }
 
 /**
@@ -21,7 +21,7 @@ export const createPlan = (data: {
  */
 export const getPlanDetail = (id: number, userId?: number): Promise<LearningPlan> => {
   const params = userId ? { userId } : {}
-  return api.get(`/api/plans/${id}`, params)
+  return api.get(`/plans/${id}`, params)
 }
 
 /**
@@ -30,7 +30,7 @@ export const getPlanDetail = (id: number, userId?: number): Promise<LearningPlan
  * @param data - 更新数据
  */
 export const updatePlan = (id: number, data: { title?: string; status?: 'in_progress' | 'completed' | 'paused' }): Promise<LearningPlan> => {
-  return api.put(`/api/plans/${id}`, data)
+  return api.put(`/plans/${id}`, data)
 }
 
 /**
@@ -38,7 +38,7 @@ export const updatePlan = (id: number, data: { title?: string; status?: 'in_prog
  * @param planId - 计划ID
  */
 export const getPlanSteps = (planId: number): Promise<PlanStep[]> => {
-  return api.get(`/api/plans/${planId}/steps`)
+  return api.get(`/plans/${planId}/steps`)
 }
 
 /**
@@ -53,7 +53,7 @@ export const addPlanStep = (planId: number, data: {
   node_type: 'learn' | 'practice'
   depth?: number
 }): Promise<PlanStep> => {
-  return api.post(`/api/plans/${planId}/steps`, data)
+  return api.post(`/plans/${planId}/steps`, data)
 }
 
 /**
@@ -62,7 +62,7 @@ export const addPlanStep = (planId: number, data: {
  * @param afterOrder - 插入位置
  */
 export const shiftPlanStep = (planId: number, afterOrder: number): Promise<void> => {
-  return api.post(`/api/plans/${planId}/steps/shift`, { after_order: afterOrder })
+  return api.post(`/plans/${planId}/steps/shift`, { after_order: afterOrder })
 }
 
 /**
@@ -71,7 +71,7 @@ export const shiftPlanStep = (planId: number, afterOrder: number): Promise<void>
  * @param nodeId - 节点ID
  */
 export const lockSuccessors = (planId: number, nodeId: string): Promise<void> => {
-  return api.post(`/api/plans/${planId}/steps/lock-successors`, { node_id: nodeId })
+  return api.post(`/plans/${planId}/steps/lock-successors`, { node_id: nodeId })
 }
 
 /**
@@ -84,7 +84,7 @@ export const changeNodeStatus = (data: {
   new_status: 'completed' | 'in_progress' | 'pending'
   plan_id: number
 }): Promise<void> => {
-  return api.post('/api/plans/node-status-change', data)
+  return api.post('/plans/node-status-change', data)
 }
 
 /**
@@ -96,5 +96,28 @@ export const updatePlanStep = (stepId: number, data: {
   status?: 'pending' | 'in_progress' | 'completed' | 'locked'
   order?: number
 }): Promise<PlanStep> => {
-  return api.put(`/api/plan-steps/${stepId}`, data)
+  return api.put(`/plan-steps/${stepId}`, data)
+}
+
+export interface PlanProgressRequest {
+  step_id: number
+  step_order: number
+  status: 'completed' | 'in_progress' | 'pending'
+  activity_type: 'study' | 'review' | 'exercise'
+  score: number
+  duration_minutes: number
+}
+
+export interface PlanProgressResponse {
+  status?: string
+  message?: string
+  [key: string]: unknown
+}
+
+/** 将学习入口承接的计划动作提交给 Java 计划进度接口。 */
+export const updatePlanProgress = (
+  planId: number,
+  data: PlanProgressRequest,
+): Promise<PlanProgressResponse> => {
+  return api.post(`/plans/${planId}/progress`, data)
 }

@@ -33,6 +33,8 @@ export interface Message {
   content: string
   mode: string
   createdAt: string
+  /** 该消息附带的图片可访问 URL（后端按落库的 fileId 重新签发；无图为 undefined） */
+  images?: string[]
 }
 
 // 会话类型
@@ -211,6 +213,7 @@ export interface ScoreTrendItem {
 // 文件上传类型
 export interface FileUploadResponse {
   fileId: number
+  url: string
   fileName: string
   originalName: string
 }

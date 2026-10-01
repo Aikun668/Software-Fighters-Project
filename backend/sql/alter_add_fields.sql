@@ -15,3 +15,13 @@ ALTER TABLE plan_steps
     ADD COLUMN review_count     INT   DEFAULT 0   COMMENT '复习次数' AFTER mastery_after,
     ADD COLUMN last_review_at   DATETIME          COMMENT '最近复习时间' AFTER review_count,
     ADD COLUMN estimated_days   INT   DEFAULT 1   COMMENT '预计学习天数' AFTER last_review_at;
+
+-- =============================================
+-- 会话消息附件字段
+-- 以前的 /api/chat 只把 images 传给 AI，从未落库，
+-- 导致会话历史回读时用户上传的图片永久丢失。
+-- 存 file_info.id 列表（JSON 数组）而非预签名 URL：
+-- 预签名 URL 7 天过期，存 URL 会让历史图片过一阵必然失效。
+-- =============================================
+ALTER TABLE messages
+    ADD COLUMN image_file_ids JSON DEFAULT NULL COMMENT '该消息附带的图片 file_info.id 列表';

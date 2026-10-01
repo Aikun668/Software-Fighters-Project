@@ -56,6 +56,18 @@ describe('parseSSEStream 阶段 D 合同：progress 帧', () => {
     expect(onDone).toHaveBeenCalledTimes(1)
   })
 
+  it('done 帧把 conversation_id 传给完成回调', async () => {
+    const onDone = vi.fn()
+
+    await parseSSEStream(
+      streamOf(frame({ type: 'done', conversation_id: 22 })),
+      vi.fn(),
+      onDone,
+    )
+
+    expect(onDone).toHaveBeenCalledWith(22)
+  })
+
   it('未传 onProgress 时，progress 帧被静默忽略（不得混入正文）', async () => {
     const onData = vi.fn()
 

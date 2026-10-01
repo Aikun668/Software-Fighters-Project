@@ -13,7 +13,8 @@ const router = createRouter({
         { path: 'profile-chat', name: 'ProfileChat', redirect: '/learning-analysis' },
         { path: 'resource-center', name: 'ResourceCenter', component: () => import('../views/ResourceCenterPage.vue') },
         { path: 'learning-path', name: 'LearningPath', component: () => import('../views/LearningPlanPage.vue') },
-        { path: 'ai-tutor', name: 'AITutor', component: () => import('../views/ModulePreview.vue') },
+        // 后端 next_action 的兼容入口：保留 /ai-tutor 合同，但加载真实可交互问答页。
+        { path: 'ai-tutor', name: 'AITutor', component: () => import('../views/QuestionNavChat.vue') },
         { path: 'course-detail', name: 'CourseDetail', component: () => import('../views/ModulePreview.vue') },
         { path: 'exercise', name: 'ExercisePage', component: () => import('../views/ExerciseCenterPage.vue') },
         { path: 'learning-resource-network', name: 'LearningResourceNetwork', component: () => import('../views/KnowledgeGraphPage.vue') },

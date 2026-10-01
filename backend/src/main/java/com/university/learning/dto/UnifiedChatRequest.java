@@ -16,6 +16,13 @@ public class UnifiedChatRequest {
     private Long conversation_id;
     /** 用户上传的图片URL列表（可选，多模态输入） */
     private List<String> images;
+    /**
+     * 本轮图片对应的 file_info.id 列表（可选）。
+     *
+     * 与 images 一一对应，用于把图片**持久化**到消息表：
+     * images 里是 7 天过期的预签名 URL，不能存；存 id 才能在历史回读时重新签发。
+     */
+    private List<Long> image_file_ids;
     /** 答疑风格：standard(标准) / socratic(苏格拉底式引导)，仅答疑场景生效 */
     private String style;
 }

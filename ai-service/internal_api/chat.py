@@ -43,6 +43,7 @@ async def _unified_chat(body: UnifiedChatRequest):
         user_id=body.user_id,
         conversation_id=body.conversation_id,
         style=body.style or "standard",
+        images=body.images or [],
     )
 
     # 预取第一个事件：route 阶段异常在 HTTP 响应发送前暴露为 500，
