@@ -672,4 +672,4 @@ eventSource.onmessage = (event) => {
 
 > **维护者**: AI 服务（Python 内核）
 > **最后更新**: 2026-06-05
-> **参考**: `temp_file/前端任务追加指导书.md` / `temp_file/API_CONTRACT.md` / `docs/前端战神任务说明书.docx`
+> **参考**: `temp_file/前端任务追加指导书.md` / `temp_file/API_CONTRACT.md` / `docs/归档/前端战神任务说明书.docx`
