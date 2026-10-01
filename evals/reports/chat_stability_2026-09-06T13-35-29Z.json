@@ -1,0 +1,380 @@
+{
+  "dataset": "chat_stability_v1.jsonl",
+  "total": 19,
+  "passed": 19,
+  "failed_cases": [],
+  "route_calibration_divergences": [],
+  "degradation_undetected": 0,
+  "axis_pass_rates": {
+    "attempts": 1.0,
+    "content": 1.0,
+    "content_expectation_matches": 1.0,
+    "context_turn_count": 1.0,
+    "current_message_last": 1.0,
+    "error_code": 1.0,
+    "failure_reasons": 1.0,
+    "history_in_built_context": 1.0,
+    "history_in_task_context": 1.0,
+    "irrelevant_profile_ignored": 1.0,
+    "no_exception_leak": 1.0,
+    "no_internal_leak": 1.0,
+    "not_counted_as_done": 1.0,
+    "required_profile_kept": 1.0,
+    "route": 1.0,
+    "same_context_on_retry": 1.0,
+    "sanity_accept": 1.0,
+    "task_mode": 1.0,
+    "terminal": 1.0,
+    "terminal_is_error": 1.0,
+    "text": 1.0,
+    "verdict": 1.0
+  },
+  "records": [
+    {
+      "id": "cq-01",
+      "category": "concept_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "axes": {
+        "route": true,
+        "task_mode": true,
+        "terminal": true,
+        "content": true,
+        "sanity_accept": true,
+        "no_internal_leak": true
+      },
+      "passed": true,
+      "notes": []
+    },
+    {
+      "id": "cq-02",
+      "category": "concept_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "axes": {
+        "route": true,
+        "task_mode": true,
+        "terminal": true,
+        "content": true,
+        "sanity_accept": true,
+        "no_internal_leak": true
+      },
+      "passed": true,
+      "notes": []
+    },
+    {
+      "id": "cp-01",
+      "category": "compare_qa",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "axes": {
+        "route": true,
+        "task_mode": true,
+        "terminal": true,
+        "content": true,
+        "sanity_accept": true,
+        "no_internal_leak": true
+      },
+      "passed": true,
+      "notes": []
+    },
+    {
+      "id": "sa-01",
+      "category": "study_advice",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "axes": {
+        "route": true,
+        "task_mode": true,
+        "terminal": true,
+        "content": true,
+        "sanity_accept": true,
+        "no_internal_leak": true
+      },
+      "passed": true,
+      "notes": []
+    },
+    {
+      "id": "fw-01",
+      "category": "followup_2turn",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "axes": {
+        "route": true,
+        "task_mode": true,
+        "history_in_task_context": true,
+        "context_turn_count": true,
+        "history_in_built_context": true,
+        "current_message_last": true,
+        "terminal": true,
+        "content": true,
+        "sanity_accept": true,
+        "no_internal_leak": true
+      },
+      "passed": true,
+      "notes": []
+    },
+    {
+      "id": "fw-02",
+      "category": "followup_2turn",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "axes": {
+        "route": true,
+        "task_mode": true,
+        "history_in_task_context": true,
+        "context_turn_count": true,
+        "history_in_built_context": true,
+        "current_message_last": true,
+        "terminal": true,
+        "content": true,
+        "sanity_accept": true,
+        "no_internal_leak": true
+      },
+      "passed": true,
+      "notes": []
+    },
+    {
+      "id": "fw-03",
+      "category": "followup_2turn",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "axes": {
+        "route": true,
+        "task_mode": true,
+        "history_in_task_context": true,
+        "context_turn_count": true,
+        "history_in_built_context": true,
+        "current_message_last": true,
+        "terminal": true,
+        "content": true,
+        "sanity_accept": true,
+        "no_internal_leak": true
+      },
+      "passed": true,
+      "notes": []
+    },
+    {
+      "id": "cr-01",
+      "category": "capability_request",
+      "expected_route": "RESOURCE",
+      "actual_route": "RESOURCE",
+      "axes": {
+        "route": true,
+        "task_mode": true,
+        "terminal": true,
+        "content": true,
+        "sanity_accept": true,
+        "no_internal_leak": true
+      },
+      "passed": true,
+      "notes": []
+    },
+    {
+      "id": "cr-02",
+      "category": "capability_request",
+      "expected_route": "EXERCISE",
+      "actual_route": "EXERCISE",
+      "axes": {
+        "route": true,
+        "task_mode": true,
+        "terminal": true,
+        "content": true,
+        "sanity_accept": true,
+        "no_internal_leak": true
+      },
+      "passed": true,
+      "notes": []
+    },
+    {
+      "id": "cr-03",
+      "category": "capability_request",
+      "expected_route": "VISUALIZATION",
+      "actual_route": "VISUALIZATION",
+      "axes": {
+        "route": true,
+        "task_mode": true,
+        "terminal": true,
+        "content": true,
+        "sanity_accept": true,
+        "no_internal_leak": true
+      },
+      "passed": true,
+      "notes": []
+    },
+    {
+      "id": "cr-04",
+      "category": "capability_request",
+      "expected_route": "PLAN",
+      "actual_route": "PLAN",
+      "axes": {
+        "route": true,
+        "task_mode": true,
+        "terminal": true,
+        "content": true,
+        "sanity_accept": true,
+        "no_internal_leak": true
+      },
+      "passed": true,
+      "notes": []
+    },
+    {
+      "id": "nr-01",
+      "category": "noise_robustness",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "axes": {
+        "route": true,
+        "task_mode": true,
+        "irrelevant_profile_ignored": true,
+        "required_profile_kept": true,
+        "terminal": true,
+        "content": true,
+        "sanity_accept": true,
+        "no_internal_leak": true
+      },
+      "passed": true,
+      "notes": []
+    },
+    {
+      "id": "nr-02",
+      "category": "noise_robustness",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "axes": {
+        "route": true,
+        "task_mode": true,
+        "irrelevant_profile_ignored": true,
+        "required_profile_kept": true,
+        "terminal": true,
+        "content": true,
+        "sanity_accept": true,
+        "no_internal_leak": true
+      },
+      "passed": true,
+      "notes": []
+    },
+    {
+      "id": "nr-03",
+      "category": "noise_robustness",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "axes": {
+        "route": true,
+        "task_mode": true,
+        "irrelevant_profile_ignored": true,
+        "required_profile_kept": true,
+        "terminal": true,
+        "content": true,
+        "sanity_accept": true,
+        "no_internal_leak": true
+      },
+      "passed": true,
+      "notes": []
+    },
+    {
+      "id": "nr-04",
+      "category": "noise_robustness",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "axes": {
+        "route": true,
+        "task_mode": true,
+        "terminal": true,
+        "content": true
+      },
+      "passed": true,
+      "notes": []
+    },
+    {
+      "id": "fi-01",
+      "category": "fault_injection",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "axes": {
+        "route": true,
+        "task_mode": true,
+        "verdict": true,
+        "error_code": true,
+        "attempts": true,
+        "text": true,
+        "failure_reasons": true,
+        "same_context_on_retry": true,
+        "terminal": true,
+        "content": true,
+        "no_internal_leak": true
+      },
+      "passed": true,
+      "notes": [
+        "verdict=ACCEPT code=None attempts=2 reasons=['empty']"
+      ]
+    },
+    {
+      "id": "fi-02",
+      "category": "fault_injection",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "axes": {
+        "route": true,
+        "task_mode": true,
+        "verdict": true,
+        "error_code": true,
+        "attempts": true,
+        "text": true,
+        "failure_reasons": true,
+        "same_context_on_retry": true,
+        "terminal": true,
+        "content": true
+      },
+      "passed": true,
+      "notes": [
+        "verdict=USER_SAFE_ERROR code=EMPTY_RESPONSE attempts=2 reasons=['empty', 'empty']"
+      ]
+    },
+    {
+      "id": "fi-03",
+      "category": "fault_injection",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "axes": {
+        "route": true,
+        "task_mode": true,
+        "verdict": true,
+        "error_code": true,
+        "attempts": true,
+        "text": true,
+        "failure_reasons": true,
+        "same_context_on_retry": true,
+        "terminal": true,
+        "content": true
+      },
+      "passed": true,
+      "notes": [
+        "verdict=USER_SAFE_ERROR code=PROMPT_LEAK attempts=1 reasons=['prompt_leak']"
+      ]
+    },
+    {
+      "id": "fi-04",
+      "category": "fault_injection",
+      "expected_route": "NORMAL_CHAT",
+      "actual_route": "NORMAL_CHAT",
+      "axes": {
+        "route": true,
+        "task_mode": true,
+        "terminal_is_error": true,
+        "not_counted_as_done": true,
+        "content_expectation_matches": true,
+        "no_exception_leak": true
+      },
+      "passed": true,
+      "notes": [
+        "terminal=error leaked=无"
+      ]
+    }
+  ],
+  "gates": {
+    "route_calibration_zero_divergence": true,
+    "all_cases_pass": true,
+    "degradation_always_detected": true
+  }
+}
