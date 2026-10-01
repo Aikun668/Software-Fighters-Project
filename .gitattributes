@@ -1,0 +1,15 @@
+# Normalize all text files to LF in the repository.
+# Working-tree checkout behavior stays controlled by core.autocrlf.
+* text=auto
+
+# Binary assets (belt and suspenders; git auto-detects most of these)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.jar binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
