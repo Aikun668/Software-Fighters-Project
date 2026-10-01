@@ -30,3 +30,14 @@ dist/
 
 # Word lock files
 ~$*.docx
+
+# Local run artifacts
+output/
+.playwright-cli/
+*.log
+
+# Local data dumps
+temp_file/minio/
+
+# Personal notes (kept local on purpose)
+RESUME_ROADMAP.md
