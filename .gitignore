@@ -6,6 +6,11 @@ __pycache__/
 venv/
 *.env.local
 
+# Tool caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
 # ChromaDB
 chroma_data/
 

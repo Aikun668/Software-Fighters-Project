@@ -1,6 +1,10 @@
 # 智学云 DeepTutor
 
-> 第 15 届中国软件杯 · 基于大模型的个性化资源生成与学习多智能体系统
+> 基于大模型的个性化资源生成与学习多智能体系统
+
+> **项目重定位说明**：本项目现已转为**个人主导维护的 Agent 工程项目**，主线聚焦 Python 多智能体内核
+> （意图门控 → 路由 → 多 Agent 编排 → 质量门 → 流式输出）。Java 业务层与 Vue 全站转为**参照与演示边界**，
+> 不再作为维护主线。仓库历史中保留的赛事与多人协作痕迹仅作过程记录，当前设计与实现以本说明为准。
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.11+-blue?logo=python" alt="Python">
@@ -191,7 +195,7 @@ Python FastAPI — AI 推理层
 
 ```
 Software-Fighters-Project/
-├── ai-service/                         # Python AI 微服务 [队长]
+├── ai-service/                         # Python AI 微服务（维护主线）
 │   ├── app/
 │   │   ├── agents/                     # 20+ Agent（tutor/content/code/exercise/solve/path/...）
 │   │   │   └── visualize/              #   可视化管线（分析→生成→审查）
@@ -212,7 +216,7 @@ Software-Fighters-Project/
 │   │   └── graph.py / plans.py / inquiry.py / eval_api.py / _helpers.py
 │   └── main.py                         # FastAPI 启动入口
 │
-├── backend/                            # Java SpringBoot 业务层 [后端]
+├── backend/                            # Java SpringBoot 业务层（已搁置，仅作参照）
 │   ├── src/main/java/com/university/learning/
 │   │   ├── controller/                 # 15 个 REST 控制器（50+ 端点）
 │   │   ├── service/                    # 11 个 Service 接口 + 实现
@@ -226,7 +230,7 @@ Software-Fighters-Project/
 │   ├── sql/                            # 4 个 SQL 迁移脚本
 │   └── pom.xml
 │
-├── frontend/                           # Vue 3 前端 [前端]
+├── frontend/                           # Vue 3 前端（已搁置，仅作参照）
 │   └── src/
 │       ├── views/                      # 11 个页面（Dashboard/Chat/图谱/练习/资源/...）
 │       ├── api/                        # 16 个 API 模块（含 SSE 流式解析）
@@ -300,22 +304,24 @@ curl -X POST http://127.0.0.1:8001/internal/knowledge-graph/ai_course \
 
 ## 分支
 
-| 分支 | 负责人 | 说明 |
-|------|--------|------|
-| `main` | 队长 | 主分支，最终合并 |
-| `agent-dev` | 队长 | Python AI Agent 开发 |
-| `backend-dev` | 后端 | Java SpringBoot 开发 |
-| `frontend-dev` | 前端 | Vue 3 开发 |
+| 分支 | 说明 |
+|------|------|
+| `main` | 稳定主线，已验收的基线 |
+| `for-work` | 当前开发分支，日常改动在此进行 |
+
+> 历史分支（`后端改造分支`、`rescue/*`、`archive/*` 等）为早期过程残留，已停止维护，未合并内容见对应分支。
 
 ---
 
-## 团队
+## 维护定位
 
-| 角色 | 职责 |
+本项目现为**单人维护**，精力集中在 Python 多智能体内核：
+
+| 范围 | 状态 |
 |------|------|
-| **队长** | Python 多智能体核心 · LangGraph 编排 · 知识图谱 · 计划引擎 · 安全防护 |
-| **后端** | Java SpringBoot · MyBatis-Plus · Redis · MinIO · PythonClient 通信层 |
-| **前端** | Vue 3 页面 · SSE 流式渲染 · ECharts 知识图谱可视化 · Markdown/Mermaid 渲染 |
+| **Python AI 内核**（编排 · 流式 · 质量门 · 状态隔离） | **维护主线** |
+| Java SpringBoot 业务层 | 搁置（仅作接口参照，不跟进维护） |
+| Vue 3 全站 | 搁置（仅保留编排演示一个展示面） |
 
 ---
 

@@ -1,6 +1,6 @@
 # AI 服务 — 后端对接文档
 
-> **版本**: v2.0 | **日期**: 2026-06-05 | **维护**: AI Agent 组（队长）
+> **版本**: v2.0 | **日期**: 2026-06-05 | **维护**: AI 服务（Python 内核）
 >
 > **适用对象**: Java SpringBoot 后端开发工程师
 >
@@ -409,6 +409,6 @@ data: {"type": "<事件类型>", ...}\n\n
 
 ---
 
-> **维护者**: AI Agent 组（队长）  
+> **维护者**: AI 服务（Python 内核）  
 > **最后更新**: 2026-06-05  
 > **参考**: `temp_file/API_CONTRACT.md` / `temp_file/PROJECT_SKELETON.md` / `docs/后端战神任务说明书.docx`

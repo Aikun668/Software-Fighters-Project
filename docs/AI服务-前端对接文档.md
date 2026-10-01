@@ -1,6 +1,6 @@
 # AI 服务 — 前端对接文档
 
-> **版本**: v2.0 | **日期**: 2026-06-05 | **维护**: AI Agent 组（队长）
+> **版本**: v2.0 | **日期**: 2026-06-05 | **维护**: AI 服务（Python 内核）
 >
 > **适用对象**: 前端开发工程师（Vue 3 + Element Plus + Pinia）
 >
@@ -670,6 +670,6 @@ eventSource.onmessage = (event) => {
 
 ---
 
-> **维护者**: AI Agent 组（队长）
+> **维护者**: AI 服务（Python 内核）
 > **最后更新**: 2026-06-05
 > **参考**: `temp_file/前端任务追加指导书.md` / `temp_file/API_CONTRACT.md` / `docs/前端战神任务说明书.docx`
