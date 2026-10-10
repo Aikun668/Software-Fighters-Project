@@ -1,4 +1,4 @@
-# ===== Agent 内核核心依赖 =====
+﻿# ===== Agent 内核核心依赖 =====
 langgraph>=0.2.0
 langchain>=0.3.0
 langchain-community>=0.3.0
