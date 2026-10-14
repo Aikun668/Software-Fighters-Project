@@ -1,0 +1,1205 @@
+{
+  "chains": [
+    {
+      "chain": "普通答疑",
+      "mode": "auto",
+      "message": "什么是进程和线程的区别",
+      "plan_tasks": [
+        {
+          "mode": "auto",
+          "intent": "tutor_question",
+          "sequence": 0
+        }
+      ],
+      "plan_route": "NORMAL_CHAT",
+      "plan_strategy": "capability_gate",
+      "events": [
+        {
+          "type": "CENTER_START",
+          "stage": "auto",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "sequence": "num"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "PROGRESS",
+          "stage": "retrieve",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "node": "str",
+              "phase": "str"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "PROGRESS",
+          "stage": "retrieve",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "node": "str",
+              "phase": "str"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "PROGRESS",
+          "stage": "respond",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "node": "str",
+              "phase": "str"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "TOKEN",
+          "stage": "",
+          "count": 69,
+          "chars": 69
+        },
+        {
+          "type": "PROGRESS",
+          "stage": "respond",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "node": "str",
+              "phase": "str"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "PROGRESS",
+          "stage": "analyze",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "node": "str",
+              "phase": "str"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "PROGRESS",
+          "stage": "analyze",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "node": "str",
+              "phase": "str"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "CENTER_END",
+          "stage": "auto",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "sequence": "num"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "CONTENT",
+          "stage": "",
+          "keys": [
+            "data",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "blocks": [
+                "[list]"
+              ],
+              "domain": "str",
+              "message": "str",
+              "partial": "bool",
+              "progress": "num",
+              "response": "str",
+              "stage": "str"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "DONE",
+          "stage": "",
+          "keys": [
+            "data",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "next_steps": [
+                "[list]"
+              ],
+              "profile_delta": {},
+              "results": [
+                "[list]",
+                {
+                  "agent": "str",
+                  "error": "null",
+                  "event_type": "str",
+                  "intent": "str",
+                  "mode": "str",
+                  "payload_keys": [
+                    "[list]",
+                    "str"
+                  ],
+                  "sequence": "num"
+                }
+              ],
+              "summary": "str",
+              "type": "str"
+            },
+            "type": "str"
+          }
+        }
+      ],
+      "type_sequence": "CENTER_START -> PROGRESS -> PROGRESS -> PROGRESS -> TOKENx69 -> PROGRESS -> PROGRESS -> PROGRESS -> CENTER_END -> CONTENT -> DONE",
+      "termination": {
+        "last_is_done": true,
+        "done_count": 1,
+        "error_count": 0,
+        "done_keys": [
+          "data",
+          "type"
+        ]
+      },
+      "deterministic": true
+    },
+    {
+      "chain": "生成练习",
+      "mode": "auto",
+      "message": "给我出 5 道二叉树练习题",
+      "plan_tasks": [
+        {
+          "mode": "exercise",
+          "intent": "exercise_gen",
+          "sequence": 0
+        }
+      ],
+      "plan_route": "EXERCISE",
+      "plan_strategy": "keyword",
+      "events": [
+        {
+          "type": "CENTER_START",
+          "stage": "exercise",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "sequence": "num"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "PROGRESS",
+          "stage": "plan",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "node": "str",
+              "phase": "str"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "PROGRESS",
+          "stage": "plan",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "node": "str",
+              "phase": "str"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "PROGRESS",
+          "stage": "generate",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "node": "str",
+              "phase": "str"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "TOKEN",
+          "stage": "",
+          "count": 6,
+          "chars": 418
+        },
+        {
+          "type": "PROGRESS",
+          "stage": "generate",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "node": "str",
+              "phase": "str"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "PROGRESS",
+          "stage": "review",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "node": "str",
+              "phase": "str"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "TOKEN",
+          "stage": "",
+          "count": 6,
+          "chars": 393
+        },
+        {
+          "type": "PROGRESS",
+          "stage": "review",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "node": "str",
+              "phase": "str"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "CENTER_END",
+          "stage": "exercise",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "sequence": "num"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "CONTENT",
+          "stage": "",
+          "keys": [
+            "data",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "count": "num",
+              "message": "str",
+              "partial": "bool",
+              "progress": "num",
+              "questions": [
+                "[list]",
+                {
+                  "correct_answer": "str",
+                  "explanation": "str",
+                  "options": {
+                    "A": "str",
+                    "B": "str",
+                    "C": "str",
+                    "D": "str"
+                  },
+                  "question": "str",
+                  "question_type": "str",
+                  "topic": "str"
+                }
+              ],
+              "response": "str",
+              "stage": "str",
+              "topic": "str",
+              "type": "str"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "DONE",
+          "stage": "",
+          "keys": [
+            "data",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "next_steps": [
+                "[list]",
+                "str"
+              ],
+              "profile_delta": {},
+              "results": [
+                "[list]",
+                {
+                  "agent": "str",
+                  "error": "null",
+                  "event_type": "str",
+                  "intent": "str",
+                  "mode": "str",
+                  "payload_keys": [
+                    "[list]",
+                    "str"
+                  ],
+                  "sequence": "num"
+                }
+              ],
+              "summary": "str",
+              "type": "str"
+            },
+            "type": "str"
+          }
+        }
+      ],
+      "type_sequence": "CENTER_START -> PROGRESS -> PROGRESS -> PROGRESS -> TOKENx6 -> PROGRESS -> PROGRESS -> TOKENx6 -> PROGRESS -> CENTER_END -> CONTENT -> DONE",
+      "termination": {
+        "last_is_done": true,
+        "done_count": 1,
+        "error_count": 0,
+        "done_keys": [
+          "data",
+          "type"
+        ]
+      },
+      "deterministic": true
+    },
+    {
+      "chain": "学习资源",
+      "mode": "auto",
+      "message": "生成反向传播技术文档",
+      "plan_tasks": [
+        {
+          "mode": "resource",
+          "intent": "resource_gen",
+          "sequence": 0
+        }
+      ],
+      "plan_route": "RESOURCE",
+      "plan_strategy": "keyword",
+      "events": [
+        {
+          "type": "CENTER_START",
+          "stage": "resource",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "sequence": "num"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "CENTER_END",
+          "stage": "resource",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "sequence": "num"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "CONTENT",
+          "stage": "",
+          "keys": [
+            "data",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "clarified_topic": "str",
+              "content": "str",
+              "is_clear": "bool",
+              "message": "str",
+              "progress": "num",
+              "questions": [
+                "[list]",
+                {
+                  "options": [
+                    "[list]"
+                  ],
+                  "text": "str"
+                }
+              ],
+              "rationale": "str",
+              "response": "str",
+              "stage": "str",
+              "type": "str"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "DONE",
+          "stage": "",
+          "keys": [
+            "data",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "next_steps": [
+                "[list]",
+                "str"
+              ],
+              "profile_delta": {},
+              "results": [
+                "[list]",
+                {
+                  "agent": "str",
+                  "error": "null",
+                  "event_type": "str",
+                  "intent": "str",
+                  "mode": "str",
+                  "payload_keys": [
+                    "[list]",
+                    "str"
+                  ],
+                  "sequence": "num"
+                }
+              ],
+              "summary": "str",
+              "type": "str"
+            },
+            "type": "str"
+          }
+        }
+      ],
+      "type_sequence": "CENTER_START -> CENTER_END -> CONTENT -> DONE",
+      "termination": {
+        "last_is_done": true,
+        "done_count": 1,
+        "error_count": 0,
+        "done_keys": [
+          "data",
+          "type"
+        ]
+      },
+      "deterministic": true
+    },
+    {
+      "chain": "学习规划",
+      "mode": "auto",
+      "message": "帮我规划学习路线，并推荐一些资料",
+      "plan_tasks": [
+        {
+          "mode": "plan",
+          "intent": "learning_path",
+          "sequence": 0
+        },
+        {
+          "mode": "resource",
+          "intent": "resource_gen",
+          "sequence": 1
+        }
+      ],
+      "plan_route": "PLAN",
+      "plan_strategy": "keyword",
+      "events": [
+        {
+          "type": "CENTER_START",
+          "stage": "plan",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "sequence": "num"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "PROGRESS",
+          "stage": "extract",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "node": "str",
+              "phase": "str"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "PROGRESS",
+          "stage": "extract",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "node": "str",
+              "phase": "str"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "PROGRESS",
+          "stage": "decompose",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "node": "str",
+              "phase": "str"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "PROGRESS",
+          "stage": "decompose",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "node": "str",
+              "phase": "str"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "PROGRESS",
+          "stage": "schedule",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "node": "str",
+              "phase": "str"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "PROGRESS",
+          "stage": "schedule",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "node": "str",
+              "phase": "str"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "CENTER_END",
+          "stage": "plan",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "sequence": "num"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "CONTENT",
+          "stage": "",
+          "keys": [
+            "data",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "concept_graph": {
+                "macro_topics": [
+                  "[list]",
+                  {
+                    "bloom_level": "str",
+                    "description": "str",
+                    "name": "str"
+                  }
+                ],
+                "micro_skills": [
+                  "[list]",
+                  {
+                    "bloom_level": "str",
+                    "description": "str",
+                    "name": "str",
+                    "parent": "str"
+                  }
+                ],
+                "prerequisites": [
+                  "[list]"
+                ]
+              },
+              "content": "str",
+              "daily_capacity": "num",
+              "estimated_days": "num",
+              "goal": {
+                "constraints": [
+                  "[list]"
+                ],
+                "deadline": "str",
+                "goal_title": "str",
+                "motivation": "str",
+                "target_level": "str",
+                "target_topic": "str"
+              },
+              "message": "str",
+              "milestones": [
+                "[list]",
+                "str"
+              ],
+              "progress": "num",
+              "response": "str",
+              "stage": "str",
+              "steps": [
+                "[list]",
+                {
+                  "bloom_level": "str",
+                  "day": "num",
+                  "description": "str",
+                  "topic": "str",
+                  "type": "str"
+                }
+              ],
+              "summary": "str",
+              "title": "str",
+              "topic": "str",
+              "total_steps": "num",
+              "type": "str"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "CENTER_START",
+          "stage": "resource",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "sequence": "num"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "CENTER_END",
+          "stage": "resource",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "sequence": "num"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "CONTENT",
+          "stage": "",
+          "keys": [
+            "data",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "clarified_topic": "str",
+              "content": "str",
+              "is_clear": "bool",
+              "message": "str",
+              "progress": "num",
+              "questions": [
+                "[list]",
+                {
+                  "options": [
+                    "[list]",
+                    "str"
+                  ],
+                  "text": "str"
+                }
+              ],
+              "rationale": "str",
+              "response": "str",
+              "stage": "str",
+              "type": "str"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "DONE",
+          "stage": "",
+          "keys": [
+            "data",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "next_steps": [
+                "[list]",
+                "str"
+              ],
+              "profile_delta": {},
+              "results": [
+                "[list]",
+                {
+                  "agent": "str",
+                  "error": "null",
+                  "event_type": "str",
+                  "intent": "str",
+                  "mode": "str",
+                  "payload_keys": [
+                    "[list]",
+                    "str"
+                  ],
+                  "sequence": "num"
+                }
+              ],
+              "summary": "str",
+              "type": "str"
+            },
+            "type": "str"
+          }
+        }
+      ],
+      "type_sequence": "CENTER_START -> PROGRESS -> PROGRESS -> PROGRESS -> PROGRESS -> PROGRESS -> PROGRESS -> CENTER_END -> CONTENT -> CENTER_START -> CENTER_END -> CONTENT -> DONE",
+      "termination": {
+        "last_is_done": true,
+        "done_count": 1,
+        "error_count": 0,
+        "done_keys": [
+          "data",
+          "type"
+        ]
+      },
+      "deterministic": true
+    },
+    {
+      "chain": "可视化",
+      "mode": "auto",
+      "message": "画一张 TCP 三次握手流程图",
+      "plan_tasks": [
+        {
+          "mode": "visualization",
+          "intent": "visualize",
+          "sequence": 0
+        }
+      ],
+      "plan_route": "VISUALIZATION",
+      "plan_strategy": "keyword",
+      "events": [
+        {
+          "type": "CENTER_START",
+          "stage": "visualization",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "sequence": "num"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "PROGRESS",
+          "stage": "retrieve",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "node": "str",
+              "phase": "str"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "PROGRESS",
+          "stage": "retrieve",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "node": "str",
+              "phase": "str"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "PROGRESS",
+          "stage": "respond",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "node": "str",
+              "phase": "str"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "PROGRESS",
+          "stage": "respond",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "node": "str",
+              "phase": "str"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "PROGRESS",
+          "stage": "analyze",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "node": "str",
+              "phase": "str"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "PROGRESS",
+          "stage": "analyze",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "node": "str",
+              "phase": "str"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "CENTER_END",
+          "stage": "visualization",
+          "keys": [
+            "data",
+            "message",
+            "stage",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "sequence": "num"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "CONTENT",
+          "stage": "",
+          "keys": [
+            "data",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "blocks": [
+                "[list]"
+              ],
+              "content": "str",
+              "message": "str",
+              "progress": "num",
+              "response": "str",
+              "stage": "str",
+              "topic": "str",
+              "type": "str"
+            },
+            "type": "str"
+          }
+        },
+        {
+          "type": "DONE",
+          "stage": "",
+          "keys": [
+            "data",
+            "type"
+          ],
+          "shape": {
+            "data": {
+              "next_steps": [
+                "[list]"
+              ],
+              "profile_delta": {},
+              "results": [
+                "[list]",
+                {
+                  "agent": "str",
+                  "error": "null",
+                  "event_type": "str",
+                  "intent": "str",
+                  "mode": "str",
+                  "payload_keys": [
+                    "[list]",
+                    "str"
+                  ],
+                  "sequence": "num"
+                }
+              ],
+              "summary": "str",
+              "type": "str"
+            },
+            "type": "str"
+          }
+        }
+      ],
+      "type_sequence": "CENTER_START -> PROGRESS -> PROGRESS -> PROGRESS -> PROGRESS -> PROGRESS -> PROGRESS -> CENTER_END -> CONTENT -> DONE",
+      "termination": {
+        "last_is_done": true,
+        "done_count": 1,
+        "error_count": 0,
+        "done_keys": [
+          "data",
+          "type"
+        ]
+      },
+      "deterministic": true
+    }
+  ],
+  "termination": [
+    {
+      "case": "缺 done 补发",
+      "type_sequence": "TOKEN -> DONE",
+      "last_is_done": true,
+      "done_count": 1,
+      "error_count": 0,
+      "error_messages": [],
+      "done_keys": [
+        "type"
+      ],
+      "deterministic": true
+    },
+    {
+      "case": "多 done 收敛",
+      "type_sequence": "TOKEN -> DONE",
+      "last_is_done": true,
+      "done_count": 1,
+      "error_count": 0,
+      "error_messages": [],
+      "done_keys": [
+        "data",
+        "type"
+      ],
+      "deterministic": true
+    },
+    {
+      "case": "管线异常转 error",
+      "type_sequence": "TOKEN -> ERROR -> DONE",
+      "last_is_done": true,
+      "done_count": 1,
+      "error_count": 1,
+      "error_messages": [
+        "boom"
+      ],
+      "done_keys": [
+        "type"
+      ],
+      "deterministic": true
+    },
+    {
+      "case": "追问不误判空正文",
+      "type_sequence": "INQUIRY -> DONE",
+      "last_is_done": true,
+      "done_count": 1,
+      "error_count": 0,
+      "error_messages": [],
+      "done_keys": [
+        "data",
+        "type"
+      ],
+      "deterministic": true
+    }
+  ]
+}

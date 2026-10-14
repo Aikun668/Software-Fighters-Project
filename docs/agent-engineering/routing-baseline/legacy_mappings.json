@@ -1,0 +1,407 @@
+{
+  "t0_2_version": 1,
+  "ai_service_root": "D:\\My_Grand_Projects2026\\Software-Cup-Game2026\\Software-Fighters-Project\\ai-service",
+  "source_sha256": {
+    "app/services/intent_extractor.py": "d3e9292dff0d9f63a0335f07f306874380222a3def78f19ae7847212a02a545f",
+    "app/services/capability_gate.py": "b1dca32ae8ef3567facc1ff58c2604e4e38bb687f8d38523ba6726fb41d1bf00",
+    "app/centers/router_agent.py": "91f4b555427c463bdea483fbd8363986e285fb2eb34fb1c975307224f9822cc2",
+    "app/centers/chat_center.py": "70f208b08e2c781047418594f5e4b9df1df2ad16f332a8f4e3bc3f8ce145fe8b",
+    "app/centers/chat_task_dispatcher.py": "ce478c5c4f552e5ef8413786c875aed18f9daa7b75ef46e16102abd7812cc42f"
+  },
+  "tables": {
+    "INTENT_REGISTRY": [
+      "exercise_gen",
+      "resource_gen",
+      "code_example",
+      "tutor_question",
+      "learning_path",
+      "solve_problem",
+      "flashcard_gen",
+      "visualize",
+      "knowledge_graph",
+      "diagnose",
+      "profile_building"
+    ],
+    "INTENT_CENTER_MAP": {
+      "tutor_question": "auto",
+      "solve_problem": "auto",
+      "diagnose": "auto",
+      "learning_path": "plan",
+      "exercise_gen": "exercise",
+      "resource_gen": "resource",
+      "code_example": "resource",
+      "visualize": "visualization",
+      "knowledge_graph": "visualization",
+      "flashcard_gen": "resource",
+      "profile_building": "auto",
+      "unknown": "auto"
+    },
+    "_CENTER_EXECUTION_ORDER": {
+      "auto": 1,
+      "visualization": 2,
+      "resource": 3,
+      "exercise": 4,
+      "plan": 5
+    },
+    "RouterAgent.MODE_TO_INTENT": {
+      "plan": "learning_path",
+      "resource": "resource_gen",
+      "exercise": "exercise_gen",
+      "visualization": "visualize"
+    },
+    "chat_center._KIND_TO_CENTER": {
+      "PLAN": "plan",
+      "RESOURCE": "resource",
+      "EXERCISE": "exercise",
+      "VISUALIZATION": "visualization"
+    },
+    "chat_task_dispatcher._ON_TOKEN_MODES": [
+      "auto",
+      "exercise"
+    ],
+    "capability_gate._MODE_TO_KIND": {
+      "plan": "PLAN",
+      "resource": "RESOURCE",
+      "exercise": "EXERCISE",
+      "visualization": "VISUALIZATION"
+    },
+    "capability_gate._CAPABILITY_RULES": [
+      {
+        "kind": "EXERCISE",
+        "rule": "verb_count_exercise",
+        "pattern": "(出|来|做|生成|设计)(?![了过])[^。？！?!;；\\n]{0,6}(\\d+|[一两二三四五六七八九十几]+)\\s*道[^。？！?!;；\\n]{0,8}(题|试题|选择题|填空题|判断题|简答题|计算题|练习|习题)"
+      },
+      {
+        "kind": "EXERCISE",
+        "rule": "verb_set_exercise",
+        "pattern": "(出|来|做|生成|设计|给我)(?![了过])[^。？！?!;；\\n]{0,4}(一套|一份|几道|些)[^。？！?!;；\\n]{0,4}(题|练习|习题|试卷|卷子)"
+      },
+      {
+        "kind": "EXERCISE",
+        "rule": "verb_topic_exercise",
+        "pattern": "(出|来|做|生成|设计|给我|帮我|请)(?![了过])[^。？！?!;；\\n]{0,12}(?<!这道)(?<!那道)(?<!该)(题|题目|试题|练习题|习题|试卷|卷子|填空|选词填空|选择题|判断题|简答题|计算题|阅读理解|完形填空)"
+      },
+      {
+        "kind": "VISUALIZATION",
+        "rule": "draw_diagram",
+        "pattern": "(画|绘制|生成|做)(?![了过])[^。？！?!;；\\n]{0,8}(一张|一幅|一个|一下|个|出)?[^。？！?!;；\\n]{0,10}(流程图|架构图|结构图|关系图|对比图|曲线图|示意图|时序图|思维导图|脑图|概念图|层次图|图表|流程|架构|曲线|图)"
+      },
+      {
+        "kind": "VISUALIZATION",
+        "rule": "knowledge_graph_request",
+        "pattern": "(生成|构建|画|绘制|展示|查看|打开|看看|看)(?![了过])[^。？！?!;；\\n]{0,6}(知识图谱|图谱)"
+      },
+      {
+        "kind": "PLAN",
+        "rule": "make_plan",
+        "pattern": "(制定|规划|安排|生成|设计|做)(?![了过])[^。？！?!;；\\n]{0,8}(学习计划|计划|学习路径|路径|路线|日程)"
+      },
+      {
+        "kind": "RESOURCE",
+        "rule": "request_material",
+        "pattern": "(帮我|给我|请|生成|整理|推荐|提供)[^。？！?!;；\\n]{0,12}(资源|资料|讲义|教程|课件|大纲|文档|学习材料|幻灯片|PPT|ppt|闪卡|记忆卡|卡片|笔记)"
+      }
+    ],
+    "intent_extractor._MUTEX_GROUPS": [
+      [
+        "exercise_gen",
+        "solve_problem"
+      ],
+      [
+        "resource_gen",
+        "visualize"
+      ]
+    ],
+    "intent_extractor._INTENT_PRIORITY": {
+      "visualize": 10,
+      "solve_problem": 5
+    }
+  },
+  "per_intent_projection": [
+    {
+      "intent": "exercise_gen",
+      "center": "exercise",
+      "order": 4,
+      "on_token": true,
+      "confidence_multiplier": 0.85,
+      "keywords": [
+        "出题",
+        "题目",
+        "练习",
+        "做题",
+        "习题",
+        "出几道",
+        "来几道",
+        "练习题",
+        "选择题",
+        "计算题",
+        "填空题",
+        "简答题"
+      ],
+      "exclusive_keywords": [],
+      "keywords_count": 12
+    },
+    {
+      "intent": "resource_gen",
+      "center": "resource",
+      "order": 3,
+      "on_token": false,
+      "confidence_multiplier": 0.85,
+      "keywords": [
+        "资源",
+        "资料",
+        "学习材料",
+        "课件",
+        "生成资源",
+        "大纲",
+        "讲义",
+        "教程",
+        "文档",
+        "提纲",
+        "幻灯片",
+        "对比",
+        "项目",
+        "思维导图",
+        "脑图",
+        "概念图"
+      ],
+      "exclusive_keywords": [
+        "出题",
+        "闪卡",
+        "卡片"
+      ],
+      "keywords_count": 16
+    },
+    {
+      "intent": "code_example",
+      "center": "resource",
+      "order": 3,
+      "on_token": false,
+      "confidence_multiplier": 0.85,
+      "keywords": [
+        "代码",
+        "例子",
+        "示例",
+        "代码示例",
+        "写一个",
+        "怎么写",
+        "实现",
+        "写个",
+        "编程"
+      ],
+      "exclusive_keywords": [
+        "出题"
+      ],
+      "keywords_count": 9
+    },
+    {
+      "intent": "tutor_question",
+      "center": "auto",
+      "order": 1,
+      "on_token": true,
+      "confidence_multiplier": 0.6,
+      "keywords": [
+        "什么",
+        "为什么",
+        "怎么",
+        "如何",
+        "是什么",
+        "解释",
+        "讲讲",
+        "讲解",
+        "说说",
+        "介绍",
+        "告诉我",
+        "说明",
+        "分析一下",
+        "帮我理解"
+      ],
+      "exclusive_keywords": [],
+      "keywords_count": 14
+    },
+    {
+      "intent": "learning_path",
+      "center": "plan",
+      "order": 5,
+      "on_token": false,
+      "confidence_multiplier": 0.85,
+      "keywords": [
+        "规划",
+        "学习路径",
+        "路线",
+        "先学",
+        "后学",
+        "怎么学",
+        "计划",
+        "安排",
+        "学习安排",
+        "自学",
+        "学习计划"
+      ],
+      "exclusive_keywords": [],
+      "keywords_count": 11
+    },
+    {
+      "intent": "solve_problem",
+      "center": "auto",
+      "order": 1,
+      "on_token": true,
+      "confidence_multiplier": 0.85,
+      "keywords": [
+        "解题",
+        "求解",
+        "计算",
+        "求导",
+        "解方程",
+        "推导",
+        "证明",
+        "计算出",
+        "这道题",
+        "帮我解"
+      ],
+      "exclusive_keywords": [
+        "解释",
+        "概述",
+        "介绍",
+        "出题"
+      ],
+      "keywords_count": 10
+    },
+    {
+      "intent": "flashcard_gen",
+      "center": "resource",
+      "order": 3,
+      "on_token": false,
+      "confidence_multiplier": 0.85,
+      "keywords": [
+        "闪卡",
+        "记忆卡",
+        "卡片",
+        "背诵",
+        "背一下"
+      ],
+      "exclusive_keywords": [],
+      "keywords_count": 5
+    },
+    {
+      "intent": "visualize",
+      "center": "visualization",
+      "order": 2,
+      "on_token": false,
+      "confidence_multiplier": 0.85,
+      "keywords": [
+        "画图",
+        "图表",
+        "流程图",
+        "可视化",
+        "画一下",
+        "画一张",
+        "画出",
+        "画个图",
+        "绘制",
+        "结构图",
+        "架构图",
+        "对比图",
+        "曲线图",
+        "示意图"
+      ],
+      "exclusive_keywords": [],
+      "keywords_count": 14
+    },
+    {
+      "intent": "knowledge_graph",
+      "center": "visualization",
+      "order": 2,
+      "on_token": false,
+      "confidence_multiplier": 0.85,
+      "keywords": [
+        "知识图谱",
+        "图谱",
+        "关系图",
+        "知识结构"
+      ],
+      "exclusive_keywords": [],
+      "keywords_count": 4
+    },
+    {
+      "intent": "diagnose",
+      "center": "auto",
+      "order": 1,
+      "on_token": true,
+      "confidence_multiplier": 0.8,
+      "keywords": [
+        "诊断",
+        "测试",
+        "掌握",
+        "薄弱",
+        "测一下",
+        "考核",
+        "测验",
+        "摸底",
+        "检查一下"
+      ],
+      "exclusive_keywords": [
+        "解题",
+        "求解"
+      ],
+      "keywords_count": 9
+    },
+    {
+      "intent": "profile_building",
+      "center": "auto",
+      "order": 1,
+      "on_token": true,
+      "confidence_multiplier": 0.7,
+      "keywords": [
+        "零基础",
+        "新手",
+        "刚入门",
+        "我是",
+        "我想学",
+        "我的基础",
+        "我刚",
+        "刚开始",
+        "小白",
+        "第一次",
+        "没学过",
+        "不懂",
+        "完全不会",
+        "基础差",
+        "入门",
+        "开始学",
+        "学习目标",
+        "我想了解",
+        "介绍一下",
+        "我是新手",
+        "完全不懂",
+        "学过",
+        "基础",
+        "方向",
+        "迷茫",
+        "不知道怎么",
+        "我不知道",
+        "大二",
+        "大一",
+        "大三",
+        "大四",
+        "转行"
+      ],
+      "exclusive_keywords": [
+        "出题",
+        "做题",
+        "练习",
+        "闪卡",
+        "资源",
+        "课件"
+      ],
+      "keywords_count": 32
+    }
+  ],
+  "center_only_entries": [
+    {
+      "intent": "unknown",
+      "center": "auto",
+      "order": 1
+    }
+  ]
+}

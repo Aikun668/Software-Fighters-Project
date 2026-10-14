@@ -1,0 +1,129 @@
+diff --git a/ai-service/app/centers/chat_task_dispatcher.py b/ai-service/app/centers/chat_task_dispatcher.py
+index dd178d2..1bb0213 100644
+--- a/ai-service/app/centers/chat_task_dispatcher.py
++++ b/ai-service/app/centers/chat_task_dispatcher.py
+@@ -62,13 +62,25 @@ def _token_event(chunk: str) -> StreamEvent:
+     )
+ 
+ 
+-def _finalize_event(payload: dict) -> StreamEvent:
+-    """最终事件：带 partial=True 标记，前端 case 'content' 据此跳过文本追加
+-    （token 流阶段已经把字送完了）。payload 仍保留 blocks 等结构化信息，
+-    供后续渲染使用。"""
++def _finalize_event(payload: dict, *, streamed: bool = True) -> StreamEvent:
++    """收尾事件（本中心的最终产物）。
++
++    `streamed` 决定 `partial` 标记 —— 这个标记的语义是
++    「**正文已通过 token 逐块送过，本帧只是结构化收尾，勿重复渲染**」：
++
++    - ``streamed=True``：本中心确实逐字发过 token（如 auto / exercise）
++      → 带 ``partial=True``，前端跳过文本追加，避免重复。
++    - ``streamed=False``：本中心**不产生 token 流**（如 plan / resource）
++      → **不带** ``partial``，因为此帧是该轮**唯一**正文载体，
++        前端必须渲染；打上 ``partial`` 会让唯一正文被丢弃。
++
++    历史缺陷：本函数曾**无条件**打 ``partial=True``，导致"正文只在收尾帧
++    下发"的中心被前端整轮跳过，表现为「后端没有返回任何内容」。
++    """
++    data = {**payload, "partial": True} if streamed else payload
+     return StreamEvent(
+         type=StreamEventType.CONTENT,
+-        data={**payload, "partial": True},
++        data=data,
+     )
+ 
+ 
+@@ -98,7 +110,9 @@ class ChatTaskDispatcher:
+ 
+     # 需要逐字 token 回调的 mode（其余 Center 的 execute 不接 on_token）。
+     # 与 `_center_for` 一样，把 mode 字面量集中为**数据**，不散落在 if 比较里。
+-    _ON_TOKEN_MODES = frozenset({"auto"})
++    # - auto：TutorAgent 经 llm.chat_stream 逐字吐正文
++    # - exercise：ExerciseAgent 逐题下发给题面、review 阶段下发答案
++    _ON_TOKEN_MODES = frozenset({"auto", "exercise"})
+ 
+     def __init__(
+         self,
+@@ -181,15 +195,18 @@ class ChatTaskDispatcher:
+             )
+ 
+             # ── B1-4：边等 center 完整结果边把 token 流式 yield 到 SSE。
+-            # 只有 auto/tutor 路径会真正产生 token（auto_center 内部
+-            # TutorAgent 在 generate_once 内 await on_token(chunk)，
+-            # 必须 await 才能保证逐字流出）；其他 center 忽略 on_token，
+-            # queue 始终为空，主循环 0.05s 后拿到 result。
++            # 产生 token 的是 `_ON_TOKEN_MODES`（auto / exercise）：
++            #   - auto：TutorAgent 经 `llm.chat_stream` 逐字吐正文；
++            #   - exercise：ExerciseAgent 逐题吐题面、review 阶段吐答案。
++            # 其余 center 忽略 on_token，queue 始终为空，
++            # 主循环 0.05s 后拿到 result（其正文只在收尾帧下发）。
+             #
+             # 用 asyncio.Queue + 异步 on_token：
+             #   - put 是 await 的（流速自然匹配消费速度，逐字）
+             #   - get 是 await 的（主循环一边 yield 一边等 chunk）
+             token_queue: asyncio.Queue = asyncio.Queue()
++            # 本轮是否真的对外发过 token —— 决定收尾帧要不要打 partial 标记
++            emitted_tokens = False
+ 
+             run_emitter.emit(
+                 ProgressEventType.CENTER_STARTED, center=task.mode, sequence=idx,
+@@ -225,6 +242,7 @@ class ChatTaskDispatcher:
+                         yield progress_queue.get_nowait()
+ 
+                     if chunk is not None:
++                        emitted_tokens = True
+                         yield _token_event(chunk)
+ 
+                 result = await result_task
+@@ -235,6 +253,7 @@ class ChatTaskDispatcher:
+                         chunk = token_queue.get_nowait()
+                     except asyncio.QueueEmpty:
+                         break
++                    emitted_tokens = True
+                     yield _token_event(chunk)
+ 
+                 # 任务结束后补吐剩余进度帧（全部早于 center_end / done）
+@@ -268,8 +287,13 @@ class ChatTaskDispatcher:
+             if result.error:
+                 yield error_event(stage=result.mode, message=result.error)
+             else:
+-                # ── B1 终态事件：partial=True，前端不再重复追加（token 流已逐字送完）
+-                yield _finalize_event(self._serialize_final_payload(result, progress))
++                # ── B1 终态事件：本中心**确实发过 token** 时带 partial=True，
++                # 前端据此跳过文本追加（防重复）；未发过 token 的中心
++                # 不带该标记，因为此帧是唯一正文载体，必须被渲染。
++                yield _finalize_event(
++                    self._serialize_final_payload(result, progress),
++                    streamed=emitted_tokens,
++                )
+ 
+             if result.profile_delta:
+                 aggregated.profile_delta.update(result.profile_delta)
+diff --git a/ai-service/app/services/capability_gate.py b/ai-service/app/services/capability_gate.py
+index 59040df..872b775 100644
+--- a/ai-service/app/services/capability_gate.py
++++ b/ai-service/app/services/capability_gate.py
+@@ -84,6 +84,23 @@ _CAPABILITY_RULES: list[tuple[CapabilityKind, str, re.Pattern[str]]] = [
+             + r"(一套|一份|几道|些)" + (_FILL % 4) + r"(题|练习|习题|试卷|卷子)"
+         ),
+     ),
++    # 动词 + 学科/题型 + 题类产物，**不要求数量词**：
++    # "生成六级填词的题目""出几道英语选择题""帮我生成练习题"
++    # 此前只认"数量词 + 道"，导致"生成六级填词的题目"这类正常请求
++    # 被判成 NORMAL_CHAT，进而在答疑路径上被"仅回答 AI"的人设拒掉。
++    #
++    # 负向断言 `_NO_SPECIFIC`：排除"这道题/那道题/该题"这类**特指已有题目**的说法
++    # （"帮我做这道题"是要解题，不是要出题），它们应继续回落 NORMAL_CHAT。
++    (
++        CapabilityKind.EXERCISE,
++        "verb_topic_exercise",
++        re.compile(
++            r"(出|来|做|生成|设计|给我|帮我|请)" + _NO_PAST + (_FILL % 12)
++            + r"(?<!这道)(?<!那道)(?<!该)"
++            + r"(题|题目|试题|练习题|习题|试卷|卷子|填空|选词填空|选择题|判断题"
++            r"|简答题|计算题|阅读理解|完形填空)"
++        ),
++    ),
+     # 画/绘制/生成 + 图类产物："画一张TCP三次握手流程图""帮我做个思维导图"
+     (
+         CapabilityKind.VISUALIZATION,
