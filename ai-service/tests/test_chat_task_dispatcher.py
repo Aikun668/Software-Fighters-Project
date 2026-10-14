@@ -94,6 +94,111 @@ class TestChatTaskDispatcher:
         assert result["agent"] == "ExerciseAgent"
 
 
+class TestPartialFlagSemantics:
+    """`partial` 标记的语义合同（回归：曾无条件打标，吞掉唯一正文）。
+
+    `partial=True` 的语义是「正文已通过 token 逐块送过，本帧只是结构化收尾」。
+    因此：
+      - 发过 token 的中心（auto / exercise）→ 收尾帧带 partial
+      - 未发 token 的中心（plan / resource）→ 收尾帧**不得**带 partial，
+        否则前端会跳过它，而它是该轮**唯一**正文载体
+    """
+
+    @pytest.mark.asyncio
+    async def test_non_streaming_center_final_frame_has_no_partial(self):
+        """resource 中心不产生 token → 收尾帧不得带 partial（否则正文被吞）。"""
+        from app.centers.chat_task_dispatcher import ChatTaskDispatcher
+        from app.centers.schemas import CenterResult
+
+        class FakeResourceCenter:
+            async def execute(self, task):
+                return CenterResult(
+                    mode="resource", intent="resource_gen", event_type="content",
+                    payload={"response": "已为您生成学习文档，共 3 个内容块。"},
+                    agent="ResourceGenWorkflow", sequence=0,
+                )
+
+        dispatcher = ChatTaskDispatcher(resource_center=FakeResourceCenter())
+        plan = ExecutionPlan(
+            tasks=[CenterTask(mode="resource", intent="resource_gen", input="生成资料")],
+        )
+        content_events = []
+        async for event in dispatcher.execute(plan):
+            if event.type.value == "content" and isinstance(event.data, dict):
+                content_events.append(event.data)
+
+        assert content_events, "resource 中心必须产出 content 事件"
+        assert "partial" not in content_events[0], (
+            "未发 token 的中心不得打 partial，否则前端会跳过唯一正文"
+        )
+        assert content_events[0]["response"] == "已为您生成学习文档，共 3 个内容块。"
+
+    @pytest.mark.asyncio
+    async def test_streaming_center_final_frame_keeps_partial(self):
+        """发过 token 的中心 → 收尾帧带 partial（防重复渲染）。"""
+        from app.centers.chat_task_dispatcher import ChatTaskDispatcher
+        from app.centers.schemas import CenterResult
+
+        class FakeAutoCenter:
+            async def execute(self, task, on_token=None):
+                if on_token is not None:
+                    await on_token("逐字")
+                    await on_token("正文")
+                return CenterResult(
+                    mode="auto", intent="tutor_question", event_type="content",
+                    payload={"response": "逐字正文"},
+                    agent="TutorAgent", sequence=0,
+                )
+
+        dispatcher = ChatTaskDispatcher(auto_center=FakeAutoCenter())
+        plan = ExecutionPlan(
+            tasks=[CenterTask(mode="auto", intent="tutor_question", input="什么是进程？")],
+        )
+        tokens = []
+        final_payload = None
+        async for event in dispatcher.execute(plan):
+            if event.type.value == "token":
+                tokens.append(event.data.get("content"))
+            elif event.type.value == "content" and isinstance(event.data, dict):
+                final_payload = event.data
+
+        assert tokens == ["逐字", "正文"], "token 必须逐块流出"
+        assert final_payload is not None
+        assert final_payload.get("partial") is True, (
+            "已发 token 的中心，收尾帧必须带 partial 以防重复渲染"
+        )
+
+    @pytest.mark.asyncio
+    async def test_non_streaming_center_without_response_still_renders(self):
+        """plan 中心产物无 response 键时，收尾帧仍须可被前端渲染（不带 partial）。"""
+        from app.centers.chat_task_dispatcher import ChatTaskDispatcher
+        from app.centers.schemas import CenterResult
+
+        class FakePlanCenter:
+            async def execute(self, task):
+                return CenterResult(
+                    mode="plan", intent="learning_path", event_type="plan",
+                    payload={
+                        "type": "plan", "title": "Python 7 天入门",
+                        "total_steps": 3, "steps": [{"title": "环境搭建"}],
+                    },
+                    agent="ScheduleAgent", sequence=0,
+                )
+
+        dispatcher = ChatTaskDispatcher(plan_center=FakePlanCenter())
+        plan = ExecutionPlan(
+            tasks=[CenterTask(mode="plan", intent="learning_path", input="制定计划")],
+        )
+        payloads = []
+        async for event in dispatcher.execute(plan):
+            if event.type.value == "content" and isinstance(event.data, dict):
+                payloads.append(event.data)
+
+        assert payloads
+        assert "partial" not in payloads[0]
+        assert payloads[0].get("response"), "plan 中心必须合成非空 response 供前端渲染"
+
+
 class TestAutoCenterRouting:
     @pytest.mark.asyncio
     async def test_profile_building_routes_to_profile_agent(self):
