@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 
 /**
  * jsdom 不实现 Web Speech API，必须在**导入被测模块之前**把桩装到 window 上：
@@ -54,22 +54,40 @@ const MessageActions = (await import('../MessageActions.vue')).default
 const mountActions = (props: Record<string, unknown>) =>
   mount(MessageActions, { props: { messageId: 'a-1', text: '这是一段回答。', ...props } })
 
+/** 操作条里第二个按钮是「复制」，用类名精确定位，避免依赖按钮顺序 */
+const copyButton = (wrapper: ReturnType<typeof mountActions>) => wrapper.get('.copy-btn')
+
+/** 每个用例开始前把剪贴板收干净，避免上一个用例的桩泄漏进来 */
+const resetClipboard = () => {
+  Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true })
+  Object.defineProperty(document, 'execCommand', { value: undefined, configurable: true })
+}
+
+/** 装一个成功的 writeText 桩，返回 spy 供断言 */
+const stubClipboardSuccess = () => {
+  const writeText = vi.fn().mockResolvedValue(undefined)
+  Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+  return writeText
+}
+
 beforeEach(() => {
   spoken = []
   cancelCount = 0
   pauseCount = 0
   resumeCount = 0
   __resetSpeechForTests()
+  resetClipboard()
 })
 
 afterEach(() => {
   __resetSpeechForTests()
+  resetClipboard()
+  vi.useRealTimers()
 })
 
 describe('MessageActions：朗读按钮的显示条件', () => {
   it('正文非空时显示朗读按钮', () => {
     const wrapper = mountActions({})
-    expect(wrapper.find('.action-btn').exists()).toBe(true)
     expect(wrapper.get('.action-btn').attributes('aria-label')).toBe('朗读')
   })
 
@@ -156,6 +174,108 @@ describe('MessageActions：点击朗读', () => {
 
     expect(spoken[0].lang).toBe('en-US')
     expect(spoken[0].voice?.lang).toBe('en-US')
+  })
+})
+
+describe('MessageActions：复制按钮', () => {
+  it('与朗读按钮并列渲染在同一操作条里', () => {
+    const wrapper = mountActions({})
+    expect(wrapper.findAll('.action-btn')).toHaveLength(2)
+    expect(wrapper.get('.copy-btn').attributes('aria-label')).toBe('复制')
+  })
+
+  it('复制的是原始 Markdown 正文，而不是渲染后的 HTML', async () => {
+    const writeText = stubClipboardSuccess()
+    const raw = '# 标题\n\n**加粗**内容'
+    const wrapper = mountActions({ text: raw })
+
+    await copyButton(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(writeText).toHaveBeenCalledWith(raw)
+    expect(wrapper.get('.copy-btn').attributes('aria-label')).toBe('已复制')
+    expect(wrapper.get('.copy-btn').classes()).toContain('is-done')
+  })
+
+  it('复制成功后反馈自动复位为「复制」', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    stubClipboardSuccess()
+    const wrapper = mountActions({})
+
+    await copyButton(wrapper).trigger('click')
+    await flushPromises()
+    expect(wrapper.get('.copy-btn').attributes('aria-label')).toBe('已复制')
+
+    vi.advanceTimersByTime(1600)
+    await flushPromises()
+    expect(wrapper.get('.copy-btn').attributes('aria-label')).toBe('复制')
+  })
+
+  it('连点复制只保留一个复位定时器，反馈不会被前一次提前抹掉', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    stubClipboardSuccess()
+    const wrapper = mountActions({})
+    const button = copyButton(wrapper)
+
+    await button.trigger('click')
+    await flushPromises()
+    await button.trigger('click')
+    await flushPromises()
+
+    expect(vi.getTimerCount()).toBe(1)
+    expect(wrapper.get('.copy-btn').attributes('aria-label')).toBe('已复制')
+  })
+
+  it('组件销毁时清掉复位定时器，避免在已卸载组件上改状态', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    stubClipboardSuccess()
+    const wrapper = mountActions({})
+
+    await copyButton(wrapper).trigger('click')
+    await flushPromises()
+    expect(vi.getTimerCount()).toBe(1)
+
+    wrapper.unmount()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('剪贴板不可用（局域网 http）时退到 execCommand，按钮仍显示成功', async () => {
+    Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true })
+    const execCommand = vi.fn(() => true)
+    Object.defineProperty(document, 'execCommand', { value: execCommand, configurable: true })
+
+    const wrapper = mountActions({})
+    await copyButton(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(execCommand).toHaveBeenCalledWith('copy')
+    expect(wrapper.get('.copy-btn').attributes('aria-label')).toBe('已复制')
+  })
+
+  it('两条路径都失败时显示「复制失败」，而不是假装成功', async () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: vi.fn().mockRejectedValue(new Error('NotAllowedError')) },
+      configurable: true,
+    })
+    // 降级路径也不可用（jsdom 默认没有 execCommand），整体应判失败
+    const wrapper = mountActions({})
+
+    await copyButton(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('.copy-btn').attributes('aria-label')).toBe('复制失败')
+    expect(wrapper.get('.copy-btn').classes()).toContain('is-failed')
+  })
+
+  it('复制按钮不影响朗读：点复制不会开始发声', async () => {
+    stubClipboardSuccess()
+    const wrapper = mountActions({})
+
+    await copyButton(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(spoken).toHaveLength(0)
+    expect(useSpeech().status.value).toBe('idle')
   })
 })
 

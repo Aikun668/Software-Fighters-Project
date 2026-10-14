@@ -25,11 +25,14 @@ const onScroll = (event: Event) => {
 }
 
 /**
- * 是否给这条消息显示朗读操作条。
- * 出错的消息与正在流式输出的消息都不显示：前者没有稳定正文可念，
+ * 是否给这条消息显示操作条（朗读 / 复制）。
+ * 出错的消息与正在流式输出的消息都不显示：前者没有稳定正文可念也不该被复制，
  * 后者会让按钮在输出过程中反复出现又消失（由 MessageActions 内部再兜一层）。
+ *
+ * 注意这里**不再**判断浏览器是否支持 TTS：复制不依赖 Web Speech API，
+ * 不支持朗读的环境也应该能复制（由 MessageActions 内部单独隐藏朗读按钮）。
  */
-const canSpeak = (msg: ChatMessage) =>
+const canShowActions = (msg: ChatMessage) =>
   msg.role === 'assistant' && !msg.streaming && !msg.error && msg.content.trim().length > 0
 </script>
 
@@ -51,7 +54,7 @@ const canSpeak = (msg: ChatMessage) =>
             <p v-if="msg.streaming && msg.content && progressText" class="msg-pending">{{ progressText }}</p>
             <p v-if="msg.error" class="msg-error">{{ msg.error }}</p>
             <MessageActions
-              v-if="canSpeak(msg)"
+              v-if="canShowActions(msg)"
               :message-id="msg.id"
               :text="msg.content"
               :streaming="msg.streaming"
