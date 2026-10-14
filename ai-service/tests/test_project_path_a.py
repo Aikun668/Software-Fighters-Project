@@ -11,14 +11,18 @@ import asyncio
 import json
 import os
 import sys
+import tempfile
 import urllib.request
 import urllib.error
 from pathlib import Path
 
 API_BASE = "http://127.0.0.1:8001/internal"
-DESKTOP = Path.home() / "Desktop"
-TEST_OUT_DIR = DESKTOP / "project_agent_path_a_test"
-TEST_OUT_DIR.mkdir(parents=True, exist_ok=True)
+# 输出目录默认落在系统临时目录，避免污染桌面。
+# 需要留存结果时设环境变量 PROJECT_PATH_A_OUT 指向目标目录即可。
+TEST_OUT_DIR = (
+    Path(os.environ.get("PROJECT_PATH_A_OUT") or tempfile.gettempdir())
+    / "project_agent_path_a_test"
+)
 
 TEST_CASES = [
     {
@@ -212,7 +216,8 @@ async def run_one(case: dict) -> dict:
 
     status = "PASS" if report["with_code"] == report["total_milestones"] and report["total_milestones"] >= 2 else "FAIL"
 
-    # Save to file
+    # Save to file（目录在此处按需创建，不再在模块导入时创建）
+    TEST_OUT_DIR.mkdir(parents=True, exist_ok=True)
     output_path = TEST_OUT_DIR / f"{name}_result.json"
     output_data = {
         "topic": topic,
