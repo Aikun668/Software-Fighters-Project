@@ -40,6 +40,8 @@ dist/
 output/
 .playwright-cli/
 *.log
+# start-all.sh 生成的启动器（含机器绝对路径，每次运行重写）
+.launch/
 
 # Local data dumps
 temp_file/minio/
