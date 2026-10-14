@@ -16,8 +16,9 @@ from app.centers.exercise_center import ExerciseCenter
 from app.centers.plan_center import PlanCenter
 from app.centers.resource_center import ResourceCenter
 from app.centers.chat_task_dispatcher import ChatTaskDispatcher
+from app.centers.plan_builder import PlanBuilder
 from app.centers.router_agent import RouterAgent
-from app.centers.schemas import CenterTask, ExecutionPlan
+from app.centers.schemas import ExecutionPlan
 from app.centers.visualization_center import VisualizationCenter
 from app.events.types import (
     StreamEvent,
@@ -63,7 +64,7 @@ class ChatCenter:
         # 不透传时，BaseAgent 的默认 `use_mock_llm=False` 会**显式**阻断环境跟随，
         # 无 Key 环境在构造期抛 ValueError（见 tests/test_mock_llm_switch_contract.py）。
         self.use_mock_llm = use_mock_llm
-
+        self._plan_builder = PlanBuilder()
     def _get_router(self) -> RouterAgent:
         if self.router_agent is None:
             self.router_agent = RouterAgent(intent_extractor=IntentExtractor())
@@ -141,9 +142,8 @@ class ChatCenter:
     ) -> ExecutionPlan:
         if not message.strip():
             # 空输入不进能力判定，交由路由层给出 inquiry 追问
-            return await self._get_router().route(
-                message=message,
-                mode=mode,
+            return self._plan_builder.build(
+                self._get_router().decide(message, mode),
                 student_profile=student_profile,
                 context=context,
                 max_intents=max_intents,
@@ -160,35 +160,19 @@ class ChatCenter:
         audit_meta = self._audit_context(message, context)
 
         if decision.kind is CapabilityKind.NORMAL_CHAT:
-            context = context or {}
-            task = CenterTask(
-                mode="auto",
-                intent="tutor_question",
-                input=message,
-                params={"question": message.strip()},
-                context={
-                    **context,
-                    "student_profile": student_profile or {},
-                    "capability_route": decision.kind.value,
-                    "capability_reason": decision.reason,
-                },
+            return self._plan_builder.build_normal_chat(
+                message,
+                student_profile=student_profile,
+                context=context,
+                route=decision.kind.value,
+                reason=decision.reason,
                 confidence=decision.confidence,
-            )
-            return ExecutionPlan(
-                tasks=[task],
-                is_clear=True,
-                intent_meta={
-                    "raw_message": message,
-                    "strategy": "capability_gate",
-                    "route": decision.kind.value,
-                    "route_reason": decision.reason,
-                    **audit_meta,
-                },
+                audit_meta=audit_meta,
             )
 
-        plan = await self._get_router().route(
-            message=message,
-            mode=mode,
+        router = self._get_router()
+        plan = self._plan_builder.build(
+            router.decide(message, mode),
             student_profile=student_profile,
             context=context,
             max_intents=max_intents,
@@ -198,20 +182,19 @@ class ChatCenter:
         if expected_center and not any(t.mode == expected_center for t in plan.tasks):
             # 二级关键词路由未命中 gate 判定的中心（回落 tutor）时，
             # 以显式 mode 直建对应中心的单任务计划，保证 gate 判定权威
-            plan = await self._get_router().route(
-                message=message,
-                mode=decision.kind.value.lower(),
+            plan = self._plan_builder.build(
+                router.decide(message, decision.kind.value.lower()),
                 student_profile=student_profile,
                 context=context,
                 max_intents=max_intents,
             )
         # 能力路径同样带观测元数据，供 execute 边界产出审计日志
-        plan.intent_meta.update({
-            "route": decision.kind.value,
-            "route_reason": decision.reason,
-            **audit_meta,
-        })
-        return plan
+        return self._plan_builder.annotate_route(
+            plan,
+            route=decision.kind.value,
+            reason=decision.reason,
+            audit_meta=audit_meta,
+        )
 
     async def execute(self, plan: ExecutionPlan):
         meta = plan.intent_meta or {}

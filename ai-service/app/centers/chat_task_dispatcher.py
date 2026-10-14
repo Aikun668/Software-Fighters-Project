@@ -24,6 +24,7 @@ from app.agents.layered_explain_agent import LayeredExplainAgent
 from app.agents.schedule_agent import ScheduleAgent
 from app.centers.auto_center import AutoCenter
 from app.centers.exercise_center import ExerciseCenter
+from app.centers.execution_gate import ExecutionVerdict, blocks_execution, judge
 from app.centers.plan_center import PlanCenter
 from app.centers.resource_center import ResourceCenter
 from app.centers.schemas import (
@@ -152,7 +153,10 @@ class ChatTaskDispatcher:
         event_queue: asyncio.Queue | None = None,
         emitter: StreamEmitter | None = None,
     ) -> AsyncGenerator[StreamEvent, None]:
-        if plan.tasks and plan.tasks[0].mode == "inquiry":
+        verdict = judge(plan)
+        if verdict is ExecutionVerdict.CONFIRM:
+            logger.info("plan needs confirmation; executing as before (not enforced)")
+        if blocks_execution(verdict):
             task = plan.tasks[0]
             question = task.params.get("question", "你想了解什么？")
             yield inquiry_event(question)

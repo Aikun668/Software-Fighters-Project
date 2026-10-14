@@ -1,10 +1,11 @@
-"""二级意图分发（关键词 → `ExecutionPlan`）—— **不是** LLM Agent。
+"""二级意图决策（关键词 → `RouteDecision`）—— **不是** LLM Agent。
 
-【决策所有权】二级请求级分发 —— 本模块是唯一拥有者。
+【决策所有权】二级请求级意图判定 —— 本模块是唯一拥有者。
   - 唯一调用点：`ChatCenter.route`（`app/centers/chat_center.py`）
-  - 输入：用户消息 + mode；输出：`ExecutionPlan`
+  - 输入：用户消息 + mode；输出：`RouteDecision`（候选意图 + 规则分），
+    不选执行者、不排顺序、不建 `ExecutionPlan`（属 `PlanBuilder`）
   - 关键词表来源：`app.services.intent_extractor.INTENT_REGISTRY`
-    （本模块只做打分与分发，**不另建关键词表**）
+    （本模块只做打分与取舍，**不另建关键词表**）
   - ⚠️ `_QMARKS`（本模块内）与 `INTENT_REGISTRY["tutor_question"].keywords` 语义相近、
     **有意独立维护**：两者关键词集合不同，合并会改变路由行为（P3 决定：只登记，不合并）
   - 禁止：决定「是否进入专项能力」（一级属 `CapabilityGate`）；
@@ -12,18 +13,16 @@
   - 约定：`temp_file/9.15工程改造计划/0、产品方向与约束/三类决策与命名约定.md`
 
 【命名澄清】名字叫 `RouterAgent`，但它 **不是 Center**（却位于 `app/centers/`）、
-  **不是 LLM Agent**（`route()` 全程无 LLM 调用），实为「关键词 → ExecutionPlan」
-  的纯规则规划器。改名排在 P3-B，本轮只标注。
+  **不是 LLM Agent**（`decide()` 全程无 LLM 调用），实为「关键词 → RouteDecision」
+  的纯规则判定器。改名排在 P3-B，本轮只标注。
 """
 
 import logging
 
-from app.centers.schemas import CenterTask, ExecutionPlan
-from app.services.capability_map import (
-    CENTER_EXECUTION_ORDER,
-    INTENT_CENTER_MAP,
-    MODE_TO_INTENT,
-)
+from app.centers.plan_builder import PlanBuilder
+from app.centers.route_decision import RouteCandidate, RouteDecision
+from app.centers.schemas import ExecutionPlan
+from app.services.capability_map import INTENT_CENTER_MAP, MODE_TO_INTENT
 from app.services.intent_extractor import (
     _INTENT_PRIORITY,
     _MUTEX_GROUPS,
@@ -37,10 +36,10 @@ logger = logging.getLogger(__name__)
 
 # 低门槛：关键词命中即可进入评分
 _KEYWORD_FLOOR = 0.3
-# 高门槛：置信度达标才保留为独立意图
+# 高门槛：规则分达标才保留为独立意图
 _CONFIDENCE_THRESHOLD = 0.4
-# 超过此数量触发确认卡
-_CONFIRM_THRESHOLD = 3
+
+_EMPTY_INQUIRY = "你想了解什么？"
 
 
 class RouterAgent:
@@ -48,9 +47,52 @@ class RouterAgent:
 
     def __init__(self, intent_extractor: IntentExtractor | None = None):
         # `intent_extractor` 参数**保留**以兼容既有测试签名（10 个测试文件构造时传参）；
-        # 当前实现只做关键词路由（`_keyword_route`），不读取该实例 —— 属 P3-B 登记项，
+        # 当前实现只做关键词判定（`_keyword_candidates`），不读取该实例 —— 属 P3-B 登记项，
         # 删除参数会破坏测试契约，故仅保留显式的"未使用"说明。
         del intent_extractor
+
+    def decide(self, message: str, mode: str = "auto") -> RouteDecision:
+        if not message.strip():
+            # 空输入给追问，不编造意图
+            return RouteDecision(
+                source="empty",
+                message=message,
+                is_clear=False,
+                inquiry=_EMPTY_INQUIRY,
+            )
+
+        if mode != "auto":
+            intent = self.MODE_TO_INTENT.get(mode, "tutor_question")
+            return RouteDecision(
+                source="manual",
+                message=message,
+                manual_mode=mode,
+                candidates=(
+                    RouteCandidate(
+                        intent=intent,
+                        rule_score=1.0,
+                        params={"question": message, "topic": message},
+                    ),
+                ),
+            )
+
+        candidates = self._keyword_candidates(message)
+        if candidates:
+            return RouteDecision(
+                source="keyword", message=message, candidates=tuple(candidates)
+            )
+
+        return RouteDecision(
+            source="fallback",
+            message=message,
+            candidates=(
+                RouteCandidate(
+                    intent="tutor_question",
+                    rule_score=0.0,
+                    params={"question": message.strip()},
+                ),
+            ),
+        )
 
     async def route(
         self,
@@ -60,66 +102,18 @@ class RouterAgent:
         context: dict | None = None,
         max_intents: int = 5,
     ) -> ExecutionPlan:
-        student_profile = student_profile or {}
-        context = context or {}
+        """旧入口：decide + PlanBuilder 的组合，仅为既有测试兼容保留。
 
-        if not message.strip():
-            # 空输入给追问，不编造意图
-            task = CenterTask(
-                mode="inquiry",
-                intent="inquiry",
-                input=message,
-                params={"question": "你想了解什么？"},
-                context={**context, "student_profile": student_profile},
-                confidence=0.0,
-            )
-            return ExecutionPlan(
-                tasks=[task],
-                is_clear=False,
-                intent_meta={"raw_message": message, "strategy": "empty_inquiry"},
-            )
-
-        if mode != "auto":
-            return self._manual_mode_plan(message, mode, student_profile, context)
-
-        tasks = self._keyword_route(message, student_profile, context)
-        if tasks:
-            tasks = self._sort_by_confidence(tasks)
-            needs_confirm = len(tasks) >= _CONFIRM_THRESHOLD
-            return ExecutionPlan(
-                tasks=tasks,
-                is_clear=True,
-                needs_confirmation=needs_confirm,
-                intent_meta={
-                    "raw_message": message,
-                    "intents": [t.intent for t in tasks],
-                    "confidence": [t.confidence for t in tasks],
-                    "strategy": "keyword",
-                    "needs_confirmation": needs_confirm,
-                },
-                max_intents=max_intents,
-            )
-
-        task = CenterTask(
-            mode="auto",
-            intent="tutor_question",
-            input=message,
-            params={"question": message.strip()},
-            context={**context, "student_profile": student_profile},
-            confidence=0.0,
-        )
-        return ExecutionPlan(
-            tasks=[task],
-            is_clear=True,
-            intent_meta={"raw_message": message, "strategy": "fallback_tutor"},
+        生产路径（`ChatCenter.route`）直接分别调用 `decide` 与 `PlanBuilder.build`。
+        """
+        return PlanBuilder().build(
+            self.decide(message, mode),
+            student_profile=student_profile,
+            context=context,
+            max_intents=max_intents,
         )
 
-    def _keyword_route(
-        self,
-        message: str,
-        student_profile: dict,
-        context: dict,
-    ) -> list[CenterTask] | None:
+    def _keyword_candidates(self, message: str) -> list[RouteCandidate] | None:
         scored = []
         for intent_def in INTENT_REGISTRY:
             score = _score_intent(message, intent_def)
@@ -162,55 +156,16 @@ class RouterAgent:
                 filtered = [(s, d) for s, d in filtered
                             if d.intent not in group or d.intent == best_intent]
 
-        # 置信度阈值过滤（替代硬截断），至少保留 1 个
+        # 规则分阈值过滤（替代硬截断），至少保留 1 个
         qualified = [(s, d) for s, d in filtered if s >= _CONFIDENCE_THRESHOLD]
         if not qualified:
             qualified = [max(filtered, key=lambda x: x[0])]
 
-        tasks: list[CenterTask] = []
-        for idx, (score, intent_def) in enumerate(qualified):
-            center = INTENT_CENTER_MAP.get(intent_def.intent, "auto")
-            params = _mock_extract_params(intent_def.intent, message)
-            task = CenterTask(
-                mode=center,
+        return [
+            RouteCandidate(
                 intent=intent_def.intent,
-                input=message,
-                params=params,
-                context={**context, "student_profile": student_profile},
-                sequence=idx,
-                confidence=score,
+                rule_score=score,
+                params=_mock_extract_params(intent_def.intent, message),
             )
-            tasks.append(task)
-
-        return tasks
-
-    def _manual_mode_plan(
-        self,
-        message: str,
-        mode: str,
-        student_profile: dict,
-        context: dict,
-    ) -> ExecutionPlan:
-        intent = self.MODE_TO_INTENT.get(mode, "tutor_question")
-        center = INTENT_CENTER_MAP.get(intent, "auto")
-        task = CenterTask(
-            mode=center,
-            intent=intent,
-            input=message,
-            params={"question": message, "topic": message},
-            context={**context, "student_profile": student_profile, "manual_mode": mode},
-            confidence=1.0,
-        )
-        return ExecutionPlan(
-            tasks=[task],
-            is_clear=True,
-            intent_meta={"manual_mode": mode, "raw_message": message},
-        )
-
-    def _sort_by_confidence(self, tasks: list[CenterTask]) -> list[CenterTask]:
-        tasks.sort(
-            key=lambda t: (-t.confidence, CENTER_EXECUTION_ORDER.get(t.mode, 99))
-        )
-        for idx, task in enumerate(tasks):
-            task.sequence = idx
-        return tasks
+            for score, intent_def in qualified
+        ]
