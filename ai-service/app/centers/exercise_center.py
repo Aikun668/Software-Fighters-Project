@@ -84,7 +84,7 @@ class ExerciseCenter:
             self.llm_service = get_llm_service()
         return self.llm_service
 
-    async def execute(self, task: CenterTask) -> CenterResult:
+    async def execute(self, task: CenterTask, on_token=None) -> CenterResult:
         context = task.context or {}
         student_profile = context.get("student_profile", {})
         topic = task.params.get("topic") or task.input
@@ -93,13 +93,18 @@ class ExerciseCenter:
 
         agent = self._exercise_agent()
         try:
-            state = await agent.run({
+            run_state: dict = {
                 "topic": topic,
                 "count": count,
                 "difficulty": difficulty,
                 "student_profile": student_profile,
                 "purpose": task.params.get("purpose", ""),
-            })
+            }
+            # 流式：把 on_token 透传给 agent.run → 节点内经 current_on_token 下发
+            # 题面/答案片段（None 时维持原非流式路径）
+            if on_token is not None:
+                run_state["_on_token"] = on_token
+            state = await agent.run(run_state)
             return CenterResult(
                 mode="exercise",
                 intent=task.intent,

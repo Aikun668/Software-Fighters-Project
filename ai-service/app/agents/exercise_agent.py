@@ -1,10 +1,11 @@
 import json
 import logging
+import re
 from typing import TypedDict
 
 from langgraph.graph import StateGraph
 
-from app.agents.base_agent import BaseAgent
+from app.agents.base_agent import BaseAgent, current_on_token
 from app.services.hallucination_guard import kb_verify
 from app.services.llm_service import create_llm
 from app.utils.prompt_loader import interpolate_variables
@@ -24,6 +25,73 @@ class ExerciseState(TypedDict, total=False):
     questions: list[dict]
     stage: str
     response: str
+
+
+_OPTION_LINE_RE = re.compile(
+    r"^\s*[（(]?([A-Ha-h])[)）.、．:：]\s*\S",
+)
+
+
+def _question_text_has_options(text: str, options: dict) -> bool:
+    """题干里是否已经自带选项行。
+
+    LLM 常在 `question` 文本里直接写出 ``A. xxx`` 形式的选项，
+    而结构化的 ``options`` 字段又包含同一批选项。若两者都渲染，
+    用户会看到**两遍选项**。此函数用于检测这种重复。
+    """
+    if not options:
+        return False
+    keys = {str(k).upper() for k in options}
+    found = set()
+    for line in text.splitlines():
+        m = _OPTION_LINE_RE.match(line)
+        if m:
+            found.add(m.group(1).upper())
+    # 多数选项已在题干出现即认为自带（避免个别 A. 编号误判）
+    return len(found & keys) >= max(2, len(keys) - 1)
+
+
+def format_question_markdown(index: int, question: dict) -> str:
+    """单道题的题面 + 选项，格式化为 Markdown（流式下发用）。
+
+    出题是**结构化产物**，逐字吐原始 JSON 会让用户看到乱码，
+    故以「一道题」为流式粒度：每校验完一题即下发一题的题面。
+    """
+    lines = [f"**第 {index} 题**", ""]
+    text = str(question.get("question") or question.get("content") or "").strip()
+    options = question.get("options")
+    if text:
+        lines += [text, ""]
+    # 题干已自带选项时不再重复罗列（否则选项出现两遍）
+    if isinstance(options, dict) and not _question_text_has_options(text, options):
+        for key, value in options.items():
+            if value is None or value == "":
+                continue
+            lines.append(f"- **{key}.** {value}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def format_answer_markdown(index: int, question: dict) -> str:
+    """单道题的答案与解析，格式化为 Markdown（流式下发用）。"""
+    lines = [f"**第 {index} 题**", ""]
+    answer = question.get("correct_answer") or question.get("answer")
+    if answer:
+        lines += [f"**答案：** {answer}", ""]
+    explanation = question.get("explanation")
+    if explanation:
+        lines += [str(explanation), ""]
+    return "\n".join(lines)
+
+
+async def _emit(on_token, text: str) -> None:
+    """安全下发流式片段：回调异常不得影响题目生成主流程。"""
+    if on_token is None or not text:
+        return
+    try:
+        await on_token(text)
+    except Exception:  # noqa: BLE001
+        logger.warning("ExerciseAgent on_token raised (non-blocking)", exc_info=True)
 
 
 @kb_verify(fields=["questions[*].question", "questions[*].answer"])
@@ -138,13 +206,19 @@ class ExerciseAgent(BaseAgent):
         return issues
 
     async def _generate_node(self, state: ExerciseState) -> dict:
-        """生成题目（LLM 产出后经 validate→normalize 把关）"""
+        """生成题目（LLM 产出后经 validate→normalize 把关）。
+
+        流式：每校验完一题即通过 `current_on_token` 下发该题题面，
+        用户能看到题目**逐题出现**（而非等待全部完成）。
+        """
         from app.utils.quiz_validator import validate_question
 
         plan = state.get("plan", [])
         purpose = state.get("purpose", "")
         knowledge_node_id = state.get("knowledge_node_id")
         questions = []
+        # P3-B3a：回调来自模块级 ContextVar（按协程隔离），与 TutorAgent 同一机制
+        on_token = current_on_token.get()
 
         conditions = {"warmup": purpose == "warmup_not_exam"}
         # 同上：平台人设必须落在 system 栏，不能靠 user 模板夹带
@@ -153,7 +227,11 @@ class ExerciseAgent(BaseAgent):
         )
         quiz_user_tpl = self._load_extra_prompt("pipeline.yaml", key="quiz_user")
 
-        for template in plan:
+        total = len(plan)
+        if on_token is not None and total:
+            await _emit(on_token, f"已为你生成 {total} 道练习题：\n\n")
+
+        for index, template in enumerate(plan, 1):
             q_type = template.get("question_type", "choice")
             topic = template.get("topic", "")
             difficulty = template.get("difficulty", "medium")
@@ -194,6 +272,9 @@ class ExerciseAgent(BaseAgent):
                     mock_q["knowledge_node_id"] = knowledge_node_id
                 questions.append(mock_q)
 
+            # 校验通过后立即下发该题题面（结构化产物 → Markdown，不吐原始 JSON）
+            await _emit(on_token, format_question_markdown(index, questions[-1]) + "\n")
+
         return {"questions": questions, "stage": "generated"}
 
     def _mock_question(self, q_type: str, topic: str) -> dict:
@@ -227,10 +308,22 @@ class ExerciseAgent(BaseAgent):
         }
 
     async def _review_node(self, state: ExerciseState) -> dict:
-        """Review：组装最终输出"""
+        """Review：组装最终输出，并把**参考答案**流式下发。
+
+        为什么要在这里也发 token：前端收到 token 后会跳过收尾帧（防重复），
+        答案若只放在收尾帧里就不会显示。题面在 `_generate_node` 逐题下发，
+        答案在此统一下发（顺序即「先做题、后对答案」）。
+        """
         questions = state.get("questions", [])
         topic = state.get("topic", "")
         count = len(questions)
 
         response = f"已为您生成「{topic}」的 {count} 道练习题。"
+
+        on_token = current_on_token.get()
+        if on_token is not None and questions:
+            await _emit(on_token, "\n---\n\n**参考答案**\n\n")
+            for index, question in enumerate(questions, 1):
+                await _emit(on_token, format_answer_markdown(index, question) + "\n")
+
         return {"response": response, "stage": "reviewed"}
