@@ -28,30 +28,6 @@ INTENT_TYPES = Literal[
     "visualize", "knowledge_graph", "diagnose", "unknown",
 ]
 
-INTENT_CENTER_MAP: dict[str, str] = {
-    "tutor_question": "auto",
-    "solve_problem": "auto",
-    "diagnose": "auto",
-    "learning_path": "plan",
-    "exercise_gen": "exercise",
-    "resource_gen": "resource",
-    "code_example": "resource",
-    "visualize": "visualization",
-    "knowledge_graph": "visualization",
-    "flashcard_gen": "resource",
-    "profile_building": "auto",
-    "unknown": "auto",
-}
-
-_CENTER_EXECUTION_ORDER = {
-    "auto": 1,
-    "visualization": 2,
-    "resource": 3,
-    "exercise": 4,
-    "plan": 5,
-}
-
-
 class ExerciseParams(BaseModel):
     topic: str = Field(default="AI基础", min_length=1)
     count: int = Field(default=3, ge=1, le=20)

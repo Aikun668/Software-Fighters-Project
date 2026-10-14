@@ -50,6 +50,7 @@ from app.events.types import (
     error_event,
     inquiry_event,
 )
+from app.services.capability_map import ON_TOKEN_CENTERS
 
 
 def _token_event(chunk: str) -> StreamEvent:
@@ -112,7 +113,7 @@ class ChatTaskDispatcher:
     # 与 `_center_for` 一样，把 mode 字面量集中为**数据**，不散落在 if 比较里。
     # - auto：TutorAgent 经 llm.chat_stream 逐字吐正文
     # - exercise：ExerciseAgent 逐题下发给题面、review 阶段下发答案
-    _ON_TOKEN_MODES = frozenset({"auto", "exercise"})
+    _ON_TOKEN_MODES = ON_TOKEN_CENTERS
 
     def __init__(
         self,

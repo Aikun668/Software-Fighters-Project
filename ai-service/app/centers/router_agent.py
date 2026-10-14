@@ -19,9 +19,12 @@
 import logging
 
 from app.centers.schemas import CenterTask, ExecutionPlan
-from app.services.intent_extractor import (
+from app.services.capability_map import (
+    CENTER_EXECUTION_ORDER,
     INTENT_CENTER_MAP,
-    _CENTER_EXECUTION_ORDER,
+    MODE_TO_INTENT,
+)
+from app.services.intent_extractor import (
     _INTENT_PRIORITY,
     _MUTEX_GROUPS,
     INTENT_REGISTRY,
@@ -41,12 +44,7 @@ _CONFIRM_THRESHOLD = 3
 
 
 class RouterAgent:
-    MODE_TO_INTENT: dict[str, str] = {
-        "plan": "learning_path",
-        "resource": "resource_gen",
-        "exercise": "exercise_gen",
-        "visualization": "visualize",
-    }
+    MODE_TO_INTENT: dict[str, str] = MODE_TO_INTENT
 
     def __init__(self, intent_extractor: IntentExtractor | None = None):
         # `intent_extractor` 参数**保留**以兼容既有测试签名（10 个测试文件构造时传参）；
@@ -211,7 +209,7 @@ class RouterAgent:
 
     def _sort_by_confidence(self, tasks: list[CenterTask]) -> list[CenterTask]:
         tasks.sort(
-            key=lambda t: (-t.confidence, _CENTER_EXECUTION_ORDER.get(t.mode, 99))
+            key=lambda t: (-t.confidence, CENTER_EXECUTION_ORDER.get(t.mode, 99))
         )
         for idx, task in enumerate(tasks):
             task.sequence = idx

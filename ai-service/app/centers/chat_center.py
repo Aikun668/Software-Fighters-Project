@@ -28,6 +28,7 @@ from app.events.types import (
     recommendation_event,
 )
 from app.services.capability_gate import CapabilityGate, CapabilityKind
+from app.services.capability_map import KIND_TO_CENTER
 from app.services.intent_extractor import IntentExtractor
 from app.services.routing_audit import (
     build_routing_record,
@@ -40,15 +41,6 @@ from app.services.llm_service import (
 )
 
 logger = logging.getLogger(__name__)
-
-# CapabilityKind → ChatTaskDispatcher 编排中心（Task 11 评审回归项：
-# gate 判定了能力，二级路由就必须进入对应中心，不得回落 tutor）
-_KIND_TO_CENTER = {
-    "PLAN": "plan",
-    "RESOURCE": "resource",
-    "EXERCISE": "exercise",
-    "VISUALIZATION": "visualization",
-}
 
 
 class ChatCenter:
@@ -201,7 +193,8 @@ class ChatCenter:
             context=context,
             max_intents=max_intents,
         )
-        expected_center = _KIND_TO_CENTER.get(decision.kind.value)
+        # gate 判定了能力，二级路由必须进入对应中心，不得回落 tutor（Task 11 回归项）
+        expected_center = KIND_TO_CENTER.get(decision.kind.value)
         if expected_center and not any(t.mode == expected_center for t in plan.tasks):
             # 二级关键词路由未命中 gate 判定的中心（回落 tutor）时，
             # 以显式 mode 直建对应中心的单任务计划，保证 gate 判定权威

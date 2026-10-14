@@ -22,6 +22,8 @@ import re
 from dataclasses import dataclass
 from enum import Enum
 
+from app.services.capability_map import MODE_TO_KIND
+
 
 class CapabilityKind(str, Enum):
     NORMAL_CHAT = "NORMAL_CHAT"
@@ -40,10 +42,7 @@ class CapabilityDecision:
 
 # 显式 mode（非 auto）→ 能力类型：用户点了功能入口，直接放行
 _MODE_TO_KIND: dict[str, CapabilityKind] = {
-    "plan": CapabilityKind.PLAN,
-    "resource": CapabilityKind.RESOURCE,
-    "exercise": CapabilityKind.EXERCISE,
-    "visualization": CapabilityKind.VISUALIZATION,
+    mode: CapabilityKind(kind) for mode, kind in MODE_TO_KIND.items()
 }
 
 _CAPABILITY_CONFIDENCE = 0.75

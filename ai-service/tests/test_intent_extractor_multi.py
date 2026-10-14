@@ -1,7 +1,7 @@
 import pytest
 
+from app.services.capability_map import CENTER_EXECUTION_ORDER, INTENT_CENTER_MAP
 from app.services.intent_extractor import (
-    INTENT_CENTER_MAP,
     IntentExtractor,
     MultiIntentResult,
 )
@@ -46,8 +46,7 @@ class TestIntentCenterMap:
 
     def test_center_order(self):
         """钉住现行执行顺序合同：先答疑（auto），再产物（plan 最后）。"""
-        from app.services.intent_extractor import _CENTER_EXECUTION_ORDER
-        order = _CENTER_EXECUTION_ORDER
+        order = CENTER_EXECUTION_ORDER
         assert order["auto"] < order["visualization"]
         assert order["visualization"] < order["resource"]
         assert order["resource"] < order["exercise"]
