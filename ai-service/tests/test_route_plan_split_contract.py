@@ -1,4 +1,4 @@
-"""T2 契约：意图决策只产 RouteDecision；计划构建不重猜意图；执行前裁决唯一。"""
+"""T2/T3 契约：意图决策 ≠ 计划构建；执行前裁决唯一；执行层不重判全局意图。"""
 
 import ast
 from pathlib import Path
@@ -12,11 +12,27 @@ from app.centers.route_decision import RouteDecision
 from app.centers.router_agent import RouterAgent
 from app.centers.schemas import CenterResult, CenterTask, ExecutionPlan
 from app.events.types import StreamEventType
-from app.services.capability_map import INTENT_CENTER_MAP
+from app.services.capability_map import CENTER_EXECUTION_ORDER, INTENT_CENTER_MAP
 
 APP_DIR = Path(__file__).resolve().parent.parent / "app"
 CENTERS_DIR = APP_DIR / "centers"
 
+# 执行层：只执行已确定的任务，不得依赖任何意图判定 / 计划构建模块
+EXECUTION_LAYER_FILES = [
+    "chat_task_dispatcher.py",
+    "auto_center.py",
+    "plan_center.py",
+    "resource_center.py",
+    "exercise_center.py",
+    "visualization_center.py",
+]
+INTENT_SIDE_MODULES = (
+    "app.centers.route_decision",
+    "app.centers.plan_builder",
+    "app.centers.router_agent",
+    "app.services.intent_extractor",
+    "app.services.capability_gate",
+)
 
 
 def _imports(path: Path) -> set[str]:
@@ -213,3 +229,29 @@ class TestExecutionGate:
         events = await _drain(dispatcher, plan)
         assert stub.calls == 1
         assert events[-1].type is StreamEventType.DONE
+
+
+# ── T3：执行层边界 ───────────────────────────────────────────────
+
+
+class TestExecutionLayerBoundary:
+    @pytest.mark.parametrize("filename", EXECUTION_LAYER_FILES)
+    def test_execution_layer_does_not_import_intent_side(self, filename):
+        mods = _imports(CENTERS_DIR / filename)
+        offenders = {
+            m for m in mods for t in INTENT_SIDE_MODULES if m == t or m.startswith(t + ".")
+        }
+        assert offenders == set(), f"{filename} 依赖意图判定侧：{offenders}"
+
+    def test_dispatcher_centers_match_execution_order_table(self):
+        dispatcher = ChatTaskDispatcher(use_mock_llm=True)
+        resolvable = {m for m in CENTER_EXECUTION_ORDER if dispatcher._center_for(m)}
+        assert resolvable == set(CENTER_EXECUTION_ORDER)
+
+    def test_every_mapped_center_is_resolvable_by_dispatcher(self):
+        dispatcher = ChatTaskDispatcher(use_mock_llm=True)
+        for intent, center in INTENT_CENTER_MAP.items():
+            assert dispatcher._center_for(center) is not None, (intent, center)
+
+    def test_unknown_mode_is_not_resolvable(self):
+        assert ChatTaskDispatcher(use_mock_llm=True)._center_for("__nope__") is None
