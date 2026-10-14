@@ -7,7 +7,7 @@ from langgraph.graph import StateGraph
 from app.agents.base_agent import BaseAgent
 from app.services.hallucination_guard import kb_verify
 from app.services.llm_service import create_llm
-from app.utils.prompt_loader import build_prompt, interpolate_variables
+from app.utils.prompt_loader import interpolate_variables
 
 logger = logging.getLogger(__name__)
 
@@ -79,8 +79,11 @@ class ExerciseAgent(BaseAgent):
             strategy_hint = "生成全新题目，覆盖用户尚未接触的知识点或更高难度。"
 
         conditions = {"warmup": purpose == "warmup_not_exam"}
-        plan_system = build_prompt(
-            "exercise_agent", "pipeline.yaml", conditions=conditions, key="plan_system"
+        # 走 _load_prompt（而非裸 build_prompt）：让平台安全人设挂在 **system 栏**。
+        # 修 _load_extra_prompt 之前，这段人设是被错误地粘进 user 消息里的；
+        # 纠正注入位置后必须在此显式补回，否则出题链路会完全失去平台身份约束。
+        plan_system = self._load_prompt(
+            "pipeline.yaml", conditions=conditions, key="plan_system"
         )
         plan_user_tpl = self._load_extra_prompt("pipeline.yaml", key="plan_user")
         user_prompt = interpolate_variables(
@@ -144,8 +147,9 @@ class ExerciseAgent(BaseAgent):
         questions = []
 
         conditions = {"warmup": purpose == "warmup_not_exam"}
-        quiz_system = build_prompt(
-            "exercise_agent", "pipeline.yaml", conditions=conditions, key="quiz_system"
+        # 同上：平台人设必须落在 system 栏，不能靠 user 模板夹带
+        quiz_system = self._load_prompt(
+            "pipeline.yaml", conditions=conditions, key="quiz_system"
         )
         quiz_user_tpl = self._load_extra_prompt("pipeline.yaml", key="quiz_user")
 

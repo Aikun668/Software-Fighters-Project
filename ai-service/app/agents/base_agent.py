@@ -87,29 +87,69 @@ class BaseAgent(ABC):
         self.logger = logging.getLogger(f"{module}.{agent_name}")
         self._compiled_graph = self.build_graph()
 
+    @staticmethod
+    def _is_user_role_key(key: str) -> bool:
+        """该 prompt 的 key 是否指向「用户消息」角色。
+
+        命名约定：key 含 ``user`` 的一律是用户消息模板
+        （``user`` / ``user_template`` / ``user_plan`` / ``plan_user`` /
+        ``quiz_user`` / ``implement_user`` …），其余是 system 角色
+        （``system`` / ``system_plan`` / ``implement_system`` …）。
+        """
+        return "user" in (key or "").lower()
+
     def _load_prompt(
         self,
         filename: str = "system.yaml",
         variables: dict | None = None,
         key: str = "system",
+        conditions: dict | None = None,
     ) -> str:
-        """加载 prompt 文件，支持 snippet / conditional / variable，自动前缀安全指令。"""
-        agent_prompt = build_prompt(
-            self.agent_name,
-            filename=filename,
-            variables=variables,
-            key=key,
-        )
-        return SAFETY_SYSTEM_PROMPT + "\n\n---\n\n" + agent_prompt
+        """加载 prompt 文件，支持 snippet / conditional / variable。
+
+        自动前缀安全指令的判定依据是 **key 的角色**，而不是「调用了哪个函数」：
+        只有 system 角色的提示词才代表平台身份（该带人设），
+        user 角色的提示词是**用户那一栏要说的话**，绝不能替用户宣称平台身份。
+        """
+        return self._render_prompt(filename, variables, key, conditions)
 
     def _load_extra_prompt(
         self,
         filename: str,
         variables: dict | None = None,
         key: str = "system",
+        conditions: dict | None = None,
     ) -> str:
-        """加载额外的 prompt 文件（如 extract.yaml）"""
-        return self._load_prompt(filename=filename, variables=variables, key=key)
+        """加载额外的 prompt 文件（如 extract.yaml）。
+
+        与 ``_load_prompt`` 同源：**是否注入平台人设由 key 的角色决定**。
+
+        历史缺陷：本方法曾无条件转发给 ``_load_prompt``，于是所有用
+        ``key="user_template"`` / ``key="plan_user"`` 之类取用户模板的调用点，
+        都会把 ``SAFETY_SYSTEM_PROMPT``（含"运行在人工智能课程教学平台中，
+        以人工智能课程为主"）粘进 **user 消息**。模型读到「用户自称是 AI 平台助手」，
+        即便用户要求出英语六级题，也会按 AI 课程出题 —— 这是"主题跑偏"的根因。
+        """
+        return self._render_prompt(filename, variables, key, conditions)
+
+    def _render_prompt(
+        self,
+        filename: str,
+        variables: dict | None,
+        key: str,
+        conditions: dict | None = None,
+    ) -> str:
+        """渲染提示词；system 角色前缀安全人设，user 角色保持原样。"""
+        agent_prompt = build_prompt(
+            self.agent_name,
+            filename=filename,
+            variables=variables,
+            conditions=conditions,
+            key=key,
+        )
+        if self._is_user_role_key(key):
+            return agent_prompt
+        return SAFETY_SYSTEM_PROMPT + "\n\n---\n\n" + agent_prompt
 
     def _build_llm(self, config: ModelConfig) -> Any:
         """从 ModelConfig 构建 LLM 实例。"""
