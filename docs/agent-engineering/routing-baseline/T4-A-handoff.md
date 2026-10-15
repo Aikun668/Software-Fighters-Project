@@ -120,11 +120,12 @@
 独立验收（静态审查 + AST import 检查 + 契约测试）结论：旁路阶段六维度中五维通过，
 发现两处需在**启用前**修正（均不影响已交付的旁路阶段，因为默认 off）：
 
-1. **接管缺置信度门槛**（`chat_center._takeover_plan`）：`semantic_relabel` 返回时
-   `intents = [r.intent for r in result.intents]` 丢弃了 `r.confidence`，接管逻辑只看
-   `is_clear` + `len(intents)==1`，不设置信度下限。这是 C108「举个例子」被 mock 腿
-   误判为 resource 的根因机制——低置信的单一意图也会被接管。启用前应让
-   `semantic_relabel` 携带置信度、接管要求最高意图置信 ≥ 阈值。
+1. **接管的置信度门槛建立在未校准的规则分上**（`chat_center._takeover_plan` +
+   `semantic_router.semantic_relabel`）：接管靠 `is_clear` 把关，而 `IntentExtractor` mock 腿的
+   `is_clear = best_confidence >= 0.5`，其 `confidence` 是 `score*0.7+0.3` 换算的**规则分伪概率**，
+   未经校准（`RouteCandidate.rule_score` 明确"不是概率、无校准器"）。于是「举个例子」单命中
+   "例子"就得到 0.597，跨过 0.5 门槛被当成"清晰"的 resource_gen——这正是 C108 误判的机制。
+   启用前应接真 LLM 语义腿（其 `confidence` 由模型给出、更可信），并实测阈值；mock 腿仅作离线占位。
 2. **一条弱断言**（`test_semantic_router_contract.py::test_timeout_budget_is_one_second`）：
    它只断言常量 `SEMANTIC_TIMEOUT_SEC == 1.0`（测字面量而非行为）；真正的超时行为已由
    `test_timeout_falls_back_without_raising`（永不完成 Future 触发真实超时）覆盖。建议删除
