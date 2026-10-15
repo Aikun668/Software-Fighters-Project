@@ -18,7 +18,7 @@ from app.centers.resource_center import ResourceCenter
 from app.centers.chat_task_dispatcher import ChatTaskDispatcher
 from app.centers.plan_builder import PlanBuilder
 from app.centers.router_agent import RouterAgent
-from app.centers.schemas import ExecutionPlan
+from app.centers.schemas import CenterTask, ExecutionPlan
 from app.centers.visualization_center import VisualizationCenter
 from app.events.types import (
     StreamEvent,
@@ -279,6 +279,55 @@ class ChatCenter:
         plan.tasks = reordered
         return plan
 
+    def _compound_plan_from_semantic(
+        self,
+        message: str,
+        semantic_result: tuple | None,
+        student_profile: dict | None,
+        context: dict | None,
+        max_intents: int,
+    ) -> ExecutionPlan | None:
+        """T4-B：语义腿多意图 → 按返回顺序建多任务 plan（仅 t4b_enabled=True 时调用）。
+
+        真模型语义腿对复合句已按表达顺序返回多意图（探针 5/5 对齐），故直接按语义返回顺序
+        建任务。保守：仅接受 ≥2 个意图且每个意图映射到合法 center；否则返回 None 走原路径。
+        """
+        if not self.t4b_enabled or semantic_result is None:
+            return None
+        intents, confidences, is_clear, _inquiry, _latency, err = semantic_result
+        if err is not None or not is_clear:
+            return None
+        if len(intents) < 2:
+            return None
+
+        ctx = (context or {})
+        tasks: list[Any] = []
+        for idx, intent in enumerate(intents):
+            center = INTENT_CENTER_MAP.get(intent)
+            if not center:
+                return None  # 含未知意图则整体放弃（保守）
+            conf = confidences[idx] if idx < len(confidences) else 0.0
+            tasks.append(CenterTask(
+                mode=center,
+                intent=intent,
+                input=message,
+                params={},
+                context={**ctx, "student_profile": student_profile or {}},
+                sequence=idx,
+                confidence=conf,
+            ))
+
+        return ExecutionPlan(
+            tasks=tasks[:max_intents],
+            is_clear=True,
+            intent_meta={
+                "raw_message": message,
+                "strategy": "t4b_compound_semantic",
+                "intents": [t.intent for t in tasks],
+            },
+            max_intents=max_intents,
+        )
+
     async def route(
         self,
         message: str,
@@ -338,6 +387,21 @@ class ChatCenter:
             audit_meta = {**audit_meta, "compound_order": False}
 
         if decision.kind is CapabilityKind.NORMAL_CHAT:
+            # T4-B：语义腿多意图 → 多任务 plan（救回复合句第二诉求）
+            compound_plan = self._compound_plan_from_semantic(
+                message=message,
+                semantic_result=semantic_result,
+                student_profile=student_profile,
+                context=context,
+                max_intents=max_intents,
+            )
+            if compound_plan is not None:
+                return self._plan_builder.annotate_route(
+                    compound_plan,
+                    route=decision.kind.value,
+                    reason=decision.reason,
+                    audit_meta=audit_meta,
+                )
             # 启用接管（保守）：不确定态且语义给出唯一明确能力 → 接管；
             # 否则回落原 NORMAL_CHAT。默认 t4a_enabled=False 时恒不接管。
             takeover = self._takeover_plan(
@@ -366,6 +430,23 @@ class ChatCenter:
             )
 
         router = self._get_router()
+
+        # T4-B：语义腿多意图 → 多任务 plan（复合句 gate 命中能力也走这里救回第二诉求）
+        compound_plan = self._compound_plan_from_semantic(
+            message=message,
+            semantic_result=semantic_result,
+            student_profile=student_profile,
+            context=context,
+            max_intents=max_intents,
+        )
+        if compound_plan is not None:
+            return self._plan_builder.annotate_route(
+                compound_plan,
+                route=decision.kind.value,
+                reason=decision.reason,
+                audit_meta=audit_meta,
+            )
+
         plan = self._plan_builder.build(
             router.decide(message, mode),
             student_profile=student_profile,

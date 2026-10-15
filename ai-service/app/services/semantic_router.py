@@ -96,6 +96,16 @@ def classify(
             gate_confidence=gate_confidence,
         )
 
+    # T4-B：明确复合表达（"先讲再练""讲义外加题"）即使 gate 命中能力，也判 UNCERTAIN，
+    # 让语义腿返回多意图、按表达顺序建多任务，避免第二诉求被吞。确定性规则，不加 LLM。
+    if detect_compound_order(message):
+        return SemanticDecision(
+            state=RouteState.UNCERTAIN,
+            gate_kind=gate_kind,
+            gate_reason=gate_reason,
+            gate_confidence=gate_confidence,
+        )
+
     if gate_reason.startswith("capability_evidence:") or gate_reason.startswith(
         "explicit_mode:"
     ):
