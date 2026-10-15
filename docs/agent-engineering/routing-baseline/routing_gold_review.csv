@@ -82,7 +82,7 @@ C080,诊断与画像相关,测一下我对操作系统的掌握程度,auto,待�
 C081,隐式需求非标准表达,感觉二叉树这块还是不太懂，多来点,auto,待澄清,tutor_question|exercise_gen,tutor_question(1)>exercise_gen(2),是,「多来点」指代不明（讲解 or 练习），需追问。,—,—,—,POLICY_UNDECIDED,
 C082,隐式需求非标准表达,今天讲的贪心算法有点晕,auto,待澄清,tutor_question,,是,情绪表达（有点晕），未明确请求，建议追问或默认讲解。,—,—,—,POLICY_UNDECIDED,
 C083,隐式需求非标准表达,那个三次握手我老记不住,auto,待澄清,tutor_question|visualize,tutor_question(1)>visualize(2),是,「记不住」可讲解/图示/闪卡，需追问。,—,—,—,POLICY_UNDECIDED,
-C084,隐式需求非标准表达,能不能搞点题练练,auto,EXERCISE,exercise_gen,,否,隐式出题表达（搞点题）；词表外延是否覆盖待裁决。,—,—,—,POLICY_UNDECIDED,
+C084,隐式需求非标准表达,能不能搞点题练练,auto,EXERCISE,exercise_gen,,否,隐式出题表达（搞点题）；词表外延是否覆盖待裁决。,—,—,—,POLICY_UNDECIDED,同意
 C085,隐式需求非标准表达,快期末了，帮我准备点东西,auto,待澄清,resource_gen|exercise_gen|learning_path,resource_gen(1)>exercise_gen(2)>learning_path(3),是,「准备点东西」诉求不明，需追问。,—,—,—,POLICY_UNDECIDED,
 C086,隐式需求非标准表达,数据结构好难啊,auto,待澄清,tutor_question,,是,纯情绪表达（好难啊），未表达诉求，需追问。,—,—,—,POLICY_UNDECIDED,
 C087,隐式需求非标准表达,想复习一下排序算法,auto,待澄清,tutor_question|resource_gen,tutor_question(1)>resource_gen(2),是,「复习」可为讲解或资料，需追问或定默认。,—,—,—,POLICY_UNDECIDED,
@@ -114,21 +114,21 @@ C112,多轮上下文与指代,有没有配套的练习题,auto,EXERCISE,exercise
 C113,多轮上下文与指代,能用简单的话再讲讲吗,auto,NORMAL_CHAT,tutor_question,,否,承接上文，请求更通俗讲解，属答疑。,—,—,—,DRAFT_CONFIRMED,
 C114,多轮上下文与指代,反过来，先学基础吧,auto,PLAN,learning_path,,否,调整既有学习路径顺序。,—,—,—,DRAFT_CONFIRMED,
 C115,多轮上下文与指代,帮我整理成一张图,auto,VISUALIZATION,visualize,,否,把前文内容整理成图。,—,—,—,DRAFT_CONFIRMED,
-C116,复合任务,解释一下什么是B+树，然后出5道题,auto,EXERCISE,tutor_question|exercise_gen,tutor_question(1)>exercise_gen(2),是,复合任务：讲解 B+树 + 出题，含两个诉求，需多中心编排。,—,—,—,POLICY_UNDECIDED,
-C117,复合任务,先帮我讲讲快排，再给我几道练习题,auto,EXERCISE,tutor_question|exercise_gen,tutor_question(1)>exercise_gen(2),是,复合任务：讲解快排 + 练习，含两个诉求。,—,—,—,POLICY_UNDECIDED,
-C118,复合任务,什么是死锁，顺便出几道题考考我,auto,EXERCISE,tutor_question|exercise_gen,tutor_question(1)>exercise_gen(2),是,复合任务：讲解死锁 + 出题，含两个诉求。,—,—,—,POLICY_UNDECIDED,
-C119,复合任务,帮我制定一个学习计划，并且画个流程图,auto,PLAN,learning_path|visualize,learning_path(1)>visualize(2),是,复合任务：计划 + 流程图，跨中心（PLAN+VISUALIZATION）。,—,—,—,POLICY_UNDECIDED,
-C120,复合任务,给我一份讲义，外加10道练习题,auto,RESOURCE,resource_gen|exercise_gen,resource_gen(1)>exercise_gen(2),是,复合任务：讲义 + 练习，跨中心（RESOURCE+EXERCISE）。,—,—,—,POLICY_UNDECIDED,
-C121,复合任务,讲讲TCP三次握手，画个图,auto,VISUALIZATION,tutor_question|visualize,tutor_question(1)>visualize(2),是,复合任务：讲解 + 配图，跨中心。,—,—,—,POLICY_UNDECIDED,
+C116,复合任务,解释一下什么是B+树，然后出5道题,auto,EXERCISE,tutor_question|exercise_gen,tutor_question(1)>exercise_gen(2),是,复合任务：讲解 B+树 + 出题，含两个诉求，需多中心编排。,—,—,—,POLICY_UNDECIDED,同意
+C117,复合任务,先帮我讲讲快排，再给我几道练习题,auto,EXERCISE,tutor_question|exercise_gen,tutor_question(1)>exercise_gen(2),是,复合任务：讲解快排 + 练习，含两个诉求。,—,—,—,POLICY_UNDECIDED,同意
+C118,复合任务,什么是死锁，顺便出几道题考考我,auto,EXERCISE,tutor_question|exercise_gen,tutor_question(1)>exercise_gen(2),是,复合任务：讲解死锁 + 出题，含两个诉求。,—,—,—,POLICY_UNDECIDED,同意
+C119,复合任务,帮我制定一个学习计划，并且画个流程图,auto,PLAN,learning_path|visualize,learning_path(1)>visualize(2),是,复合任务：计划 + 流程图，跨中心（PLAN+VISUALIZATION）。,—,—,—,POLICY_UNDECIDED,同意
+C120,复合任务,给我一份讲义，外加10道练习题,auto,RESOURCE,resource_gen|exercise_gen,resource_gen(1)>exercise_gen(2),是,复合任务：讲义 + 练习，跨中心（RESOURCE+EXERCISE）。,—,—,—,POLICY_UNDECIDED,同意
+C121,复合任务,讲讲TCP三次握手，画个图,auto,VISUALIZATION,tutor_question|visualize,tutor_question(1)>visualize(2),是,复合任务：讲解 + 配图，跨中心。,—,—,—,POLICY_UNDECIDED,同意
 C122,复合任务,我基础比较差，帮我做个诊断再制定计划,auto,PLAN,diagnose|profile_building|learning_path,diagnose(1)>profile_building(2)>learning_path(3),是,复合任务：诊断 + 画像 + 计划，三中心链；含 diagnose/profile 待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,
 C123,复合任务,求解这道题，然后帮我找几个类似的题目,auto,EXERCISE,solve_problem|exercise_gen,solve_problem(1)>exercise_gen(2),是,"复合任务：解题 + 找类似题；{solve_problem, exercise_gen} 互斥需裁决。",是,缺失,待裁决,POLICY_UNDECIDED,
-C124,复合任务,生成一份思维导图，再出几道题,auto,VISUALIZATION,visualize|exercise_gen,visualize(1)>exercise_gen(2),是,复合任务：思维导图 + 出题，跨中心。,—,—,—,POLICY_UNDECIDED,
-C125,复合任务,什么是过拟合，画个示意图说明一下,auto,VISUALIZATION,tutor_question|visualize,tutor_question(1)>visualize(2),是,复合任务：讲解 + 图示，跨中心。,—,—,—,POLICY_UNDECIDED,
-C126,复合任务,帮我规划学习路线，并推荐一些资料,auto,PLAN,learning_path|resource_gen,learning_path(1)>resource_gen(2),是,复合任务：学习路线 + 资料，跨中心（PLAN+RESOURCE）。,—,—,—,POLICY_UNDECIDED,
-C127,复合任务,出5道题，顺便把知识点做成知识图谱,auto,EXERCISE,exercise_gen|knowledge_graph,exercise_gen(1)>knowledge_graph(2),是,复合任务：出题 + 知识图谱，跨中心（EXERCISE+VISUALIZATION）。,—,—,—,POLICY_UNDECIDED,
+C124,复合任务,生成一份思维导图，再出几道题,auto,VISUALIZATION,visualize|exercise_gen,visualize(1)>exercise_gen(2),是,复合任务：思维导图 + 出题，跨中心。,—,—,—,POLICY_UNDECIDED,同意
+C125,复合任务,什么是过拟合，画个示意图说明一下,auto,VISUALIZATION,tutor_question|visualize,tutor_question(1)>visualize(2),是,复合任务：讲解 + 图示，跨中心。,—,—,—,POLICY_UNDECIDED,同意
+C126,复合任务,帮我规划学习路线，并推荐一些资料,auto,PLAN,learning_path|resource_gen,learning_path(1)>resource_gen(2),是,复合任务：学习路线 + 资料，跨中心（PLAN+RESOURCE）。,—,—,—,POLICY_UNDECIDED,同意
+C127,复合任务,出5道题，顺便把知识点做成知识图谱,auto,EXERCISE,exercise_gen|knowledge_graph,exercise_gen(1)>knowledge_graph(2),是,复合任务：出题 + 知识图谱，跨中心（EXERCISE+VISUALIZATION）。,—,—,—,POLICY_UNDECIDED,同意
 C128,复合任务,解释一下动态规划，给我个代码示例,auto,RESOURCE,tutor_question|code_example,tutor_question(1)>code_example(2),是,复合任务：讲解 + 代码示例，跨中心；含 code_example 待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,
 C129,复合任务,诊断一下我的薄弱点，然后生成针对性的练习,auto,EXERCISE,diagnose|exercise_gen,diagnose(1)>exercise_gen(2),是,复合任务：诊断 + 针对性练习；含 diagnose 待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,
-C130,复合任务,帮我找资料，再制定一个学习计划,auto,PLAN,resource_gen|learning_path,resource_gen(1)>learning_path(2),是,复合任务：资料 + 计划，跨中心（RESOURCE+PLAN）。,—,—,—,POLICY_UNDECIDED,
+C130,复合任务,帮我找资料，再制定一个学习计划,auto,PLAN,resource_gen|learning_path,resource_gen(1)>learning_path(2),是,复合任务：资料 + 计划，跨中心（RESOURCE+PLAN）。,—,—,—,POLICY_UNDECIDED,同意
 C131,否定表达引用内容干扰,不要给我出题，我只要讲解,auto,NORMAL_CHAT,tutor_question,,否,明确否定出题，只要讲解，属答疑。,—,—,—,DRAFT_CONFIRMED,
 C132,否定表达引用内容干扰,不用画图，文字说明就行,auto,NORMAL_CHAT,tutor_question,,否,明确否定画图，要文字说明，属答疑。,—,—,—,DRAFT_CONFIRMED,
 C133,否定表达引用内容干扰,我不是问怎么出题，我是问这道题怎么做,auto,待裁决,solve_problem,,否,否定「怎么出题」，真实诉求=解这道题；含 solve_problem 待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,
