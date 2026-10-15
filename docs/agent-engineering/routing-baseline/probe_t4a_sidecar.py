@@ -87,7 +87,7 @@ def t4a_view(plan) -> dict:
         "semantic_state": meta.get("semantic_state"),
         "route_source": meta.get("route_source"),
         "semantic_called": meta.get("semantic_called"),
-        "semantic_latency_ms": meta.get("semantic_latency_ms"),
+        # latency_ms 是运行期观测，不进产物（否则每次重跑产生噪声 diff，破坏可复现性）
         "semantic_error": meta.get("semantic_error"),
         "semantic_intents": meta.get("semantic_intents"),
         "semantic_is_clear": meta.get("semantic_is_clear"),
