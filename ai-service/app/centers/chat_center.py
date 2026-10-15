@@ -65,6 +65,7 @@ class ChatCenter:
         use_mock_llm: bool = False,
         t4a_enabled: bool = False,
         semantic_extractor: Any | None = None,
+        t4b_enabled: bool = False,
     ):
         self.router_agent = router_agent
         self.dispatcher = dispatcher
@@ -79,6 +80,8 @@ class ChatCenter:
         # 其 use_mock 跟随 INTENT_USE_LLM 环境变量，离线时走确定性关键词、不真调模型）。
         self.t4a_enabled = t4a_enabled
         self.semantic_extractor = semantic_extractor
+        # T4-B：复合顺序重排开关。默认关闭（旁路只记录）；启用后按用户表达顺序重排多任务。
+        self.t4b_enabled = t4b_enabled
     def _get_router(self) -> RouterAgent:
         if self.router_agent is None:
             self.router_agent = RouterAgent(intent_extractor=IntentExtractor())
@@ -238,6 +241,44 @@ class ChatCenter:
             max_intents=max_intents,
         )
 
+    def _reorder_by_compound(self, message: str, plan: ExecutionPlan) -> ExecutionPlan:
+        """T4-B：按用户明确表达的顺序重排多任务（确定性、无 LLM）。
+
+        仅当 `detect_compound_order` 识别出明确复合顺序、且任务数 ≥2、且各子句判出的
+        意图与已识别任务意图**集合一致**时才重排。保守：只重排顺序，不增删任务、不引入
+        子句新判出的意图（避免误加）。不满足条件则原样返回。
+        """
+        subclauses = detect_compound_order(message)
+        if not subclauses or len(plan.tasks) < 2:
+            return plan
+
+        router = self._get_router()
+        # 对每个子句粗判意图（仅取候选第一名），得到用户表达顺序的意图序列
+        ordered_intents: list[str] = []
+        for sub in subclauses:
+            d = router.decide(sub)
+            if d.candidates:
+                ordered_intents.append(d.candidates[0].intent)
+
+        if len(ordered_intents) < 2:
+            return plan
+
+        # 任务当前意图集合（保持多任务去重后的有序序列）
+        task_intents = [t.intent for t in plan.tasks]
+        # 仅当「子句判出的意图」与「任务意图」集合一致时才重排（否则保守不动）
+        if set(ordered_intents) != set(task_intents):
+            return plan
+
+        # 按子句顺序映射到任务：对每个子句意图，取对应任务
+        by_intent = {t.intent: t for t in plan.tasks}
+        reordered = [by_intent[i] for i in ordered_intents if i in by_intent]
+        if len(reordered) != len(plan.tasks):
+            return plan
+        for idx, t in enumerate(reordered):
+            t.sequence = idx
+        plan.tasks = reordered
+        return plan
+
     async def route(
         self,
         message: str,
@@ -342,6 +383,10 @@ class ChatCenter:
                 context=context,
                 max_intents=max_intents,
             )
+        # T4-B：启用时按用户表达顺序重排多任务（纯规则、超保守）
+        if self.t4b_enabled:
+            plan = self._reorder_by_compound(message, plan)
+
         # 能力路径同样带观测元数据，供 execute 边界产出审计日志
         return self._plan_builder.annotate_route(
             plan,
