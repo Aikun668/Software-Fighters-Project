@@ -11,6 +11,9 @@ class CenterTask:
     context: dict = field(default_factory=dict)
     sequence: int = 0
     confidence: float = 0.0
+    # T4-B：本任务依赖的上游任务 sequence（仅当真依赖时非空；
+    # 执行时由 Dispatcher 把上游 CenterResult 注入 context["upstream_results"]）
+    depends_on: list[int] = field(default_factory=list)
 
 
 @dataclass

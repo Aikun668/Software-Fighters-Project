@@ -192,6 +192,21 @@ class ChatTaskDispatcher:
         run_emitter.emit(ProgressEventType.RUN_STARTED, tasks=total)
 
         for idx, task in enumerate(plan.tasks):
+            # T4-B：数据依赖注入。执行下游任务前，把其 depends_on 指向的上游
+            # CenterResult 结构化注入 task.context["upstream_results"]（按 sequence）。
+            if getattr(task, "depends_on", None):
+                upstream = [
+                    r for r in aggregated.results if r.sequence in task.depends_on
+                ]
+                if upstream:
+                    task.context = {
+                        **task.context,
+                        "upstream_results": [
+                            {"mode": r.mode, "intent": r.intent, "payload": r.payload}
+                            for r in upstream
+                        ],
+                    }
+
             progress = round((idx / total) * 100) / 100 if total else 0.0
             yield center_start_event(
                 center=task.mode,
