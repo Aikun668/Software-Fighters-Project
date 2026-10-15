@@ -191,6 +191,10 @@ class ChatTaskDispatcher:
         run_emitter.subscribe(_forward_progress)
         run_emitter.emit(ProgressEventType.RUN_STARTED, tasks=total)
 
+        # T4-B 缺口④：记录已失败任务的 sequence；下游 depends_on 指向失败任务时阻断，
+        # 独立任务（无依赖）继续执行，避免"失败后仍拿坏结果拼装"。
+        failed_sequences: set[int] = set()
+
         for idx, task in enumerate(plan.tasks):
             # T4-B：数据依赖注入。执行下游任务前，把其 depends_on 指向的上游
             # CenterResult 结构化注入 task.context["upstream_results"]（按 sequence）。
@@ -206,6 +210,21 @@ class ChatTaskDispatcher:
                             for r in upstream
                         ],
                     }
+
+            # T4-B 缺口④：上游失败 → 阻断有依赖的后继（跳过，发 skip 语义的 error 事件）
+            if getattr(task, "depends_on", None) and (failed_sequences & set(task.depends_on)):
+                yield error_event(
+                    stage=task.mode,
+                    message="上游任务失败，已跳过本步骤",
+                )
+                aggregated.results.append(CenterResult(
+                    mode=task.mode,
+                    intent=task.intent,
+                    event_type="error",
+                    error="上游任务失败，已跳过本步骤",
+                    sequence=task.sequence,
+                ))
+                continue
 
             progress = round((idx / total) * 100) / 100 if total else 0.0
             yield center_start_event(
@@ -305,6 +324,7 @@ class ChatTaskDispatcher:
 
             # 出错时不发 finalize（partial 对错误事件无意义，走 error_event）
             if result.error:
+                failed_sequences.add(task.sequence)
                 yield error_event(stage=result.mode, message=result.error)
             else:
                 # ── B1 终态事件：本中心**确实发过 token** 时带 partial=True，
