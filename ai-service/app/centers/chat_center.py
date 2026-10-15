@@ -35,6 +35,7 @@ from app.services.semantic_router import (
     SEMANTIC_TAKEOVER_CONFIDENCE,
     RouteState,
     classify,
+    detect_compound_order,
     semantic_relabel,
 )
 from app.services.routing_audit import (
@@ -282,6 +283,18 @@ class ChatCenter:
             gate_confidence=decision.confidence,
         )
         audit_meta = {**audit_meta, **semantic_meta}
+
+        # T4-B 旁路：复合表达切分（只记审计，不改执行）。detect_compound_order 是确定性
+        # 规则，切出的子句按用户表达顺序；仅写入 intent_meta 供对照表，不进脱敏审计白名单。
+        compound_parts = detect_compound_order(message)
+        if compound_parts:
+            audit_meta = {
+                **audit_meta,
+                "compound_order": True,
+                "compound_subclauses": compound_parts,
+            }
+        else:
+            audit_meta = {**audit_meta, "compound_order": False}
 
         if decision.kind is CapabilityKind.NORMAL_CHAT:
             # 启用接管（保守）：不确定态且语义给出唯一明确能力 → 接管；
