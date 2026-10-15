@@ -32,6 +32,13 @@ class TestDetectReferent:
         assert detect_referent("什么是进程调度") is False
         assert detect_referent("") is False
 
+    def test_transform_not_referent(self):
+        # 产物变换类（句子含新意图关键词）不该命中「复用上轮意图」，
+        # 应走语义腿判新意图
+        assert detect_referent("有没有配套的练习题") is False
+        assert detect_referent("帮我整理成一张图") is False
+        assert detect_referent("给我个代码实现") is False
+
 
 class TestReferentPlan:
     def test_reuses_prev_exercise(self):
