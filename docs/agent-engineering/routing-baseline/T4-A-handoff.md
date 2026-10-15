@@ -114,3 +114,24 @@
 
 按 `gold_ask_clarify`：33 条「是」（需澄清）、25 条「否」。
 按三态：uncertain 38 / direct_capability 11 / direct_chat 8 / empty 1。
+
+## 九、验收自查发现（旁路阶段已交付，以下为启用前待修项）
+
+独立验收（静态审查 + AST import 检查 + 契约测试）结论：旁路阶段六维度中五维通过，
+发现两处需在**启用前**修正（均不影响已交付的旁路阶段，因为默认 off）：
+
+1. **接管缺置信度门槛**（`chat_center._takeover_plan`）：`semantic_relabel` 返回时
+   `intents = [r.intent for r in result.intents]` 丢弃了 `r.confidence`，接管逻辑只看
+   `is_clear` + `len(intents)==1`，不设置信度下限。这是 C108「举个例子」被 mock 腿
+   误判为 resource 的根因机制——低置信的单一意图也会被接管。启用前应让
+   `semantic_relabel` 携带置信度、接管要求最高意图置信 ≥ 阈值。
+2. **一条弱断言**（`test_semantic_router_contract.py::test_timeout_budget_is_one_second`）：
+   它只断言常量 `SEMANTIC_TIMEOUT_SEC == 1.0`（测字面量而非行为）；真正的超时行为已由
+   `test_timeout_falls_back_without_raising`（永不完成 Future 触发真实超时）覆盖。建议删除
+   或改写成行为断言。
+
+通过的五维：所有权契约（semantic_router 模块级零决策模块 import，intent_extractor 为函数内
+延迟导入）、旁路不改执行（指纹 `2624a51be09b9d5e` 实证）、审计脱敏（semantic_intents 不进日志，
+白名单双保险）、预算铁律（asyncio.timeout(1.0)+兜底，每请求≤1 次两侧均有测试）、
+总计划「不得把没命中关键词=明确聊天」（`_is_clearly_chat` 只认明确疑问/否定/寒暄，其余
+`uncertain`）。
