@@ -130,18 +130,19 @@
 通过的五维：所有权契约、旁路不改执行（指纹 `2624a51be09b9d5e`）、审计脱敏、预算铁律、
 总计划「不得把没命中关键词=明确聊天」。
 
-## 十、真模型演练现状（第二项，卡在缺 key）
+## 十、真模型演练（第二项，用户已补 key）
 
-真 LLM 语义腿（`IntentExtractor(use_mock=False)` / `INTENT_USE_LLM=1`）依赖
-`DEEPSEEK_API_KEY`，但本机 `.env` 只配了 `DEEPSEEK_BASE_URL` / `DEEPSEEK_MODEL_CHAT` /
-`DEEPSEEK_MODEL_REASONER`，**没有 API key**（`MINIMAX_API_KEY` 也没有）。
+真 LLM 语义腿（`IntentExtractor(use_mock=False)`）已连通（用户补了 `DEEPSEEK_API_KEY`），
+`preview_t4a_real_llm.py` 对 15 条代表性消息实测：
 
-实测结论（`_env_mock_flag()=False`、`get_llm_service()` 默认真调）：
-- 缺 key 时 `extract_multi` **安全兜底不崩**：返回 `tutor_question / is_clear=False`，
-  日志记 `Multi-intent extraction failed`（T4-A「模型不可用→安全兜底」铁律成立）。
-- 但 `_extract_multi_llm` 内部吞了异常、返回 fallback，`semantic_relabel` 的 `semantic_error`
-  因此是 None（把"模型挂了"当成"判出 tutor_question"），审计会失真——这是 `IntentExtractor`
-  既有行为，非 T4-A 引入，留待接真 key 后一并处理。
+- **判断质量好**：明确能力句置信 0.9~0.98（"出5道题"→exercise 0.98、"画流程图"→visualize 0.98、
+  "代码示例"→resource 0.9）；不确定句正确给低置信（"数据好难"0.3、"举个例子"0.3 → is_clear=False，
+  **不再误判 C108**，印证 mock 腿误判是真模型可解决的）。
+- **时延超预算**：p50≈933ms、p90≈1278ms、p95≈1506ms、max≈1506ms；15 条里 6 条 >1000ms。
+  → 目标「p95 ≤ 1000ms」当前真模型达不到；`SEMANTIC_TIMEOUT_SEC=1.0` 会打断约 4 成慢请求，
+    让它们走兜底（判不出来）。
 
-**结论：真模型演练需要 DEEPSEEK_API_KEY 才能真正跑「p95 时延 + 判断质量」**，否则只能
-验证到"缺 key 兜底"这一层。
+**待产品拍板**：时延预算二选一——
+  (a) 放宽到 p95 ≤ 1.5s、超时提到 2.0s（判断最全，但首字时延变长）；
+  (b) 保持 1.0s 超时（预算严，但约 4 成不确定请求因超时兜底、判不出来）。
+本机实测值已记录，`SEMANTIC_TIMEOUT_SEC` 尚未改动，等你定。
