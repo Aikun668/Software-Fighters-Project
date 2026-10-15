@@ -74,6 +74,8 @@
 - `probe_t4a_sidecar.py` + `routing_t4a_sidecar.jsonl`（140 条旁路数据）
 - `build_t4a_compare.py` + `routing_t4a_compare.csv`（旧 vs Gold 对照表）
 - `list_t4a_undecided.py`（58 条待裁决清单，按三态分组）
+- `build_t4a_worklist.py` + `routing_t4a_undecided_worklist.csv`（58 条裁决工作单，
+  Excel 可直接打开，`reviewer_decision` 列待人工填）
 
 ## 六、验证
 
