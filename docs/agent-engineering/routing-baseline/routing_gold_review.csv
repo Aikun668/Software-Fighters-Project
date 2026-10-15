@@ -14,16 +14,16 @@ C012,普通概念答疑,讲讲虚拟内存是干嘛的,auto,NORMAL_CHAT,tutor_qu
 C013,普通概念答疑,面向对象里的多态到底是什么意思,auto,NORMAL_CHAT,tutor_question,,否,概念/原理提问，无能力证据，属默认答疑。,—,—,—,DRAFT_CONFIRMED,
 C014,普通概念答疑,为什么浮点数会有精度问题,auto,NORMAL_CHAT,tutor_question,,否,概念/原理提问，无能力证据，属默认答疑。,—,—,—,DRAFT_CONFIRMED,
 C015,普通概念答疑,哈希表和红黑树分别适合什么场景,auto,NORMAL_CHAT,tutor_question,,否,概念/原理提问，无能力证据，属默认答疑。,—,—,—,DRAFT_CONFIRMED,
-C016,解答已有题目,帮我解一下这道题，求sinx除以x在x趋近于0时的极限,auto,待裁决,solve_problem,,否,求解已有题目；solve_problem 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,
-C017,解答已有题目,这道物理题怎么做，一个物体从20米高空自由落体，落地速度多少,auto,待裁决,solve_problem,,否,求解已有题目；solve_problem 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,
-C018,解答已有题目,帮我算一下这个积分，x的平方从0积到1,auto,待裁决,solve_problem,,否,求解已有题目；solve_problem 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,
-C019,解答已有题目,这题我不会，已知a加b等于5，ab等于6，求a方加b方,auto,待裁决,solve_problem,,否,求解已有题目；solve_problem 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,
-C020,解答已有题目,求解这个方程，2x加3等于11,auto,待裁决,solve_problem,,否,求解已有题目；solve_problem 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,
-C021,解答已有题目,帮我推导一下这个公式，E等于mc方,auto,待裁决,solve_problem,,否,求解已有题目；solve_problem 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,
-C022,解答已有题目,这道证明题怎么做，证明根号2是无理数,auto,待裁决,solve_problem,,否,求解已有题目；solve_problem 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,
-C023,解答已有题目,这道选择题答案是B吗，我不太确定,auto,待裁决,tutor_question,,是,核对选择题答案、且未提供题面（参数不足）；意图处于答疑/解题边界，需裁决。,—,—,—,POLICY_UNDECIDED,
-C024,解答已有题目,帮我把这道概率题算一下，抛三次硬币恰好两次正面,auto,待裁决,solve_problem,,否,求解已有题目；solve_problem 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,
-C025,解答已有题目,这道题的第二问卡住了，帮我看看思路,auto,待裁决,solve_problem,,是,题面缺失（无上文/无图片），需先追问补全题目。,是,缺失,待裁决,POLICY_UNDECIDED,
+C016,解答已有题目,帮我解一下这道题，求sinx除以x在x趋近于0时的极限,auto,NORMAL_CHAT,solve_problem,,否,求解已有题目；solve_problem 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,同意独立意图 solve_problem；一级无入口走答疑底座，二级识别解题
+C017,解答已有题目,这道物理题怎么做，一个物体从20米高空自由落体，落地速度多少,auto,NORMAL_CHAT,solve_problem,,否,求解已有题目；solve_problem 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,同意独立意图 solve_problem；一级无入口走答疑底座，二级识别解题
+C018,解答已有题目,帮我算一下这个积分，x的平方从0积到1,auto,NORMAL_CHAT,solve_problem,,否,求解已有题目；solve_problem 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,同意独立意图 solve_problem；一级无入口走答疑底座，二级识别解题
+C019,解答已有题目,这题我不会，已知a加b等于5，ab等于6，求a方加b方,auto,NORMAL_CHAT,solve_problem,,否,求解已有题目；solve_problem 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,同意独立意图 solve_problem；一级无入口走答疑底座，二级识别解题
+C020,解答已有题目,求解这个方程，2x加3等于11,auto,NORMAL_CHAT,solve_problem,,否,求解已有题目；solve_problem 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,同意独立意图 solve_problem；一级无入口走答疑底座，二级识别解题
+C021,解答已有题目,帮我推导一下这个公式，E等于mc方,auto,NORMAL_CHAT,solve_problem,,否,求解已有题目；solve_problem 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,同意独立意图 solve_problem；一级无入口走答疑底座，二级识别解题
+C022,解答已有题目,这道证明题怎么做，证明根号2是无理数,auto,NORMAL_CHAT,solve_problem,,否,求解已有题目；solve_problem 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,同意独立意图 solve_problem；一级无入口走答疑底座，二级识别解题
+C023,解答已有题目,这道选择题答案是B吗，我不太确定,auto,待澄清,tutor_question,,是,核对选择题答案、且未提供题面（参数不足）；意图处于答疑/解题边界，需裁决。,—,—,—,POLICY_UNDECIDED,追问补全题面后解题
+C024,解答已有题目,帮我把这道概率题算一下，抛三次硬币恰好两次正面,auto,NORMAL_CHAT,solve_problem,,否,求解已有题目；solve_problem 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,同意独立意图 solve_problem；一级无入口走答疑底座，二级识别解题
+C025,解答已有题目,这道题的第二问卡住了，帮我看看思路,auto,待澄清,solve_problem,,是,题面缺失（无上文/无图片），需先追问补全题目。,是,缺失,待裁决,POLICY_UNDECIDED,追问补全题面后解题
 C026,明确生成练习题,二叉树的题目，基础一点的,exercise,EXERCISE,exercise_gen,,否,明确出题诉求，命中 EXERCISE。,—,—,—,DRAFT_CONFIRMED,
 C027,明确生成练习题,生成10道英语六级选词填空,auto,EXERCISE,exercise_gen,,否,明确出题诉求，命中 EXERCISE。,—,—,—,DRAFT_CONFIRMED,
 C028,明确生成练习题,来几道关于TCP的面试题,auto,EXERCISE,exercise_gen,,否,明确出题诉求，命中 EXERCISE。,—,—,—,DRAFT_CONFIRMED,
@@ -45,7 +45,7 @@ C043,明确生成学习资源,推荐一些入门Python的教程,auto,RESOURCE,re
 C044,明确生成学习资源,给我整理一份算法学习的大纲,auto,RESOURCE,resource_gen,,否,明确资源/讲义/资料诉求，命中 RESOURCE。,—,—,—,DRAFT_CONFIRMED,
 C045,明确生成学习资源,英语单词卡片,resource,RESOURCE,flashcard_gen,,否,单词卡片=闪卡诉求，命中 flashcard_gen。,—,—,—,DRAFT_CONFIRMED,
 C046,明确生成学习资源,生成10张记忆卡背四级词汇,auto,RESOURCE,flashcard_gen,,否,记忆卡=闪卡诉求，命中 flashcard_gen。,—,—,—,DRAFT_CONFIRMED,
-C047,明确生成学习资源,给我一个快速排序的代码示例,auto,RESOURCE,code_example,,否,诉求为代码示例；code_example 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,
+C047,明确生成学习资源,给我一个快速排序的代码示例,auto,RESOURCE,code_example,,否,诉求为代码示例；code_example 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,同意独立意图 code_example，走 resource
 C048,明确生成学习资源,Python爬虫,resource,RESOURCE,resource_gen,,否,明确资源/讲义/资料诉求，命中 RESOURCE。,—,—,—,DRAFT_CONFIRMED,
 C049,明确生成学习资源,推荐几本学数据结构的书和资料,auto,RESOURCE,resource_gen,,否,明确资源/讲义/资料诉求，命中 RESOURCE。,—,—,—,DRAFT_CONFIRMED,
 C050,明确生成学习资源,整理一下关于HTTP的课件,auto,RESOURCE,resource_gen,,否,明确资源/讲义/资料诉求，命中 RESOURCE。,—,—,—,DRAFT_CONFIRMED,
@@ -69,31 +69,31 @@ C067,可视化,看一下我的知识图谱,auto,VISUALIZATION,knowledge_graph,,�
 C068,可视化,知识点关系,visualization,VISUALIZATION,visualize,,否,可视化诉求，命中 VISUALIZATION。,—,—,—,DRAFT_CONFIRMED,
 C069,可视化,画出进程状态转换图,auto,VISUALIZATION,visualize,,否,可视化诉求，命中 VISUALIZATION。,—,—,—,DRAFT_CONFIRMED,
 C070,可视化,生成一张数据库事务的对比图,auto,VISUALIZATION,visualize,,否,可视化诉求，命中 VISUALIZATION。,—,—,—,DRAFT_CONFIRMED,
-C071,诊断与画像相关,帮我诊断一下我哪里薄弱,auto,待裁决,diagnose,,否,掌握度/薄弱点诊断；diagnose 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,
-C072,诊断与画像相关,测试一下我对数据结构的掌握情况,auto,待裁决,diagnose,,否,掌握度/薄弱点诊断；diagnose 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,
-C073,诊断与画像相关,我是零基础，想学人工智能,auto,待裁决,profile_building,,否,自述基础/背景，属画像构建；profile_building 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,
-C074,诊断与画像相关,我的编程基础比较差，怎么补比较好,auto,待裁决,profile_building,,否,自述基础/背景，属画像构建；profile_building 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,
-C075,诊断与画像相关,我刚开始学，有点迷茫不知道该干嘛,auto,待裁决,profile_building,,否,自述基础/背景，属画像构建；profile_building 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,
-C076,诊断与画像相关,出几道题测测我的水平,auto,EXERCISE,diagnose|exercise_gen,diagnose(1)>exercise_gen(2),否,出题测水平=出题+诊断；diagnose 是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,
-C077,诊断与画像相关,帮我做个学习诊断,auto,待裁决,diagnose,,否,掌握度/薄弱点诊断；diagnose 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,
-C078,诊断与画像相关,我大二，想转做后端开发,auto,待裁决,profile_building,,否,自述基础/背景，属画像构建；profile_building 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,
-C079,诊断与画像相关,我完全不会数学，能学机器学习吗,auto,待裁决,profile_building,,否,自述基础/背景，属画像构建；profile_building 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,
-C080,诊断与画像相关,测一下我对操作系统的掌握程度,auto,待裁决,diagnose,,否,掌握度/薄弱点诊断；diagnose 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,
-C081,隐式需求非标准表达,感觉二叉树这块还是不太懂，多来点,auto,待澄清,tutor_question|exercise_gen,tutor_question(1)>exercise_gen(2),是,「多来点」指代不明（讲解 or 练习），需追问。,—,—,—,POLICY_UNDECIDED,
-C082,隐式需求非标准表达,今天讲的贪心算法有点晕,auto,待澄清,tutor_question,,是,情绪表达（有点晕），未明确请求，建议追问或默认讲解。,—,—,—,POLICY_UNDECIDED,
-C083,隐式需求非标准表达,那个三次握手我老记不住,auto,待澄清,tutor_question|visualize,tutor_question(1)>visualize(2),是,「记不住」可讲解/图示/闪卡，需追问。,—,—,—,POLICY_UNDECIDED,
+C071,诊断与画像相关,帮我诊断一下我哪里薄弱,auto,NORMAL_CHAT,diagnose,,否,掌握度/薄弱点诊断；diagnose 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,诊断不单独开路，归答疑
+C072,诊断与画像相关,测试一下我对数据结构的掌握情况,auto,NORMAL_CHAT,diagnose,,否,掌握度/薄弱点诊断；diagnose 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,诊断不单独开路，归答疑
+C073,诊断与画像相关,我是零基础，想学人工智能,auto,NORMAL_CHAT,profile_building,,否,自述基础/背景，属画像构建；profile_building 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,画像静默采集，主走答疑
+C074,诊断与画像相关,我的编程基础比较差，怎么补比较好,auto,NORMAL_CHAT,profile_building,,否,自述基础/背景，属画像构建；profile_building 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,画像静默采集，主走答疑
+C075,诊断与画像相关,我刚开始学，有点迷茫不知道该干嘛,auto,NORMAL_CHAT,profile_building,,否,自述基础/背景，属画像构建；profile_building 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,画像静默采集，主走答疑
+C076,诊断与画像相关,出几道题测测我的水平,auto,EXERCISE,diagnose|exercise_gen,diagnose(1)>exercise_gen(2),否,出题测水平=出题+诊断；diagnose 是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,同意主能力 EXERCISE；diagnose 不单独
+C077,诊断与画像相关,帮我做个学习诊断,auto,NORMAL_CHAT,diagnose,,否,掌握度/薄弱点诊断；diagnose 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,诊断不单独开路，归答疑
+C078,诊断与画像相关,我大二，想转做后端开发,auto,NORMAL_CHAT,profile_building,,否,自述基础/背景，属画像构建；profile_building 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,画像静默采集，主走答疑
+C079,诊断与画像相关,我完全不会数学，能学机器学习吗,auto,NORMAL_CHAT,profile_building,,否,自述基础/背景，属画像构建；profile_building 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,画像静默采集，主走答疑
+C080,诊断与画像相关,测一下我对操作系统的掌握程度,auto,NORMAL_CHAT,diagnose,,否,掌握度/薄弱点诊断；diagnose 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,诊断不单独开路，归答疑
+C081,隐式需求非标准表达,感觉二叉树这块还是不太懂，多来点,auto,待澄清,tutor_question|exercise_gen,tutor_question(1)>exercise_gen(2),是,「多来点」指代不明（讲解 or 练习），需追问。,—,—,—,POLICY_UNDECIDED,追问
+C082,隐式需求非标准表达,今天讲的贪心算法有点晕,auto,待澄清,tutor_question,,是,情绪表达（有点晕），未明确请求，建议追问或默认讲解。,—,—,—,POLICY_UNDECIDED,追问
+C083,隐式需求非标准表达,那个三次握手我老记不住,auto,待澄清,tutor_question|visualize,tutor_question(1)>visualize(2),是,「记不住」可讲解/图示/闪卡，需追问。,—,—,—,POLICY_UNDECIDED,追问
 C084,隐式需求非标准表达,能不能搞点题练练,auto,EXERCISE,exercise_gen,,否,隐式出题表达（搞点题）；词表外延是否覆盖待裁决。,—,—,—,POLICY_UNDECIDED,同意
-C085,隐式需求非标准表达,快期末了，帮我准备点东西,auto,待澄清,resource_gen|exercise_gen|learning_path,resource_gen(1)>exercise_gen(2)>learning_path(3),是,「准备点东西」诉求不明，需追问。,—,—,—,POLICY_UNDECIDED,
-C086,隐式需求非标准表达,数据结构好难啊,auto,待澄清,tutor_question,,是,纯情绪表达（好难啊），未表达诉求，需追问。,—,—,—,POLICY_UNDECIDED,
-C087,隐式需求非标准表达,想复习一下排序算法,auto,待澄清,tutor_question|resource_gen,tutor_question(1)>resource_gen(2),是,「复习」可为讲解或资料，需追问或定默认。,—,—,—,POLICY_UNDECIDED,
+C085,隐式需求非标准表达,快期末了，帮我准备点东西,auto,待澄清,resource_gen|exercise_gen|learning_path,resource_gen(1)>exercise_gen(2)>learning_path(3),是,「准备点东西」诉求不明，需追问。,—,—,—,POLICY_UNDECIDED,追问
+C086,隐式需求非标准表达,数据结构好难啊,auto,待澄清,tutor_question,,是,纯情绪表达（好难啊），未表达诉求，需追问。,—,—,—,POLICY_UNDECIDED,追问
+C087,隐式需求非标准表达,想复习一下排序算法,auto,待澄清,tutor_question|resource_gen,tutor_question(1)>resource_gen(2),是,「复习」可为讲解或资料，需追问或定默认。,—,—,—,POLICY_UNDECIDED,追问
 C088,隐式需求非标准表达,老师讲的多态我没听明白，能再讲一遍吗,auto,NORMAL_CHAT,tutor_question,,否,明确请求再讲一遍，属答疑。,—,—,—,DRAFT_CONFIRMED,
-C089,隐式需求非标准表达,有没有什么好办法学英语口语,auto,待澄清,resource_gen|learning_path,resource_gen(1)>learning_path(2),是,求「好办法」可为资源或计划，需追问。,—,—,—,POLICY_UNDECIDED,
-C090,隐式需求非标准表达,我明天要考数据库了,auto,待澄清,resource_gen|exercise_gen|learning_path,resource_gen(1)>exercise_gen(2)>learning_path(3),是,「明天要考」隐含需求不明，需追问。,—,—,—,POLICY_UNDECIDED,
+C089,隐式需求非标准表达,有没有什么好办法学英语口语,auto,待澄清,resource_gen|learning_path,resource_gen(1)>learning_path(2),是,求「好办法」可为资源或计划，需追问。,—,—,—,POLICY_UNDECIDED,追问
+C090,隐式需求非标准表达,我明天要考数据库了,auto,待澄清,resource_gen|exercise_gen|learning_path,resource_gen(1)>exercise_gen(2)>learning_path(3),是,「明天要考」隐含需求不明，需追问。,—,—,—,POLICY_UNDECIDED,追问
 C091,隐式需求非标准表达,这个知识点能不能展开讲讲,auto,NORMAL_CHAT,tutor_question,,否,明确请求展开讲解，属答疑。,—,—,—,DRAFT_CONFIRMED,
-C092,隐式需求非标准表达,帮我看看这块知识我还有哪些漏洞,auto,待裁决,diagnose,,否,掌握度/薄弱点诊断；diagnose 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,
-C093,隐式需求非标准表达,想找点项目练练手,auto,待澄清,resource_gen|exercise_gen,resource_gen(1)>exercise_gen(2),是,「找项目练手」可为资料或练习，需追问。,—,—,—,POLICY_UNDECIDED,
+C092,隐式需求非标准表达,帮我看看这块知识我还有哪些漏洞,auto,NORMAL_CHAT,diagnose,,否,掌握度/薄弱点诊断；diagnose 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,诊断不单独开路，归答疑
+C093,隐式需求非标准表达,想找点项目练练手,auto,待澄清,resource_gen|exercise_gen,resource_gen(1)>exercise_gen(2),是,「找项目练手」可为资料或练习，需追问。,—,—,—,POLICY_UNDECIDED,追问
 C094,隐式需求非标准表达,动态规划太难了，有没有什么套路,auto,NORMAL_CHAT,tutor_question,,否,求讲解套路，属答疑。,—,—,—,DRAFT_CONFIRMED,
-C095,隐式需求非标准表达,最近在学React，感觉一头雾水,auto,待澄清,tutor_question|profile_building,tutor_question(1)>profile_building(2),是,「一头雾水」可为讲解或画像，需追问。,是,缺失,待裁决,POLICY_UNDECIDED,
+C095,隐式需求非标准表达,最近在学React，感觉一头雾水,auto,待澄清,tutor_question|profile_building,tutor_question(1)>profile_building(2),是,「一头雾水」可为讲解或画像，需追问。,是,缺失,待裁决,POLICY_UNDECIDED,追问
 C096,多轮上下文与指代,那它和堆有什么区别,auto,NORMAL_CHAT,tutor_question,,否,承接「二叉搜索树」追问，属答疑。,—,—,—,DRAFT_CONFIRMED,
 C097,多轮上下文与指代,再来5道,auto,EXERCISE,exercise_gen,,否,「再来5道」承接口径=出题。,—,—,—,DRAFT_CONFIRMED,
 C098,多轮上下文与指代,能不能画得更详细一点,auto,VISUALIZATION,visualize,,否,上文已生成流程图，要求更详细=重绘，上下文充足。,—,—,—,DRAFT_CONFIRMED,
@@ -101,15 +101,15 @@ C099,多轮上下文与指代,把时间改成两周吧,auto,PLAN,learning_path,,
 C100,多轮上下文与指代,还有别的吗,auto,RESOURCE,resource_gen,,否,承接资料推荐，请求更多。,—,—,—,DRAFT_CONFIRMED,
 C101,多轮上下文与指代,第二题为什么选C,auto,NORMAL_CHAT,tutor_question,,否,就上一轮题目追问解析，属答疑。,—,—,—,DRAFT_CONFIRMED,
 C102,多轮上下文与指代,那线程呢,auto,NORMAL_CHAT,tutor_question,,否,承接「进程」追问线程，属答疑。,—,—,—,DRAFT_CONFIRMED,
-C103,多轮上下文与指代,给我个代码实现,auto,RESOURCE,code_example,,否,承接快排思路，请求代码实现（code_example）。诉求为代码示例；code_example 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,
+C103,多轮上下文与指代,给我个代码实现,auto,RESOURCE,code_example,,否,承接快排思路，请求代码实现（code_example）。诉求为代码示例；code_example 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,同意独立意图 code_example，走 resource
 C104,多轮上下文与指代,换成选择题做,auto,EXERCISE,exercise_gen,,否,改题型，仍为出题。,—,—,—,DRAFT_CONFIRMED,
 C105,多轮上下文与指代,展开看看子节点,auto,VISUALIZATION,knowledge_graph,,否,承接知识图谱，展开子节点。,—,—,—,DRAFT_CONFIRMED,
 C106,多轮上下文与指代,帮我加个数据结构进去,auto,PLAN,learning_path,,否,修改既有计划，增补内容。,—,—,—,DRAFT_CONFIRMED,
-C107,多轮上下文与指代,那我该补哪块,auto,待裁决,diagnose,,否,承接诊断结论追问补强方向。掌握度/薄弱点诊断；diagnose 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,
+C107,多轮上下文与指代,那我该补哪块,auto,NORMAL_CHAT,diagnose,,否,承接诊断结论追问补强方向。掌握度/薄弱点诊断；diagnose 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,诊断不单独开路，归答疑
 C108,多轮上下文与指代,举个例子,auto,NORMAL_CHAT,tutor_question,,否,请求举例说明，属答疑。,—,—,—,DRAFT_CONFIRMED,
 C109,多轮上下文与指代,难度调高一点,auto,EXERCISE,exercise_gen,,否,调整既有题目难度，仍为出题。,—,—,—,DRAFT_CONFIRMED,
 C110,多轮上下文与指代,再画一个时序图,auto,VISUALIZATION,visualize,,否,追加画图。,—,—,—,DRAFT_CONFIRMED,
-C111,多轮上下文与指代,对，我就是想转行,auto,待裁决,profile_building,,否,承接画像追问，确认转行=画像信息，上下文充足。自述基础/背景，属画像构建；profile_building 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,
+C111,多轮上下文与指代,对，我就是想转行,auto,NORMAL_CHAT,profile_building,,否,承接画像追问，确认转行=画像信息，上下文充足。自述基础/背景，属画像构建；profile_building 已注册，一级入口缺失，是否独立任务待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,画像静默采集，主走答疑
 C112,多轮上下文与指代,有没有配套的练习题,auto,EXERCISE,exercise_gen,,否,承接资料推荐，追加练习题。,—,—,—,DRAFT_CONFIRMED,
 C113,多轮上下文与指代,能用简单的话再讲讲吗,auto,NORMAL_CHAT,tutor_question,,否,承接上文，请求更通俗讲解，属答疑。,—,—,—,DRAFT_CONFIRMED,
 C114,多轮上下文与指代,反过来，先学基础吧,auto,PLAN,learning_path,,否,调整既有学习路径顺序。,—,—,—,DRAFT_CONFIRMED,
@@ -120,22 +120,22 @@ C118,复合任务,什么是死锁，顺便出几道题考考我,auto,EXERCISE,tu
 C119,复合任务,帮我制定一个学习计划，并且画个流程图,auto,PLAN,learning_path|visualize,learning_path(1)>visualize(2),是,复合任务：计划 + 流程图，跨中心（PLAN+VISUALIZATION）。,—,—,—,POLICY_UNDECIDED,同意
 C120,复合任务,给我一份讲义，外加10道练习题,auto,RESOURCE,resource_gen|exercise_gen,resource_gen(1)>exercise_gen(2),是,复合任务：讲义 + 练习，跨中心（RESOURCE+EXERCISE）。,—,—,—,POLICY_UNDECIDED,同意
 C121,复合任务,讲讲TCP三次握手，画个图,auto,VISUALIZATION,tutor_question|visualize,tutor_question(1)>visualize(2),是,复合任务：讲解 + 配图，跨中心。,—,—,—,POLICY_UNDECIDED,同意
-C122,复合任务,我基础比较差，帮我做个诊断再制定计划,auto,PLAN,diagnose|profile_building|learning_path,diagnose(1)>profile_building(2)>learning_path(3),是,复合任务：诊断 + 画像 + 计划，三中心链；含 diagnose/profile 待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,
-C123,复合任务,求解这道题，然后帮我找几个类似的题目,auto,EXERCISE,solve_problem|exercise_gen,solve_problem(1)>exercise_gen(2),是,"复合任务：解题 + 找类似题；{solve_problem, exercise_gen} 互斥需裁决。",是,缺失,待裁决,POLICY_UNDECIDED,
+C122,复合任务,我基础比较差，帮我做个诊断再制定计划,auto,PLAN,diagnose|profile_building|learning_path,diagnose(1)>profile_building(2)>learning_path(3),是,复合任务：诊断 + 画像 + 计划，三中心链；含 diagnose/profile 待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,同意主能力 PLAN；diagnose/profile 静默不单独
+C123,复合任务,求解这道题，然后帮我找几个类似的题目,auto,EXERCISE,solve_problem|exercise_gen,solve_problem(1)>exercise_gen(2),是,"复合任务：解题 + 找类似题；{solve_problem, exercise_gen} 互斥需裁决。",是,缺失,待裁决,POLICY_UNDECIDED,同意主能力 EXERCISE；solve_problem 独立但此题先解后练
 C124,复合任务,生成一份思维导图，再出几道题,auto,VISUALIZATION,visualize|exercise_gen,visualize(1)>exercise_gen(2),是,复合任务：思维导图 + 出题，跨中心。,—,—,—,POLICY_UNDECIDED,同意
 C125,复合任务,什么是过拟合，画个示意图说明一下,auto,VISUALIZATION,tutor_question|visualize,tutor_question(1)>visualize(2),是,复合任务：讲解 + 图示，跨中心。,—,—,—,POLICY_UNDECIDED,同意
 C126,复合任务,帮我规划学习路线，并推荐一些资料,auto,PLAN,learning_path|resource_gen,learning_path(1)>resource_gen(2),是,复合任务：学习路线 + 资料，跨中心（PLAN+RESOURCE）。,—,—,—,POLICY_UNDECIDED,同意
 C127,复合任务,出5道题，顺便把知识点做成知识图谱,auto,EXERCISE,exercise_gen|knowledge_graph,exercise_gen(1)>knowledge_graph(2),是,复合任务：出题 + 知识图谱，跨中心（EXERCISE+VISUALIZATION）。,—,—,—,POLICY_UNDECIDED,同意
-C128,复合任务,解释一下动态规划，给我个代码示例,auto,RESOURCE,tutor_question|code_example,tutor_question(1)>code_example(2),是,复合任务：讲解 + 代码示例，跨中心；含 code_example 待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,
-C129,复合任务,诊断一下我的薄弱点，然后生成针对性的练习,auto,EXERCISE,diagnose|exercise_gen,diagnose(1)>exercise_gen(2),是,复合任务：诊断 + 针对性练习；含 diagnose 待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,
+C128,复合任务,解释一下动态规划，给我个代码示例,auto,RESOURCE,tutor_question|code_example,tutor_question(1)>code_example(2),是,复合任务：讲解 + 代码示例，跨中心；含 code_example 待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,同意独立意图 code_example，走 resource
+C129,复合任务,诊断一下我的薄弱点，然后生成针对性的练习,auto,EXERCISE,diagnose|exercise_gen,diagnose(1)>exercise_gen(2),是,复合任务：诊断 + 针对性练习；含 diagnose 待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,同意主能力 EXERCISE；diagnose 不单独
 C130,复合任务,帮我找资料，再制定一个学习计划,auto,PLAN,resource_gen|learning_path,resource_gen(1)>learning_path(2),是,复合任务：资料 + 计划，跨中心（RESOURCE+PLAN）。,—,—,—,POLICY_UNDECIDED,同意
 C131,否定表达引用内容干扰,不要给我出题，我只要讲解,auto,NORMAL_CHAT,tutor_question,,否,明确否定出题，只要讲解，属答疑。,—,—,—,DRAFT_CONFIRMED,
 C132,否定表达引用内容干扰,不用画图，文字说明就行,auto,NORMAL_CHAT,tutor_question,,否,明确否定画图，要文字说明，属答疑。,—,—,—,DRAFT_CONFIRMED,
-C133,否定表达引用内容干扰,我不是问怎么出题，我是问这道题怎么做,auto,待裁决,solve_problem,,否,否定「怎么出题」，真实诉求=解这道题；含 solve_problem 待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,
+C133,否定表达引用内容干扰,我不是问怎么出题，我是问这道题怎么做,auto,NORMAL_CHAT,solve_problem,,否,否定「怎么出题」，真实诉求=解这道题；含 solve_problem 待裁决。,是,缺失,待裁决,POLICY_UNDECIDED,同意独立意图 solve_problem；一级无入口走答疑底座，二级识别解题
 C134,否定表达引用内容干扰,别推荐资源了，先把这个概念讲清楚,auto,NORMAL_CHAT,tutor_question,,否,否定资源推荐，要求讲清概念，属答疑。,—,—,—,DRAFT_CONFIRMED,
-C135,否定表达引用内容干扰,刚才题目里说的「出题」是老师布置的作业,auto,待澄清,tutor_question,,是,转述/引用「出题」，未表达明确请求，需追问。,—,—,—,POLICY_UNDECIDED,
-C136,空输入模糊请求缺少参数,,auto,待澄清,,,是,空/过短/无信息输入，未表达可路由诉求，需追问引导。,—,—,—,POLICY_UNDECIDED,
-C137,空输入模糊请求缺少参数,嗯,auto,待澄清,,,是,空/过短/无信息输入，未表达可路由诉求，需追问引导。,—,—,—,POLICY_UNDECIDED,
-C138,空输入模糊请求缺少参数,帮我,auto,待澄清,,,是,空/过短/无信息输入，未表达可路由诉求，需追问引导。,—,—,—,POLICY_UNDECIDED,
-C139,空输入模糊请求缺少参数,在吗,auto,待澄清,,,是,空/过短/无信息输入，未表达可路由诉求，需追问引导。,—,—,—,POLICY_UNDECIDED,
-C140,空输入模糊请求缺少参数,那个……就是那个,auto,待澄清,,,是,空/过短/无信息输入，未表达可路由诉求，需追问引导。,—,—,—,POLICY_UNDECIDED,
+C135,否定表达引用内容干扰,刚才题目里说的「出题」是老师布置的作业,auto,待澄清,tutor_question,,是,转述/引用「出题」，未表达明确请求，需追问。,—,—,—,POLICY_UNDECIDED,追问
+C136,空输入模糊请求缺少参数,,auto,待澄清,,,是,空/过短/无信息输入，未表达可路由诉求，需追问引导。,—,—,—,POLICY_UNDECIDED,追问
+C137,空输入模糊请求缺少参数,嗯,auto,待澄清,,,是,空/过短/无信息输入，未表达可路由诉求，需追问引导。,—,—,—,POLICY_UNDECIDED,追问
+C138,空输入模糊请求缺少参数,帮我,auto,待澄清,,,是,空/过短/无信息输入，未表达可路由诉求，需追问引导。,—,—,—,POLICY_UNDECIDED,追问
+C139,空输入模糊请求缺少参数,在吗,auto,待澄清,,,是,空/过短/无信息输入，未表达可路由诉求，需追问引导。,—,—,—,POLICY_UNDECIDED,追问
+C140,空输入模糊请求缺少参数,那个……就是那个,auto,待澄清,,,是,空/过短/无信息输入，未表达可路由诉求，需追问引导。,—,—,—,POLICY_UNDECIDED,追问

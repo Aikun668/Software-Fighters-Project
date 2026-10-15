@@ -30,8 +30,10 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# 语义调用的超时预算（p95 ≤ 1000ms 的硬上限）
-SEMANTIC_TIMEOUT_SEC = 1.0
+# 语义调用的超时预算。真模型实测 p95≈1506ms、max≈1506ms（见 T4-A-handoff 第十节），
+# 按产品决定放宽到 1.5s：p95 基本落在预算内，同时仍以「超时即兜底」保底，
+# 避免慢请求无限占用热路径。
+SEMANTIC_TIMEOUT_SEC = 1.5
 
 # 启用接管的最小置信度：语义腿给唯一能力意图时，最高置信度低于此值不接管，
 # 保持旧行为（答疑兜底）。设 0.6 是因为 mock 关键词腿把单命中换算成 0.597 的

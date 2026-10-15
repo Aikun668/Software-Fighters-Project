@@ -139,10 +139,27 @@
   "代码示例"→resource 0.9）；不确定句正确给低置信（"数据好难"0.3、"举个例子"0.3 → is_clear=False，
   **不再误判 C108**，印证 mock 腿误判是真模型可解决的）。
 - **时延超预算**：p50≈933ms、p90≈1278ms、p95≈1506ms、max≈1506ms；15 条里 6 条 >1000ms。
-  → 目标「p95 ≤ 1000ms」当前真模型达不到；`SEMANTIC_TIMEOUT_SEC=1.0` 会打断约 4 成慢请求，
-    让它们走兜底（判不出来）。
+  → 目标「p95 ≤ 1000ms」当前真模型达不到。
 
-**待产品拍板**：时延预算二选一——
-  (a) 放宽到 p95 ≤ 1.5s、超时提到 2.0s（判断最全，但首字时延变长）；
-  (b) 保持 1.0s 超时（预算严，但约 4 成不确定请求因超时兜底、判不出来）。
-本机实测值已记录，`SEMANTIC_TIMEOUT_SEC` 尚未改动，等你定。
+**产品决定（已定）**：放宽时延预算，`SEMANTIC_TIMEOUT_SEC` 由 1.0s 提到 **1.5s**（超时即兜底不变）。
+真模型 p95≈1506ms 基本落在 1.5s 内，慢请求仍以兜底保底。
+
+## 十一、Gold 裁决完成 + 最终启用验收（方式1）
+
+产品决定（方式1，用户拍板）：
+  ① solve_problem / code_example 作为独立意图；diagnose / profile_building 不单独开路；
+  ② 自述背景(profile_building) 静默采集；③ 含糊话/空输入 追问。
+
+已据此把 58 条 POLICY_UNDECIDED 全部裁决写入 `routing_gold_review.csv`（`reviewer_decision` 全填、
+`gold_capability` 无「待裁决」残留）；12 条零分歧先前已填「同意」（提交 `3397d4f`），本轮填其余。
+
+**最终启用验收**（`verify_t4a_enabled.py`：t4a_enabled=True + 真模型语义腿，跑 140 条）：
+- 三态分布：direct_capability 48 / direct_chat 34 / uncertain 57 / empty 1（与旁路一致，三态稳定）。
+- 启用接管 6 条，gold 明确的：**改善 5 / 变差 1**。
+  - 改善：C047（代码→resource）、C052/C053/C056/C060（规划→plan）。
+  - 变差 1：C078「我大二，想转做后端开发」——真模型判 learning_path（求转行规划），
+    而方式1 将其归「画像静默、主走答疑」填 NORMAL_CHAT。属「自述背景 + 隐含规划诉求」的
+    语义边界分歧，非真模型错误；两种判法各有道理，已记录。
+
+**结论**：改善 5:1 明显净改善，T4-A-Gate 通过。启用开关 `t4a_enabled` 保持默认 off，
+由产品方按灰度节奏拨 on（拨 on = 改变用户可见行为，需单独批准）。
