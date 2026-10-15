@@ -305,3 +305,25 @@ def detect_compound_order(message: str) -> list[str] | None:
             return [first, second]
 
     return None
+
+
+# ── T4-B：跨轮指代消解 ────────────────────────────────────────────
+
+# 指代/变换词：当前消息含这些词时，指向上一轮产物的「复用/微调」，而非新诉求。
+# 只认强指代词；"再来/再画/改成/换成/难度/还有/展开/反过来/配套/补哪块"等。
+_REFERENT_MARKS = (
+    "再来", "再画", "再出", "改成", "换成", "调高", "调低", "调成", "还有",
+    "展开", "反过来", "加个", "详细", "配套", "难度", "补哪块", "举个例子",
+    "别的", "整理成", "继续", "换个",
+)
+
+
+def detect_referent(message: str) -> bool:
+    """检测当前消息是否是对上一轮产物的跨轮指代（确定性、无 LLM）。
+
+    只做「是否指代」的判定；复用上轮意图由调用方（ChatCenter）结合 history 完成。
+    """
+    if not message or not message.strip():
+        return False
+    text = message.strip()
+    return any(m in text for m in _REFERENT_MARKS)

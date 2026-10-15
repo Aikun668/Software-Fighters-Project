@@ -36,6 +36,7 @@ from app.services.semantic_router import (
     RouteState,
     classify,
     detect_compound_order,
+    detect_referent,
     semantic_relabel,
 )
 from app.services.routing_audit import (
@@ -328,6 +329,53 @@ class ChatCenter:
             max_intents=max_intents,
         )
 
+    def _referent_plan(
+        self,
+        message: str,
+        context: dict | None,
+        student_profile: dict | None,
+        max_intents: int,
+    ) -> ExecutionPlan | None:
+        """T4-B：跨轮指代消解（仅 t4b_enabled=True 时调用）。
+
+        当前消息是指代（"再来5道/画详细/改成两周"）且 history 上一轮有明确能力诉求时，
+        复用上轮意图建单任务计划。找不到上轮明确意图则返回 None（走原 NORMAL_CHAT 兜底）。
+        """
+        if not self.t4b_enabled or not detect_referent(message):
+            return None
+        msgs = list((context or {}).get("messages") or [])
+        # 从后往前找「上一轮 user 消息」：跳过末尾的当前消息
+        prev_user = ""
+        for m in reversed(msgs):
+            if m.get("role") == "user" and m.get("content") != message:
+                prev_user = m.get("content", "")
+                break
+        if not prev_user:
+            return None
+        rd = self._get_router().decide(prev_user)
+        if not rd.candidates:
+            return None
+        intent = rd.candidates[0].intent
+        if intent in ("tutor_question", "unknown"):
+            return None
+        center = INTENT_CENTER_MAP.get(intent)
+        if not center:
+            return None
+        task = CenterTask(
+            mode=center,
+            intent=intent,
+            input=message,
+            params={},
+            context={**(context or {}), "student_profile": student_profile or {}},
+            confidence=rd.candidates[0].rule_score,
+        )
+        return ExecutionPlan(
+            tasks=[task],
+            is_clear=True,
+            intent_meta={"raw_message": message, "strategy": "t4b_referent"},
+            max_intents=max_intents,
+        )
+
     async def route(
         self,
         message: str,
@@ -398,6 +446,20 @@ class ChatCenter:
             if compound_plan is not None:
                 return self._plan_builder.annotate_route(
                     compound_plan,
+                    route=decision.kind.value,
+                    reason=decision.reason,
+                    audit_meta=audit_meta,
+                )
+            # T4-B：跨轮指代消解（"再来5道/画详细/改成两周"）复用上轮意图
+            referent_plan = self._referent_plan(
+                message=message,
+                context=context,
+                student_profile=student_profile,
+                max_intents=max_intents,
+            )
+            if referent_plan is not None:
+                return self._plan_builder.annotate_route(
+                    referent_plan,
                     route=decision.kind.value,
                     reason=decision.reason,
                     audit_meta=audit_meta,
