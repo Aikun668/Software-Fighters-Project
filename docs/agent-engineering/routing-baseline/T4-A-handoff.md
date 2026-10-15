@@ -100,3 +100,17 @@
 结论：启用接管的代码与测试已就绪（默认 off），但**真正拨开关前必须先接真 LLM 语义腿**
 （`INTENT_USE_LLM=1`），否则会把"举个例子"这类误判进资源路由。真 LLM 的预算实测 +
 58 条裁决是剩余前置。
+
+## 八、58 条待裁决导航（纯事实统计，非裁决）
+
+裁决工作单 `routing_t4a_undecided_worklist.csv` 里 58 条 POLICY_UNDECIDED 的性质分布
+（gold_capability 是 gold 草案给出的方向，仅作导航，不代裁决）：
+
+| 类别 | 条数 | 裁决对象 |
+|---|---|---|
+| gold_capability=待裁决 | 23 | 四意图（solve_problem/diagnose/profile_building/code_example）是否给独立一级入口 |
+| gold_capability=待澄清 | 16 | 该不该追问、追问什么（澄清策略） |
+| gold_capability=明确能力（EXERCISE 8/RESOURCE 4/PLAN 4/VISUALIZATION 3） | 19 | 多中心编排或含待裁决意图，方向已明、确认即可 |
+
+按 `gold_ask_clarify`：33 条「是」（需澄清）、25 条「否」。
+按三态：uncertain 38 / direct_capability 11 / direct_chat 8 / empty 1。
