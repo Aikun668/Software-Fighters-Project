@@ -40,6 +40,10 @@ class CenterResult:
     sequence: int = 0
     error: Optional[str] = None
     profile_delta: dict = field(default_factory=dict)
+    # T4-C：统一三态结果语义——「执行成功且产物可用」= success；
+    # 执行成功但产物为空/不可用 = degraded；失败 = error（此时 error 字段非空）。
+    # 默认 success，各 center 在产物为空但未抛异常时显式置 degraded。
+    final_status: str = "success"
 
 
 @dataclass

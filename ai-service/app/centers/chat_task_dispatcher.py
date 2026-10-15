@@ -518,6 +518,10 @@ class ChatTaskDispatcher:
         return steps
 
     def _serialize_result(self, result: CenterResult) -> dict[str, Any]:
+        # T4-C：三态归一。error 非空 → 至少是 error；否则沿用 center 给的 final_status。
+        status = getattr(result, "final_status", "success")
+        if result.error and status == "success":
+            status = "error"
         return {
             "mode": result.mode,
             "intent": result.intent,
@@ -525,5 +529,6 @@ class ChatTaskDispatcher:
             "agent": result.agent,
             "sequence": result.sequence,
             "error": result.error,
+            "final_status": status,
             "payload_keys": list(result.payload.keys()),
         }
