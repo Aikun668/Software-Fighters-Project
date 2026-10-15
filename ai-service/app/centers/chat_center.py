@@ -31,6 +31,11 @@ from app.events.types import (
 from app.services.capability_gate import CapabilityGate, CapabilityKind
 from app.services.capability_map import KIND_TO_CENTER
 from app.services.intent_extractor import IntentExtractor
+from app.services.semantic_router import (
+    RouteState,
+    classify,
+    semantic_relabel,
+)
 from app.services.routing_audit import (
     build_routing_record,
     emit_routing_record,
@@ -56,6 +61,8 @@ class ChatCenter:
         dispatcher: ChatTaskDispatcher | None = None,
         capability_gate: CapabilityGate | None = None,
         use_mock_llm: bool = False,
+        t4a_enabled: bool = False,
+        semantic_extractor: Any | None = None,
     ):
         self.router_agent = router_agent
         self.dispatcher = dispatcher
@@ -65,6 +72,11 @@ class ChatCenter:
         # 无 Key 环境在构造期抛 ValueError（见 tests/test_mock_llm_switch_contract.py）。
         self.use_mock_llm = use_mock_llm
         self._plan_builder = PlanBuilder()
+        # T4-A：三态语义路由开关。默认关闭（旁路对照）；启用后 UNCERTAIN 态才会
+        # 真正用语义重判接管路由。semantic_extractor 供测试注入（默认用 IntentExtractor，
+        # 其 use_mock 跟随 INTENT_USE_LLM 环境变量，离线时走确定性关键词、不真调模型）。
+        self.t4a_enabled = t4a_enabled
+        self.semantic_extractor = semantic_extractor
     def _get_router(self) -> RouterAgent:
         if self.router_agent is None:
             self.router_agent = RouterAgent(intent_extractor=IntentExtractor())
@@ -132,6 +144,51 @@ class ChatCenter:
             "context_turn_count": turn_count,
         }
 
+    async def _semantic_audit_meta(
+        self, message: str, gate_kind: str, gate_reason: str, gate_confidence: float
+    ) -> dict:
+        """T4-A 三态旁路判定：只产出审计字段，不改变执行。
+
+        返回 dict，调用方把它并入 `intent_meta`（进而进入 execute 的审计记录）。
+        - DIRECT_CAPABILITY / DIRECT_CHAT：不调语义，只记 route_source 与 semantic_state。
+        - UNCERTAIN：调一次 semantic_relabel（默认 mock extractor，离线可复现），
+          记下 intents / is_clear / latency / error，但不据此改返回的 plan。
+
+        旁路约束：本方法**从不**影响 `route()` 返回的 ExecutionPlan 内容，
+        只增审计元数据。启用接管（t4a_enabled=True 时真正改路由）是第二步，
+        在 140 条对照验收通过后再开。
+        """
+        decision = classify(
+            gate_kind=gate_kind,
+            gate_reason=gate_reason,
+            gate_confidence=gate_confidence,
+            message=message,
+        )
+        meta: dict[str, Any] = {
+            "semantic_state": decision.state.value,
+        }
+        if decision.state is RouteState.UNCERTAIN:
+            intents, is_clear, inquiry, latency, err = await semantic_relabel(
+                message=message,
+                intent_extractor=self.semantic_extractor,
+            )
+            meta.update({
+                "route_source": "semantic" if err is None else "fallback",
+                "semantic_called": True,
+                "semantic_latency_ms": latency,
+                "semantic_error": err,
+                "semantic_intents": intents,
+                "semantic_is_clear": is_clear,
+            })
+        else:
+            meta.update({
+                "route_source": "rule",
+                "semantic_called": False,
+                "semantic_latency_ms": None,
+                "semantic_error": None,
+            })
+        return meta
+
     async def route(
         self,
         message: str,
@@ -142,12 +199,22 @@ class ChatCenter:
     ) -> ExecutionPlan:
         if not message.strip():
             # 空输入不进能力判定，交由路由层给出 inquiry 追问
-            return self._plan_builder.build(
+            plan = self._plan_builder.build(
                 self._get_router().decide(message, mode),
                 student_profile=student_profile,
                 context=context,
                 max_intents=max_intents,
             )
+            # T4-A 旁路：空输入是确定行为（追问），记 semantic_state 但不调语义、
+            # 不改执行，保证 140 条每条都有三态审计字段。
+            plan.intent_meta.update({
+                "semantic_state": "empty",
+                "route_source": "rule",
+                "semantic_called": False,
+                "semantic_latency_ms": None,
+                "semantic_error": None,
+            })
+            return plan
 
         # 一级判定：CapabilityGate。默认 NORMAL_CHAT 直达 TutorAgent，
         # 只有明确能力请求才进入 RouterAgent → ExecutionPlan → ChatTaskDispatcher。
@@ -158,6 +225,15 @@ class ChatCenter:
             context=context,
         )
         audit_meta = self._audit_context(message, context)
+
+        # T4-A 三态旁路：只记审计，不改返回的 plan（启用接管是第二步）
+        semantic_meta = await self._semantic_audit_meta(
+            message=message,
+            gate_kind=decision.kind.value,
+            gate_reason=decision.reason,
+            gate_confidence=decision.confidence,
+        )
+        audit_meta = {**audit_meta, **semantic_meta}
 
         if decision.kind is CapabilityKind.NORMAL_CHAT:
             return self._plan_builder.build_normal_chat(
@@ -225,6 +301,11 @@ class ChatCenter:
                     context_turn_count=meta.get("context_turn_count", 0),
                     model_latency_ms=(time.perf_counter() - started) * 1000,
                     sse_terminal_event=terminal,
+                    route_source=meta.get("route_source"),
+                    semantic_state=meta.get("semantic_state"),
+                    semantic_called=meta.get("semantic_called"),
+                    semantic_latency_ms=meta.get("semantic_latency_ms"),
+                    semantic_error=meta.get("semantic_error"),
                 ))
 
     @staticmethod

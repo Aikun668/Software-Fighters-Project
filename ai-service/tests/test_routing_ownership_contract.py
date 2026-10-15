@@ -36,6 +36,8 @@ DECISION_MODULE_OWNERS = {
     "app.services.capability_gate": {"app/centers/chat_center.py"},
     # 二级意图分发（进哪个业务域）
     "app.centers.router_agent": {"app/centers/chat_center.py"},
+    # 三态语义路由（T4-A：明确聊天/明确能力/不确定的边界裁决）
+    "app.services.semantic_router": {"app/centers/chat_center.py"},
     # 内容领域分类（AI / 通用）—— 纯分类，不参与执行单元选择
     "app.services.domain_classifier": {"app/agents/tutor_agent.py"},
     # 资源流内部的专项 Agent 选择

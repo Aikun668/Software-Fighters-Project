@@ -27,6 +27,11 @@ ALLOWED_KEYS = frozenset({
     "conversation_id", # Java 会话 ID
     "route",           # NORMAL_CHAT / PLAN / RESOURCE / EXERCISE / VISUALIZATION
     "route_reason",    # 路由依据（capability_evidence:* / no_capability_evidence / explicit_mode:* 等）
+    "route_source",    # T4-A：rule（规则直通）/ semantic（语义重判）/ fallback（兜底）
+    "semantic_state",  # T4-A：direct_capability / direct_chat / uncertain
+    "semantic_called", # T4-A：本次是否真正调用了语义判定（bool）
+    "semantic_latency_ms", # T4-A：语义判定耗时（未调用为 None）
+    "semantic_error",  # T4-A：语义判定错误类别（timeout / 异常类型 / None）
     "context_turn_count",  # 本次请求携带的历史消息条数（数字，不含正文）
     "profile_fields_used", # Task 6 ContextBuilder 起填充；当前为 None
     "kb_chunks_used",      # Task 6 起填充；当前为 None
@@ -55,6 +60,11 @@ def build_routing_record(
     profile_fields_used: list | None = None,
     kb_chunks_used: list | None = None,
     error_code: str | None = None,
+    route_source: str | None = None,
+    semantic_state: str | None = None,
+    semantic_called: bool | None = None,
+    semantic_latency_ms: float | None = None,
+    semantic_error: str | None = None,
 ) -> dict:
     """构建一条脱敏路由记录。白名单之外的键一律丢弃。"""
     record = {
@@ -63,6 +73,13 @@ def build_routing_record(
         "conversation_id": conversation_id,
         "route": route,
         "route_reason": route_reason,
+        "route_source": route_source,
+        "semantic_state": semantic_state,
+        "semantic_called": semantic_called,
+        "semantic_latency_ms": (
+            round(semantic_latency_ms, 2) if semantic_latency_ms is not None else None
+        ),
+        "semantic_error": semantic_error,
         "context_turn_count": context_turn_count,
         "profile_fields_used": profile_fields_used,
         "kb_chunks_used": kb_chunks_used,
