@@ -152,7 +152,15 @@ def _get_chat_center():
         with _chat_center_lock:
             if _chat_center_singleton is None:
                 from app.centers.chat_center import ChatCenter
-                _chat_center_singleton = ChatCenter(use_mock_llm=_get_mock_flag())
+
+                mock = _get_mock_flag()
+                # T4-A 三态语义路由：生产已拨 on。语义腿跟随全局 mock 开关——
+                # 生产（mock off）走真模型，离线 mock 环境走关键词腿（置信度门槛兜住误判）。
+                _chat_center_singleton = ChatCenter(
+                    use_mock_llm=mock,
+                    t4a_enabled=True,
+                    semantic_extractor=IntentExtractor(use_mock=mock),
+                )
     return _chat_center_singleton
 
 
