@@ -231,3 +231,67 @@ async def semantic_relabel(
     except Exception as exc:  # 模型不可用 / 输出非法 → 兜底
         logger.warning("semantic_relabel failed: %s", exc)
         return ([], [], True, "", (time.perf_counter() - started) * 1000, type(exc).__name__)
+
+
+# ── T4-B：复合表达识别 ────────────────────────────────────────────
+
+# 明确的复合连接词（按「用户表达顺序」切分）。只认这些强连接词，避免误切普通句子。
+# "先 X 再 Y" 的「先」用前瞻式短语单独处理（见 _split_compound）。
+_COMPOUND_CONNECTORS = (
+    "然后", "接着", "之后", "再给我", "顺便", "外加", "再加上", "并且",
+    "以及", "然后帮我", "然后给我",
+)
+
+# 「再 + 祈使动词」也是复合连接（"再制定/再画/再出/再做/再找"），
+# 但要排除"再来5道/再看一眼"这类跨轮指代（"来/看"非祈使动词）。
+_COMPOUND_RE_VERBS = (
+    "制定", "规划", "画", "绘制", "出", "做", "找", "生成", "安排",
+    "加", "整理", "推荐", "设计", "讲", "解释", "出几道", "给",
+)
+
+
+def detect_compound_order(message: str) -> list[str] | None:
+    """识别一句里的多个诉求，返回按**用户表达顺序**的子句列表。
+
+    只认明确的复合连接词（"先讲解再出题""帮我找资料，再制定计划""出5道题顺便做图谱"）。
+    识别不到明确复合结构时返回 None（交给现有单意图/多候选路径）。
+
+    确定性、无 LLM；仅供 plan_builder 作排序参考，本函数不改变任何路由结果。
+    """
+    if not message or not message.strip():
+        return None
+
+    def _clean(s: str) -> str:
+        return s.strip().strip("，,。.；;！!？? ")
+
+    text = message.strip()
+
+    # 1) "先 ... 再/然后 ..." 结构
+    if text.startswith("先") or "先" in text[:4]:
+        stripped = text.lstrip("先").lstrip("，, ")
+        for cut in ("再", "然后"):
+            if cut in stripped:
+                first, second = stripped.split(cut, 1)
+                first, second = _clean(first), _clean(second)
+                if first and second:
+                    return [first, second]
+                break
+
+    # 2) 通用复合连接词切分
+    for conn in _COMPOUND_CONNECTORS:
+        if conn in text:
+            first, second = text.split(conn, 1)
+            first, second = _clean(first), _clean(second)
+            if first and second:
+                return [first, second]
+
+    # 3) 「再 + 祈使动词」："帮我找资料，再制定一个计划" → ["帮我找资料","制定一个计划"]
+    import re as _re
+    m = _re.search(r"[，,。；;]?\s*再(?=(?:" + "|".join(_COMPOUND_RE_VERBS) + r"))", text)
+    if m and m.start() > 0:
+        first = _clean(text[:m.start()])
+        second = _clean(text[m.end():])
+        if first and second:
+            return [first, second]
+
+    return None
