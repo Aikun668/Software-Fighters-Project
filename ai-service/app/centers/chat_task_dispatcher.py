@@ -27,6 +27,12 @@ from app.centers.exercise_center import ExerciseCenter
 from app.centers.execution_gate import ExecutionVerdict, blocks_execution, judge
 from app.centers.plan_center import PlanCenter
 from app.centers.resource_center import ResourceCenter
+from app.centers.chat_presentation import (
+    build_next_steps,
+    build_run_summary,
+    ensure_user_visible_response,
+    map_event_type,
+)
 from app.centers.schemas import (
     AggregatedResult,
     CenterResult,
@@ -341,9 +347,9 @@ class ChatTaskDispatcher:
             if self.CENTER_DELAY_SECONDS > 0 and idx < total - 1:
                 await asyncio.sleep(self.CENTER_DELAY_SECONDS)
 
-        summary = self._build_summary(aggregated)
+        summary = build_run_summary(aggregated)
         aggregated.summary = summary
-        aggregated.next_steps = self._build_next_steps(aggregated)
+        aggregated.next_steps = build_next_steps(aggregated)
 
         # 对账（指导文档 §6-3）：前端逐字收到的文本 vs 后台收集的完整文本
         run_emitter.emit(
@@ -411,11 +417,11 @@ class ChatTaskDispatcher:
                 message=result.error,
             )
         return StreamEvent(
-            type=self._map_event_type(result.event_type),
+            type=map_event_type(result.event_type),
             stage=result.mode,
             message=f"{result.agent} 输出",
             progress=progress,
-            data=self._ensure_user_visible_response(result),
+            data=ensure_user_visible_response(result),
         )
 
     def _serialize_final_payload(
@@ -430,92 +436,8 @@ class ChatTaskDispatcher:
             "stage": result.mode,
             "message": f"{result.agent} 输出",
             "progress": progress,
-            **self._ensure_user_visible_response(result),
+            **ensure_user_visible_response(result),
         }
-
-    @staticmethod
-    def _ensure_user_visible_response(result: CenterResult) -> dict:
-        """统一 content 合同（Task 11 评审回归项）：前端与 internal_api 的正文
-        只从 payload 的 response/content 键提取。中心产物 payload 若两者皆无，
-        优先取真实产物文本（solve 的 solution），仍无才合成用户可读摘要
-        （cap-01/05/06）。合不出摘要时保持 payload 原样，空正文由
-        internal_api 的终态合同转成 error，而不是伪造 content。"""
-        payload = result.payload if isinstance(result.payload, dict) else {}
-        if payload.get("response") or payload.get("content"):
-            return payload
-        solution = payload.get("solution")
-        if isinstance(solution, str) and solution.strip():
-            return {**payload, "response": solution, "content": solution}
-        summary = ChatTaskDispatcher._summarize_product(result.mode, payload)
-        if not summary:
-            return payload
-        return {**payload, "response": summary, "content": summary}
-
-    @staticmethod
-    def _summarize_product(mode: str, payload: dict) -> str:
-        title = str(payload.get("title") or payload.get("topic") or "").strip()
-        quoted = f"「{title}」" if title else ""
-        if mode == "plan":
-            steps = payload.get("steps") or []
-            total = payload.get("total_steps") or len(steps)
-            text = f"已为你生成{quoted}学习计划，共 {total} 步"
-            names = []
-            for step in steps[:3]:
-                if isinstance(step, dict):
-                    name = step.get("title") or step.get("topic") or step.get("name")
-                    if name:
-                        names.append(str(name))
-            if names:
-                text += "：" + "；".join(names)
-            days = payload.get("estimated_days")
-            if days:
-                text += f"，预计 {days} 天完成"
-            return text + "。"
-        if mode == "visualization":
-            blocks = payload.get("blocks") or []
-            return f"已为你生成{quoted}的可视化图解，共 {len(blocks)} 个内容块。"
-        if mode == "exercise":
-            count = payload.get("count") or payload.get("total")
-            return f"已为你生成{quoted}的 {count} 道练习题。" if count else f"已为你生成{quoted}练习题。"
-        if mode == "resource":
-            return f"已为你生成{quoted}的学习资源。"
-        # 无可描述产物（如 auto 中心空回答）时返回空串：由上层终态合同
-        # 补 error，而不是伪造「已完成xx处理。」
-        return ""
-
-    def _map_event_type(self, event_type: str) -> StreamEventType:
-        mapping = {
-            "content": StreamEventType.CONTENT,
-            "plan": StreamEventType.CONTENT,
-            "resource": StreamEventType.CONTENT,
-            "exercise": StreamEventType.CONTENT,
-            "visualization": StreamEventType.CONTENT,
-            "error": StreamEventType.ERROR,
-            "inquiry": StreamEventType.INQUIRY,
-        }
-        return mapping.get(event_type, StreamEventType.CONTENT)
-
-    def _build_summary(self, aggregated: AggregatedResult) -> str:
-        if not aggregated.results:
-            return "已完成处理。"
-        parts = []
-        for r in aggregated.results:
-            if r.error:
-                parts.append(f"{r.mode} 执行出现错误")
-            else:
-                parts.append(f"{r.mode} 已完成")
-        return "；".join(parts) + "。"
-
-    def _build_next_steps(self, aggregated: AggregatedResult) -> list[str]:
-        steps = []
-        intents = [r.intent for r in aggregated.results if not r.error]
-        if "learning_path" in intents and "exercise_gen" not in intents:
-            steps.append("可以尝试生成配套练习题巩固路径内容")
-        if "exercise_gen" in intents and "learning_path" not in intents:
-            steps.append("可以规划系统学习路径")
-        if "resource_gen" in intents:
-            steps.append("可以导出为 PPT/PDF 便于复习")
-        return steps
 
     def _serialize_result(self, result: CenterResult) -> dict[str, Any]:
         # 注意：本 dict 进对外 SSE done 载荷的 results[]，其 shape 受 sse_contract.json
