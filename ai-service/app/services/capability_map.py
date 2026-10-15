@@ -48,4 +48,13 @@ KIND_TO_CENTER: dict[str, str] = {
     "VISUALIZATION": "visualization",
 }
 
+# T4-C：意图级数据依赖（下游 intent → 依赖的上游 intent）。
+# 仅声明「下游产物确实需要上游内容」的真依赖；顺序关系不在此表（那是 execution order）。
+# 例："诊断薄弱点→生成针对性练习" exercise_gen 依赖 diagnose 的 mastery_vector；
+#     "解这道题→找类似题" exercise_gen 依赖 solve_problem 的题目内容。
+INTENT_DEPENDENCIES: dict[str, list[str]] = {
+    "exercise_gen": ["diagnose", "solve_problem"],
+    "learning_path": ["diagnose"],
+}
+
 ON_TOKEN_CENTERS: frozenset[str] = frozenset({"auto", "exercise"})

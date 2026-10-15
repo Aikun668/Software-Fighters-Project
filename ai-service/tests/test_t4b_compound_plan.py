@@ -55,3 +55,40 @@ class TestCompoundPlanFromSemantic:
     def test_unknown_intent_returns_none(self):
         cc = _center()
         assert cc._compound_plan_from_semantic("x", _sr(["tutor_question", "not_a_real_intent"]), None, None, 3) is None
+
+
+class TestDependencyEdges:
+    def test_diagnose_then_exercise_sets_depends_on(self):
+        cc = _center()
+        plan = cc._compound_plan_from_semantic(
+            "诊断一下薄弱点，然后生成针对性练习",
+            _sr(["diagnose", "exercise_gen"]),
+            None, None, 3,
+        )
+        assert plan is not None
+        # exercise_gen 依赖 diagnose
+        ex = [t for t in plan.tasks if t.intent == "exercise_gen"][0]
+        diag = [t for t in plan.tasks if t.intent == "diagnose"][0]
+        assert diag.sequence in ex.depends_on
+
+    def test_solve_then_exercise_sets_depends_on(self):
+        cc = _center()
+        plan = cc._compound_plan_from_semantic(
+            "求解这道题，然后找几个类似题",
+            _sr(["solve_problem", "exercise_gen"]),
+            None, None, 3,
+        )
+        ex = [t for t in plan.tasks if t.intent == "exercise_gen"][0]
+        solve = [t for t in plan.tasks if t.intent == "solve_problem"][0]
+        assert solve.sequence in ex.depends_on
+
+    def test_no_dependency_pair_gets_empty(self):
+        cc = _center()
+        plan = cc._compound_plan_from_semantic(
+            "先讲解再出题",
+            _sr(["tutor_question", "exercise_gen"]),
+            None, None, 3,
+        )
+        ex = [t for t in plan.tasks if t.intent == "exercise_gen"][0]
+        # tutor_question 不在依赖表，exercise_gen 不应依赖它
+        assert ex.depends_on == []

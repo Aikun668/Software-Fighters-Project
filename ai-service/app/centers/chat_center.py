@@ -29,7 +29,7 @@ from app.events.types import (
     recommendation_event,
 )
 from app.services.capability_gate import CapabilityGate, CapabilityKind
-from app.services.capability_map import KIND_TO_CENTER, INTENT_CENTER_MAP
+from app.services.capability_map import INTENT_CENTER_MAP, INTENT_DEPENDENCIES, KIND_TO_CENTER
 from app.services.intent_extractor import IntentExtractor
 from app.services.semantic_router import (
     SEMANTIC_TAKEOVER_CONFIDENCE,
@@ -317,6 +317,14 @@ class ChatCenter:
                 sequence=idx,
                 confidence=conf,
             ))
+
+        # T4-C：按意图级依赖表填 depends_on（真依赖，非顺序）。下游 intent 依赖的上游
+        # intent 若在本计划内，则记其 sequence。
+        for t in tasks:
+            for upstream_intent in INTENT_DEPENDENCIES.get(t.intent, []):
+                for up in tasks:
+                    if up.intent == upstream_intent and up.sequence != t.sequence:
+                        t.depends_on.append(up.sequence)
 
         return ExecutionPlan(
             tasks=tasks[:max_intents],
