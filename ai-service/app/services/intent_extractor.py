@@ -356,7 +356,22 @@ def _mock_extract_params(intent: INTENT_TYPES, message: str) -> dict:
         topic = _extract_topic(message)
         cm = COUNT_PATTERN.search(message)
         count = int(cm.group(1)) if cm else 5
-        return {"topic": topic, "count": count}
+        # T4-C：补 suggested_types 让 ResourceCenter type_direct 直通 flashcard Agent，
+        # 不再依赖 _rule_route 词根碰运气。
+        return {"topic": topic, "count": count, "suggested_types": ["flashcard"]}
+
+    if intent == "code_example":
+        # T4-C：此前 code_example 落到 return {}（空 params），topic 缺失、无 suggested_types，
+        # ResourceCenter 只能拿整句 input 当 topic 走词根兜底。补 topic/language/suggested_types，
+        # 使 type_direct 直通 code Agent，确定性产出代码示例。
+        topic = _extract_topic(message)
+        language = "python"
+        for kw, lang in (("java", "java"), ("javascript", "javascript"), ("c++", "cpp"),
+                         ("cpp", "cpp"), ("go", "go"), ("rust", "rust")):
+            if kw in message.lower():
+                language = lang
+                break
+        return {"topic": topic, "language": language, "suggested_types": ["code"]}
 
     if intent == "profile_building":
         return {"message": message.strip()}
