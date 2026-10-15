@@ -237,10 +237,13 @@ INTENT_REGISTRY: list[IntentDef] = [
 
 
 def _build_extraction_prompt() -> str:
-    """构建精简版 LLM 提取 prompt — 5 大类意图。
+    """构建精简版 LLM 提取 prompt — 8 大类意图。
 
-    细粒度路由（解题/诊断/画像）由 RouterAgent 关键词粗路由处理，
-    LLM 只需判断消息属于哪个 Center，大幅降低分类难度。
+    T4-C：从 5 类扩到 8 类，补 solve_problem / code_example / flashcard_gen 三个
+    「产物明确」的意图，消除「解具体题/要代码/要闪卡」被误塞进 tutor_question 或
+    resource_gen 的断层（实测 8 类 p95 更稳、冷门意图全识别对）。
+    diagnose / profile_building / knowledge_graph 仍走 RouterAgent 关键词粗路由，
+    因它们涉及既有学习状态与授权边界（master plan T4-C 第 3/4 条），不并入语义腿。
     """
     parts = [
         "分析用户消息，判断其意图类别。返回JSON。",
@@ -250,13 +253,15 @@ def _build_extraction_prompt() -> str:
         "2. 单意图消息只输出一个意图，多诉求消息（如'解释X再出几道题'）才输出多个",
         "3. 不确定时用 tutor_question 兜底",
         "",
-        "意图类别（5类）：",
+        "意图类别（8类）：",
         "1. tutor_question - 答疑/概念解释/闲聊/问为什么/问怎么做",
-        "2. resource_gen - 生成学习资源（教程/文档/代码/闪卡/思维导图/项目）",
-        "3. exercise_gen - 生成练习题/出题/做题",
-        "4. learning_path - 学习路径规划/学习路线/怎么学",
-        "5. visualize - 画图/可视化/流程图/知识图谱",
-        "6. unknown - 无法识别",
+        "2. solve_problem - 解一道具体题目（求解/计算/证明/推导/这道题怎么做/求极限/求积分）",
+        "3. code_example - 要代码示例（写代码/代码实现/给个代码示例/给个例子/实现一个）",
+        "4. flashcard_gen - 要记忆闪卡（闪卡/记忆卡/背诵/单词卡）",
+        "5. resource_gen - 生成学习资源（教程/文档/讲义/课件，不含代码和闪卡）",
+        "6. exercise_gen - 生成练习题/出题/做题",
+        "7. learning_path - 学习路径规划/学习路线/怎么学",
+        "8. visualize - 画图/可视化/流程图/知识图谱",
         "",
         '返回格式：{"intents":[{"intent":"exercise_gen","params":{"topic":"...","count":5},"confidence":0.95}],"is_clear":true}',
         "is_clear 表示意图是否清晰可执行；模糊设为 false。",
