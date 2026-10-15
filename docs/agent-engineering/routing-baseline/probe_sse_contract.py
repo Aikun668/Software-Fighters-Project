@@ -307,6 +307,64 @@ async def _run_chain(chain: dict) -> dict:
     }
 
 
+def _diff_paths(a: Any, b: Any, path: str = "") -> list[str]:
+    """递归找出解析后两个 JSON 的结构差异路径（供 --verify 报错定位）。"""
+    diffs: list[str] = []
+    if type(a) is not type(b):
+        diffs.append(f"{path}: 类型 {type(a).__name__} -> {type(b).__name__}")
+        return diffs
+    if isinstance(a, dict):
+        for k in sorted(set(a) | set(b)):
+            if k not in a:
+                diffs.append(f"{path}/{k}: 新增键")
+            elif k not in b:
+                diffs.append(f"{path}/{k}: 缺失键")
+            else:
+                diffs += _diff_paths(a[k], b[k], f"{path}/{k}")
+    elif isinstance(a, list):
+        if len(a) != len(b):
+            diffs.append(f"{path}: 列表长度 {len(a)} -> {len(b)}")
+        for i, (x, y) in enumerate(zip(a, b)):
+            diffs += _diff_paths(x, y, f"{path}[{i}]")
+    elif a != b:
+        diffs.append(f"{path}: {a!r} -> {b!r}")
+    return diffs
+
+
+def _emit(records: list[dict], termination: list[dict]) -> dict:
+    return {"chains": records, "termination": termination}
+
+
+async def _collect() -> dict:
+    records = []
+    for chain in CHAINS:
+        records.append(await _run_chain(chain))
+    termination = await _run_termination_cases()
+    return _emit(records, termination)
+
+
+async def verify() -> int:
+    """--verify：重新生成契约并与基线文件比对（解析后精确 diff）。不一致返回非零。"""
+    if not os.path.exists(OUT):
+        print(f"[verify] 基线不存在: {OUT}")
+        return 2
+    with open(OUT, encoding="utf-8") as fh:
+        baseline = json.load(fh)
+
+    current = await _collect()
+    if baseline == current:
+        print(f"[verify] SSE 契约与基线一致（{OUT}）")
+        return 0
+
+    diffs = _diff_paths(baseline, current)
+    print(f"[verify] SSE 契约已偏离基线：{len(diffs)} 处差异")
+    for d in diffs[:50]:
+        print(f"  {d}")
+    if len(diffs) > 50:
+        print(f"  ... 还有 {len(diffs) - 50} 处")
+    return 1
+
+
 async def main() -> None:
     records = []
     for chain in CHAINS:
@@ -316,7 +374,7 @@ async def main() -> None:
 
     with open(OUT, "w", encoding="utf-8") as fh:
         json.dump(
-            {"chains": records, "termination": termination},
+            _emit(records, termination),
             fh,
             ensure_ascii=False,
             indent=2,
@@ -352,5 +410,8 @@ async def main() -> None:
     else:
         print("全部链路 + 终态合同两次运行一致（结构层面确定）。")
 
+
+if "--verify" in sys.argv:
+    sys.exit(asyncio.run(verify()))
 
 asyncio.run(main())
