@@ -81,3 +81,17 @@
   route_plan_split / ownership_contract）148 passed。
 - 旁路旧行为指纹 = `2624a51be09b9d5e`（T0 一致，0 异常 0 非确定）。
 - 启用接管默认 off：9 条用例锁定「off 不接管 / on 仅保守接管 / gate 权威不被覆盖」。
+
+## 七、启用预演（mock 语义腿，未拨开关）
+
+`preview_t4a_enabled.py` 用 `t4a_enabled=True` + 离线 mock 语义腿跑了 140 条：
+
+- 57 条 uncertain 中 11 条被接管；DRAFT_CONFIRMED 里**改善 6 / 变差 1**。
+- 变差的唯一 1 条是 C108「举个例子」：mock 关键词腿因"例子"命中 resource_gen，但 gold 是
+  NORMAL_CHAT。**这印证 mock 关键词腿不够格做启用接管**——真 LLM 语义腿是启用前的硬前提。
+- 改善样例：C030/C104/C112（隐式出题→exercise）、C053/C056/C060（规划→plan）、
+  C047/C103（代码示例→resource）。
+
+结论：启用接管的代码与测试已就绪（默认 off），但**真正拨开关前必须先接真 LLM 语义腿**
+（`INTENT_USE_LLM=1`），否则会把"举个例子"这类误判进资源路由。真 LLM 的预算实测 +
+58 条裁决是剩余前置。
