@@ -518,10 +518,9 @@ class ChatTaskDispatcher:
         return steps
 
     def _serialize_result(self, result: CenterResult) -> dict[str, Any]:
-        # T4-C：三态归一。error 非空 → 至少是 error；否则沿用 center 给的 final_status。
-        status = getattr(result, "final_status", "success")
-        if result.error and status == "success":
-            status = "error"
+        # 注意：本 dict 进对外 SSE done 载荷的 results[]，其 shape 受 sse_contract.json
+        # 基线（sha256 866a6c6d）约束，**不得新增键**。T4-C 的 final_status 属审计用途，
+        # 留在 CenterResult 上供 routing_audit 读取，不在此暴露（见 test_sse_contract）。
         return {
             "mode": result.mode,
             "intent": result.intent,
@@ -529,6 +528,5 @@ class ChatTaskDispatcher:
             "agent": result.agent,
             "sequence": result.sequence,
             "error": result.error,
-            "final_status": status,
             "payload_keys": list(result.payload.keys()),
         }

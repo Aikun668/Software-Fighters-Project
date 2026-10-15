@@ -1,4 +1,7 @@
-"""T4-C 三态结果语义（路由正确/执行成功/产物可用）契约。"""
+"""T4-C 三态结果语义（路由正确/执行成功/产物可用）契约。
+
+关键：final_status 是**审计字段**，留在 CenterResult 上，**不进对外 SSE 契约**。
+"""
 
 import asyncio
 
@@ -51,28 +54,23 @@ async def _run(d, mode="resource", intent="resource_gen"):
 
 
 class TestFinalStatusSemantics:
+    """final_status 是审计字段（CenterResult 上），**不进对外 SSE done 载荷**——
+    后者受 sse_contract.json 基线约束，不得新增键。"""
+
     @pytest.mark.asyncio
-    async def test_success_defaults_to_success(self):
+    async def test_final_status_not_in_sse_payload(self):
+        # SSE done 的 results[] shape 必须与基线一致：不得出现 final_status
         d = _dispatcher(_StatusCenter())
         r = await _run(d)
-        assert r["error"] is None
-        assert r["final_status"] == "success"
+        assert "final_status" not in r
 
     @pytest.mark.asyncio
-    async def test_error_normalizes_to_error(self):
-        # center 返回 error 但 final_status 忘设 → 归一化为 error
-        d = _dispatcher(_StatusCenter(error="boom", final_status="success"))
-        r = await _run(d)
-        assert r["error"] == "boom"
-        assert r["final_status"] == "error"
-
-    @pytest.mark.asyncio
-    async def test_degraded_preserved(self):
-        # 执行成功但产物空 → degraded（不误报 success）
-        d = _dispatcher(_StatusCenter(final_status="degraded", empty_payload=True))
-        r = await _run(d)
-        assert r["error"] is None
-        assert r["final_status"] == "degraded"
+    async def test_center_result_carries_final_status(self):
+        # 审计字段仍在 CenterResult 上，供 routing_audit 读取
+        res = CenterResult(mode="resource", intent="resource_gen")
+        assert res.final_status == "success"
+        res2 = CenterResult(mode="resource", intent="resource_gen", final_status="degraded")
+        assert res2.final_status == "degraded"
 
     @pytest.mark.asyncio
     async def test_payload_keys_present(self):
