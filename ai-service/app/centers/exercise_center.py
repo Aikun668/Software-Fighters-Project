@@ -91,6 +91,19 @@ class ExerciseCenter:
         count = task.params.get("count", 3)
         difficulty = task.params.get("difficulty", "medium")
 
+        # T4-C：消费上游结果（数据依赖闭环）。诊断上游给出薄弱点/下一技能时，
+        # 用它定制针对性练习的 topic 与难度；否则用任务自带参数。
+        upstream = context.get("upstream_results") or []
+        for u in upstream:
+            if u.get("intent") == "diagnose":
+                payload = u.get("payload") or {}
+                if payload.get("next_skill"):
+                    topic = payload["next_skill"]
+                mv = payload.get("mastery_vector") or {}
+                weak = min(mv.items(), key=lambda kv: kv[1]) if mv else None
+                if weak and weak[1] < 0.6:
+                    difficulty = "hard" if weak[1] < 0.3 else "medium"
+
         agent = self._exercise_agent()
         try:
             run_state: dict = {
