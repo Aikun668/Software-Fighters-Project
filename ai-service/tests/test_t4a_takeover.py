@@ -17,11 +17,12 @@ from app.services.intent_extractor import IntentExtractor, IntentResult, MultiIn
 
 
 class _StubExtractor:
-    """可控语义结果：注入 intents / is_clear / error，验证接管边界。"""
+    """可控语义结果：注入 intents / is_clear / confidence / error，验证接管边界。"""
 
-    def __init__(self, intents, is_clear=True, error=None):
+    def __init__(self, intents, is_clear=True, confidence=0.9, error=None):
         self.intents = intents
         self.is_clear = is_clear
+        self.confidence = confidence
         self.error = error
         self.calls = 0
 
@@ -30,7 +31,7 @@ class _StubExtractor:
         if self.error:
             raise RuntimeError(self.error)
         return MultiIntentResult(
-            intents=[IntentResult(intent=i, confidence=0.9) for i in self.intents],
+            intents=[IntentResult(intent=i, confidence=self.confidence) for i in self.intents],
             is_clear=self.is_clear,
             raw_message=message,
         )
@@ -104,6 +105,17 @@ class TestTakeoverConservative:
     async def test_auto_domain_intent_does_not_take_over(self):
         # diagnose / profile_building / solve_problem 映射到 auto，不算"明确能力直通"
         cc = _center(True, ["diagnose"])
+        plan = await cc.route("数据结构好难啊", mode="auto")
+        assert [t.intent for t in plan.tasks] == ["tutor_question"]
+
+    @pytest.mark.asyncio
+    async def test_low_confidence_does_not_take_over(self):
+        # 单一能力意图但置信度 0.55 < 0.6 门槛 → 不接管（挡住 C108「举个例子」误判）
+        cc = ChatCenter(
+            router_agent=RouterAgent(intent_extractor=IntentExtractor(use_mock=True)),
+            t4a_enabled=True,
+            semantic_extractor=_StubExtractor(["resource_gen"], confidence=0.55),
+        )
         plan = await cc.route("数据结构好难啊", mode="auto")
         assert [t.intent for t in plan.tasks] == ["tutor_question"]
 

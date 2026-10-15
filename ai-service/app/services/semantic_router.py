@@ -33,6 +33,12 @@ logger = logging.getLogger(__name__)
 # 语义调用的超时预算（p95 ≤ 1000ms 的硬上限）
 SEMANTIC_TIMEOUT_SEC = 1.0
 
+# 启用接管的最小置信度：语义腿给唯一能力意图时，最高置信度低于此值不接管，
+# 保持旧行为（答疑兜底）。设 0.6 是因为 mock 关键词腿把单命中换算成 0.597 的
+# 伪置信度（"举个例子"→resource 即此），0.6 能把这类低置信误判挡在门外；
+# 真 LLM 腿给明确能力通常 ≥0.8，能正常过门槛。此值可在预算实测阶段按真模型分布回调。
+SEMANTIC_TAKEOVER_CONFIDENCE = 0.6
+
 
 class RouteState(str, Enum):
     """三态：直通能力 / 直通聊天 / 不确定（需语义重判）。"""
@@ -191,10 +197,11 @@ async def semantic_relabel(
     intent_extractor: Any | None = None,
     max_intents: int = 3,
     clarity_threshold: float = 0.5,
-) -> tuple[list[str], bool, str, float | None, str | None]:
+) -> tuple[list[str], list[float], bool, str, float | None, str | None]:
     """按需语义重判：委托 IntentExtractor.extract_multi，超时/异常兜底。
 
-    返回 (intents, is_clear, inquiry_question, latency_ms, error)。
+    返回 (intents, confidences, is_clear, inquiry_question, latency_ms, error)。
+    confidences 与 intents 同序，供接管方设置信度门槛；失败时为空列表。
     超时/失败时不抛异常，返回空列表让调用方兜底为原行为。
     """
     from app.services.intent_extractor import IntentExtractor  # noqa: E402 延迟导入，避免契约依赖
@@ -208,15 +215,17 @@ async def semantic_relabel(
             )
         latency_ms = (time.perf_counter() - started) * 1000
         intents = [r.intent for r in result.intents]
+        confidences = [r.confidence for r in result.intents]
         return (
             intents,
+            confidences,
             result.is_clear,
             result.inquiry_question,
             latency_ms,
             None,
         )
     except TimeoutError:
-        return ([], True, "", (time.perf_counter() - started) * 1000, "timeout")
+        return ([], [], True, "", (time.perf_counter() - started) * 1000, "timeout")
     except Exception as exc:  # 模型不可用 / 输出非法 → 兜底
         logger.warning("semantic_relabel failed: %s", exc)
-        return ([], True, "", (time.perf_counter() - started) * 1000, type(exc).__name__)
+        return ([], [], True, "", (time.perf_counter() - started) * 1000, type(exc).__name__)

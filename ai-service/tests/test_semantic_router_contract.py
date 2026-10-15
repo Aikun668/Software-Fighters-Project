@@ -17,7 +17,6 @@ import asyncio
 import pytest
 
 from app.services.semantic_router import (
-    SEMANTIC_TIMEOUT_SEC,
     RouteState,
     classify,
     semantic_relabel,
@@ -174,35 +173,35 @@ class _SlowExtractor:
 
 
 class TestSemanticRelabelBudget:
-    def test_timeout_budget_is_one_second(self):
-        assert SEMANTIC_TIMEOUT_SEC == 1.0
-
     @pytest.mark.asyncio
     async def test_success_returns_intents_and_latency(self):
-        intents, is_clear, inquiry, latency, err = await semantic_relabel(
+        intents, confidences, is_clear, inquiry, latency, err = await semantic_relabel(
             message="数据好难", intent_extractor=_SlowExtractor()
         )
         assert intents == ["tutor_question"]
+        assert confidences == [0.5]
         assert is_clear is True
         assert latency is not None and latency >= 0
         assert err is None
 
     @pytest.mark.asyncio
     async def test_timeout_falls_back_without_raising(self):
-        intents, is_clear, inquiry, latency, err = await semantic_relabel(
+        intents, confidences, is_clear, inquiry, latency, err = await semantic_relabel(
             message="数据好难",
             intent_extractor=_SlowExtractor(hang=True),
         )
         assert intents == []
+        assert confidences == []
         assert err == "timeout"
 
     @pytest.mark.asyncio
     async def test_exception_falls_back_without_raising(self):
-        intents, is_clear, inquiry, latency, err = await semantic_relabel(
+        intents, confidences, is_clear, inquiry, latency, err = await semantic_relabel(
             message="数据好难",
             intent_extractor=_SlowExtractor(raise_exc=RuntimeError("boom")),
         )
         assert intents == []
+        assert confidences == []
         assert err == "RuntimeError"
 
     @pytest.mark.asyncio

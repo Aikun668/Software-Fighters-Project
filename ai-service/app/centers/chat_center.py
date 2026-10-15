@@ -32,6 +32,7 @@ from app.services.capability_gate import CapabilityGate, CapabilityKind
 from app.services.capability_map import KIND_TO_CENTER, INTENT_CENTER_MAP
 from app.services.intent_extractor import IntentExtractor
 from app.services.semantic_router import (
+    SEMANTIC_TAKEOVER_CONFIDENCE,
     RouteState,
     classify,
     semantic_relabel,
@@ -172,7 +173,7 @@ class ChatCenter:
                 message=message,
                 intent_extractor=self.semantic_extractor,
             )
-            intents, is_clear, inquiry, latency, err = semantic_result
+            intents, _confidences, is_clear, inquiry, latency, err = semantic_result
             meta.update({
                 "route_source": "semantic" if err is None else "fallback",
                 "semantic_called": True,
@@ -209,18 +210,21 @@ class ChatCenter:
         - 排除 tutor_question / unknown（保持答疑兜底）
         - 意图必须映射到非 auto 的合法 center（auto 域不算"明确能力直通"）
         - 语义出错/不清不接管
+        - 最高置信度 ≥ SEMANTIC_TAKEOVER_CONFIDENCE 才接管（挡未校准的伪置信误判）
         """
         if not self.t4a_enabled or state is not RouteState.UNCERTAIN:
             return None
         if semantic_result is None:
             return None
-        intents, is_clear, _inquiry, _latency, err = semantic_result
+        intents, confidences, is_clear, _inquiry, _latency, err = semantic_result
         if err is not None or not is_clear:
             return None
-        if len(intents) != 1:
+        if len(intents) != 1 or len(confidences) != 1:
             return None
         intent = intents[0]
         if intent in ("tutor_question", "unknown"):
+            return None
+        if confidences[0] < SEMANTIC_TAKEOVER_CONFIDENCE:
             return None
         center = INTENT_CENTER_MAP.get(intent)
         if not center or center == "auto":
