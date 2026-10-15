@@ -57,9 +57,11 @@
 
 ## 四、未闭环 / 下一步
 
-1. **启用接管未实现**：`t4a_enabled` 参数与开关已留口，但默认 `False`，语义结果尚未真正接管路由。
-   需等：① 58 条 POLICY_UNDECIDED 人工裁决（尤其 C131–C135 否定/引用、C097–C115 多轮指代）；
-   ② 真 LLM 语义腿的预算验收（p95 ≤ 1000ms 实测）。
+1. **启用接管已实现（默认 off）**：`_takeover_plan` 已落地——仅当 `t4a_enabled=True` 且
+   「不确定态 + 语义给出唯一、非答疑、映射到非 auto 中心的能力意图」才接管；其余一律
+   保持旧行为。**默认 False，线上行为零变化**（旁路指纹仍是 T0 的 `2624a51be09b9d5e`）。
+   尚未「拨开关」：需等 ① 58 条 POLICY_UNDECIDED 人工裁决；② 真 LLM 语义腿预算实测
+   （p95 ≤ 1000ms）。
 2. 多轮指代消解（C097–C115）归 T4-B，不在本阶段。
 3. `semantic_relabel` 外层 1s 超时对真 LLM 可能偏紧（`OpenAILLM.chat` 内部 180s + 重试），
    启用阶段需按实测调预算。
@@ -67,12 +69,15 @@
 ## 五、产物
 
 - `app/services/semantic_router.py` + `tests/test_semantic_router_contract.py`（16 用例）
+- `tests/test_t4a_takeover.py`（9 用例，锁启用接管的保守边界）
 - `chat_center.py` / `routing_audit.py` / `test_routing_ownership_contract.py` 增量
 - `probe_t4a_sidecar.py` + `routing_t4a_sidecar.jsonl`（140 条旁路数据）
 - `build_t4a_compare.py` + `routing_t4a_compare.csv`（旧 vs Gold 对照表）
+- `list_t4a_undecided.py`（58 条待裁决清单，按三态分组）
 
 ## 六、验证
 
-- 契约测试 16 passed；核心路由测试（capability_gate / routing_audit / route_plan_split /
-  ownership_contract）138 passed。
+- 契约测试 16 + 接管 9 passed；核心路由测试（capability_gate / routing_audit /
+  route_plan_split / ownership_contract）148 passed。
 - 旁路旧行为指纹 = `2624a51be09b9d5e`（T0 一致，0 异常 0 非确定）。
+- 启用接管默认 off：9 条用例锁定「off 不接管 / on 仅保守接管 / gate 权威不被覆盖」。

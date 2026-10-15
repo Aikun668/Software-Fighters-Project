@@ -29,7 +29,7 @@ from app.events.types import (
     recommendation_event,
 )
 from app.services.capability_gate import CapabilityGate, CapabilityKind
-from app.services.capability_map import KIND_TO_CENTER
+from app.services.capability_map import KIND_TO_CENTER, INTENT_CENTER_MAP
 from app.services.intent_extractor import IntentExtractor
 from app.services.semantic_router import (
     RouteState,
@@ -146,17 +146,16 @@ class ChatCenter:
 
     async def _semantic_audit_meta(
         self, message: str, gate_kind: str, gate_reason: str, gate_confidence: float
-    ) -> dict:
-        """T4-A 三态旁路判定：只产出审计字段，不改变执行。
+    ) -> tuple[dict, RouteState, tuple | None]:
+        """T4-A 三态旁路判定：产出审计字段；返回三态与语义结果供启用接管复用。
 
-        返回 dict，调用方把它并入 `intent_meta`（进而进入 execute 的审计记录）。
-        - DIRECT_CAPABILITY / DIRECT_CHAT：不调语义，只记 route_source 与 semantic_state。
-        - UNCERTAIN：调一次 semantic_relabel（默认 mock extractor，离线可复现），
-          记下 intents / is_clear / latency / error，但不据此改返回的 plan。
+        返回 (meta, state, semantic_result)：
+        - meta：并入 intent_meta 的审计字段（不改执行）
+        - state：三态（RouteState）
+        - semantic_result：仅 UNCERTAIN 态为 (intents, is_clear, inquiry, latency, error)，
+          其余态为 None。启用接管复用这份结果，**不重复调语义**（预算铁律：每请求 ≤1 次）。
 
-        旁路约束：本方法**从不**影响 `route()` 返回的 ExecutionPlan 内容，
-        只增审计元数据。启用接管（t4a_enabled=True 时真正改路由）是第二步，
-        在 140 条对照验收通过后再开。
+        旁路约束：本方法**从不**影响 `route()` 返回的 ExecutionPlan 内容。
         """
         decision = classify(
             gate_kind=gate_kind,
@@ -167,11 +166,13 @@ class ChatCenter:
         meta: dict[str, Any] = {
             "semantic_state": decision.state.value,
         }
+        semantic_result: tuple | None = None
         if decision.state is RouteState.UNCERTAIN:
-            intents, is_clear, inquiry, latency, err = await semantic_relabel(
+            semantic_result = await semantic_relabel(
                 message=message,
                 intent_extractor=self.semantic_extractor,
             )
+            intents, is_clear, inquiry, latency, err = semantic_result
             meta.update({
                 "route_source": "semantic" if err is None else "fallback",
                 "semantic_called": True,
@@ -187,7 +188,50 @@ class ChatCenter:
                 "semantic_latency_ms": None,
                 "semantic_error": None,
             })
-        return meta
+        return meta, decision.state, semantic_result
+
+    def _takeover_plan(
+        self,
+        message: str,
+        state: RouteState,
+        semantic_result: tuple | None,
+        student_profile: dict | None,
+        context: dict | None,
+        max_intents: int,
+    ) -> ExecutionPlan | None:
+        """启用接管的保守实现（仅 t4a_enabled=True 时由 route 调用）。
+
+        只接管「不确定态 + 语义给出唯一、明确、非答疑的能力意图」这一种安全情形；
+        其余一律返回 None（不接管，保持旧行为）。
+
+        安全边界：
+        - 只接受单一意图（len==1），排除多意图歧义
+        - 排除 tutor_question / unknown（保持答疑兜底）
+        - 意图必须映射到非 auto 的合法 center（auto 域不算"明确能力直通"）
+        - 语义出错/不清不接管
+        """
+        if not self.t4a_enabled or state is not RouteState.UNCERTAIN:
+            return None
+        if semantic_result is None:
+            return None
+        intents, is_clear, _inquiry, _latency, err = semantic_result
+        if err is not None or not is_clear:
+            return None
+        if len(intents) != 1:
+            return None
+        intent = intents[0]
+        if intent in ("tutor_question", "unknown"):
+            return None
+        center = INTENT_CENTER_MAP.get(intent)
+        if not center or center == "auto":
+            return None
+        # 用该单一意图直建计划（等价于显式 mode 直通），交 PlanBuilder 校验
+        return self._plan_builder.build(
+            self._get_router().decide(message, center),
+            student_profile=student_profile,
+            context=context,
+            max_intents=max_intents,
+        )
 
     async def route(
         self,
@@ -226,8 +270,8 @@ class ChatCenter:
         )
         audit_meta = self._audit_context(message, context)
 
-        # T4-A 三态旁路：只记审计，不改返回的 plan（启用接管是第二步）
-        semantic_meta = await self._semantic_audit_meta(
+        # T4-A 三态旁路：只记审计，不改返回的 plan（启用接管仅 t4a_enabled=True 时触发）
+        semantic_meta, semantic_state, semantic_result = await self._semantic_audit_meta(
             message=message,
             gate_kind=decision.kind.value,
             gate_reason=decision.reason,
@@ -236,6 +280,23 @@ class ChatCenter:
         audit_meta = {**audit_meta, **semantic_meta}
 
         if decision.kind is CapabilityKind.NORMAL_CHAT:
+            # 启用接管（保守）：不确定态且语义给出唯一明确能力 → 接管；
+            # 否则回落原 NORMAL_CHAT。默认 t4a_enabled=False 时恒不接管。
+            takeover = self._takeover_plan(
+                message=message,
+                state=semantic_state,
+                semantic_result=semantic_result,
+                student_profile=student_profile,
+                context=context,
+                max_intents=max_intents,
+            )
+            if takeover is not None:
+                return self._plan_builder.annotate_route(
+                    takeover,
+                    route=decision.kind.value,
+                    reason=decision.reason,
+                    audit_meta=audit_meta,
+                )
             return self._plan_builder.build_normal_chat(
                 message,
                 student_profile=student_profile,
