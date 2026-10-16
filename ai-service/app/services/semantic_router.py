@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -325,6 +326,12 @@ _REFERENT_MARKS = (
     "别的", "继续", "换个",
 )
 
+# FINAL 实测：口语复述请求（"再多来几道"/"再给几道"/"再来点"）此前不命中标记词，
+# 导致落回答疑、丢失上一轮主题。用正则覆盖「再(+多/少) + 来/要/给/出 + 数量」。
+_RE_REFERENT_RETRY = re.compile(
+    r"再(多|少)?\s*(来|要|给|出|做)\s*(点|些|几|一|两|二|三|\d+)\s*[道个题张]?"
+)
+
 
 def detect_referent(message: str) -> bool:
     """检测当前消息是否是对上一轮产物的跨轮指代（确定性、无 LLM）。
@@ -334,4 +341,6 @@ def detect_referent(message: str) -> bool:
     if not message or not message.strip():
         return False
     text = message.strip()
-    return any(m in text for m in _REFERENT_MARKS)
+    if any(m in text for m in _REFERENT_MARKS):
+        return True
+    return _RE_REFERENT_RETRY.search(text) is not None

@@ -51,6 +51,10 @@ from app.services.llm_service import (
 
 logger = logging.getLogger(__name__)
 
+# FINAL 实测：params 模型里 topic 的占位默认值；语义腿在无上文时（如"再来5道"）
+# 会返回它，需要靠跨轮继承替换成真实主题。
+_PLACEHOLDER_TOPIC = "AI基础"
+
 
 class ChatCenter:
     # 推荐抽取（LLM 调用）的超时预算，防止 done 被阻塞。Task 2 收敛到
@@ -196,6 +200,31 @@ class ChatCenter:
             })
         return meta, decision.state, semantic_result
 
+    def _inherit_topic(self, context: dict | None, message: str) -> str:
+        """从最近的上一轮 user 消息抽取主题，供跨轮指代（"再来5道"）继承。
+
+        确定性、无 LLM：只取最近一条非当前的 user 消息，用关键词表/清洗抽 topic。
+        抽不到则返回空串（调用方保持原样）。
+        """
+        msgs = list((context or {}).get("messages") or [])
+        prev_user = ""
+        for m in reversed(msgs):
+            if m.get("role") == "user" and m.get("content") != message:
+                prev_user = m.get("content", "")
+                break
+        if not prev_user:
+            return ""
+        try:
+            from app.services.intent_extractor import _extract_topic
+
+            topic = _extract_topic(prev_user)
+        except Exception:
+            return ""
+        topic = (topic or "").strip()
+        if not topic or topic == _PLACEHOLDER_TOPIC:
+            return ""
+        return topic
+
     def _takeover_plan(
         self,
         message: str,
@@ -222,21 +251,36 @@ class ChatCenter:
         if semantic_result is None:
             return None
         intents, confidences, is_clear, _inquiry, _latency, err, sem_params = semantic_result
-        if err is not None or not is_clear:
+        if err is not None:
             return None
         if len(intents) != 1 or len(confidences) != 1:
             return None
         intent = intents[0]
         if intent in ("tutor_question", "unknown"):
             return None
-        if confidences[0] < SEMANTIC_TAKEOVER_CONFIDENCE:
-            return None
         center = INTENT_CENTER_MAP.get(intent)
         if not center or center == "auto":
             return None
         # FINAL 实测修复：用语义腿给出的 params（含 count/difficulty/language），
         # 而非重建 —— 此前重建导致「生成一道题」的 count=1 丢失、落回默认 3。
-        params = dict(sem_params[0]) if sem_params else {}
+        params = self._clean_params(dict(sem_params[0]) if sem_params else {})
+        # FINAL 实测修复②：跨轮指代（"再来5道/再来几道"）语义腿看不到上文，topic 落成
+        # 占位「AI基础」或 None，且 is_clear 恒为 False（模型因缺上文而"不确定"）。
+        # 此时从上一条 user 消息继承主题；继承不到则按原规则拒绝（保持保守）。
+        topic = str(params.get("topic") or "").strip()
+        inherited_topic = ""
+        if not topic or topic == _PLACEHOLDER_TOPIC:
+            inherited_topic = self._inherit_topic(context, message)
+            if inherited_topic:
+                params["topic"] = inherited_topic
+        # 明确指代 + 成功继承主题 → 放行（语义腿缺上文必然判 is_clear=False；
+        # 意图本身可靠：量词"道/题"已足够定位为出题类）。
+        referent_resolved = detect_referent(message) and bool(inherited_topic)
+        if not referent_resolved:
+            if not is_clear:
+                return None
+            if confidences[0] < SEMANTIC_TAKEOVER_CONFIDENCE:
+                return None
         task = CenterTask(
             mode=center,
             intent=intent,
@@ -251,6 +295,34 @@ class ChatCenter:
             intent_meta={"raw_message": message, "strategy": "t4a_takeover"},
             max_intents=max_intents,
         )
+
+    @staticmethod
+    def _clean_params(params: dict) -> dict:
+        """清洗语义腿参数里的脏值。
+
+        FINAL 实测：真模型偶发返回 count=None / count='more'（字符串）/ topic=None，
+        这些脏值会直达下游 Center 并可能破坏参数校验，故在此归一。
+        - count：只接受正整数，其余丢弃（下游回退默认值）
+        - topic/difficulty/language：None 或空串丢弃
+        """
+        for key in ("topic", "difficulty", "language"):
+            val = params.get(key)
+            if val is None or (isinstance(val, str) and not val.strip()):
+                params.pop(key, None)
+        count = params.get("count")
+        if isinstance(count, bool):
+            params.pop("count", None)
+        elif isinstance(count, int):
+            if count <= 0:
+                params.pop("count", None)
+        elif isinstance(count, str):
+            if count.strip().isdigit() and int(count) > 0:
+                params["count"] = int(count)
+            else:
+                params.pop("count", None)
+        elif count is not None:
+            params.pop("count", None)
+        return params
 
     def _reorder_by_compound(self, message: str, plan: ExecutionPlan) -> ExecutionPlan:
         """T4-B：按用户明确表达的顺序重排多任务（确定性、无 LLM）。
