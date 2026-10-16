@@ -1,10 +1,12 @@
 <script setup lang="ts">
+import { nextTick, ref, watch } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import type { ChatMessage } from './chat-types'
 import MessageActions from './MessageActions.vue'
+import { renderMermaidBlocks } from '@/utils/mermaid'
 
-defineProps<{
+const props = defineProps<{
   conversationStarted: boolean
   resourceMode: boolean
   messages: ChatMessage[]
@@ -18,6 +20,8 @@ const emit = defineEmits<{
   imageLoaded: []
 }>()
 
+const threadRef = ref<{ $el?: HTMLElement } | null>(null)
+
 /**
  * 助手正文按 Markdown 渲染。
  *
@@ -28,6 +32,36 @@ const emit = defineEmits<{
  */
 const renderMarkdown = (content: string): string =>
   DOMPurify.sanitize(marked.parse(content, { breaks: true, gfm: true }) as string)
+
+/**
+ * FINAL 用户需求：AI 返回的 mermaid 图（mindmap/流程图…）此前只是代码块渲染不出来。
+ * 在 Markdown 落到 DOM 后扫描 ```mermaid 代码块并替换为 SVG。
+ * - 幂等（已渲染的块带标记跳过），流式期间反复触发也安全；
+ * - **只在流结束后渲染**：流式中途图表语法还不完整，渲染必报错；
+ *   流式中的 token 更新（`m.streaming:1` 前缀变化）直接跳过，避免无效渲染尝试。
+ */
+watch(
+  () => props.messages.map((m) => `${m.id}:${m.streaming ? 1 : 0}:${m.content.length}`).join('|'),
+  async (value, oldValue) => {
+    // 流式进行中（本轮 watch 仍因同一批 streaming 消息的长度变化触发）不渲染：
+    // 语法残缺时 mermaid.render 必失败，白白消耗且可能留下残图。
+    const wasStreamingOnly =
+      oldValue !== undefined &&
+      props.messages.some((m) => m.streaming) &&
+      value.split('|').length === oldValue.split('|').length &&
+      value.split('|').every((seg, i) => {
+        const old = oldValue.split('|')[i]
+        if (!old) return false
+        const [id, flag] = seg.split(':')
+        const [oldId, oldFlag] = old.split(':')
+        return id === oldId && flag === oldFlag && flag === '1'
+      })
+    if (wasStreamingOnly) return
+    await nextTick()
+    await renderMermaidBlocks(threadRef.value?.$el ?? null)
+  },
+  { immediate: true },
+)
 
 /** 距底部多少像素内仍视为“贴底” */
 const BOTTOM_THRESHOLD = 80
@@ -50,7 +84,7 @@ const canShowActions = (msg: ChatMessage) =>
 </script>
 
 <template>
-  <div class="chat-scroll-region" @scroll.passive="onScroll">
+  <div ref="threadRef" class="chat-scroll-region" @scroll.passive="onScroll">
     <div v-if="!conversationStarted" class="chat-empty-state">
       <div class="chat-heading">
         <h1>{{ resourceMode ? '想生成什么学习资料？' : '下午好——今天想研究什么？' }}</h1>
@@ -154,6 +188,13 @@ const canShowActions = (msg: ChatMessage) =>
 .msg-markdown :deep(td) { padding: 6px 10px; border: 1px solid var(--line); text-align: left; }
 .msg-markdown :deep(th) { background: rgba(120,105,85,.08); font-weight: 600; }
 .msg-markdown :deep(img) { max-width: 100%; height: auto; border-radius: 8px; }
+/* mermaid 渲染结果：白底卡片 + 可横向滚动，宽图不撑破气泡 */
+.msg-markdown :deep(.mermaid-figure) {
+  margin: 10px 0; padding: 12px;
+  border: 1px solid var(--line); border-radius: 9px;
+  background: #fff; overflow-x: auto;
+}
+.msg-markdown :deep(.mermaid-figure svg) { max-width: 100%; height: auto; display: block; margin: 0 auto; }
 
 .msg-images { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .msg-images img { width: 120px; max-width: 100%; height: 120px; border-radius: 8px; object-fit: cover; background: rgba(255,255,255,.25); }

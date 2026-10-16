@@ -24,6 +24,7 @@
     "echarts": "^6.1.0",
     "element-plus": "^2.14.0",
     "marked": "^18.0.4",
+    "mermaid": "^12.2.0",
     "pinia": "^3.0.4",
     "pinia-plugin-persistedstate": "^4.7.1",
     "reka-ui": "^2.9.10",
