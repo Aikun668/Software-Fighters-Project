@@ -14,11 +14,13 @@ def _center(enabled=True):
     )
 
 
-# semantic_result 六元组: (intents, confidences, is_clear, inquiry, latency, err)
-def _sr(intents, confidences=None, is_clear=True, err=None):
+# semantic_result 七元组: (intents, confidences, is_clear, inquiry, latency, err, params)
+def _sr(intents, confidences=None, is_clear=True, err=None, params=None):
     if confidences is None:
         confidences = [0.9] * len(intents)
-    return (intents, confidences, is_clear, "", 10.0, err)
+    if params is None:
+        params = [{} for _ in intents]
+    return (intents, confidences, is_clear, "", 10.0, err, params)
 
 
 class TestCompoundPlanFromSemantic:

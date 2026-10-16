@@ -178,7 +178,7 @@ class ChatCenter:
                 message=message,
                 intent_extractor=self.semantic_extractor,
             )
-            intents, _confidences, is_clear, inquiry, latency, err = semantic_result
+            intents, _confidences, is_clear, inquiry, latency, err, _params = semantic_result
             meta.update({
                 "route_source": "semantic" if err is None else "fallback",
                 "semantic_called": True,
@@ -221,7 +221,7 @@ class ChatCenter:
             return None
         if semantic_result is None:
             return None
-        intents, confidences, is_clear, _inquiry, _latency, err = semantic_result
+        intents, confidences, is_clear, _inquiry, _latency, err, sem_params = semantic_result
         if err is not None or not is_clear:
             return None
         if len(intents) != 1 or len(confidences) != 1:
@@ -234,11 +234,21 @@ class ChatCenter:
         center = INTENT_CENTER_MAP.get(intent)
         if not center or center == "auto":
             return None
-        # 用该单一意图直建计划（等价于显式 mode 直通），交 PlanBuilder 校验
-        return self._plan_builder.build(
-            self._get_router().decide(message, center),
-            student_profile=student_profile,
-            context=context,
+        # FINAL 实测修复：用语义腿给出的 params（含 count/difficulty/language），
+        # 而非重建 —— 此前重建导致「生成一道题」的 count=1 丢失、落回默认 3。
+        params = dict(sem_params[0]) if sem_params else {}
+        task = CenterTask(
+            mode=center,
+            intent=intent,
+            input=message,
+            params=params,
+            context={**(context or {}), "student_profile": student_profile or {}},
+            confidence=confidences[0],
+        )
+        return ExecutionPlan(
+            tasks=[task],
+            is_clear=True,
+            intent_meta={"raw_message": message, "strategy": "t4a_takeover"},
             max_intents=max_intents,
         )
 
@@ -295,7 +305,7 @@ class ChatCenter:
         """
         if not self.t4b_enabled or semantic_result is None:
             return None
-        intents, confidences, is_clear, _inquiry, _latency, err = semantic_result
+        intents, confidences, is_clear, _inquiry, _latency, err, sem_params = semantic_result
         if err is not None or not is_clear:
             return None
         if len(intents) < 2:
@@ -308,11 +318,13 @@ class ChatCenter:
             if not center:
                 return None  # 含未知意图则整体放弃（保守）
             conf = confidences[idx] if idx < len(confidences) else 0.0
+            # FINAL 实测修复：保留语义腿给出的 params（count/difficulty/language 等）
+            p = dict(sem_params[idx]) if idx < len(sem_params) and sem_params[idx] else {}
             tasks.append(CenterTask(
                 mode=center,
                 intent=intent,
                 input=message,
-                params={},
+                params=p,
                 context={**ctx, "student_profile": student_profile or {}},
                 sequence=idx,
                 confidence=conf,

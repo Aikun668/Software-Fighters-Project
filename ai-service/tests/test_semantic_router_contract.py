@@ -175,7 +175,7 @@ class _SlowExtractor:
 class TestSemanticRelabelBudget:
     @pytest.mark.asyncio
     async def test_success_returns_intents_and_latency(self):
-        intents, confidences, is_clear, inquiry, latency, err = await semantic_relabel(
+        intents, confidences, is_clear, inquiry, latency, err, params = await semantic_relabel(
             message="数据好难", intent_extractor=_SlowExtractor()
         )
         assert intents == ["tutor_question"]
@@ -183,10 +183,27 @@ class TestSemanticRelabelBudget:
         assert is_clear is True
         assert latency is not None and latency >= 0
         assert err is None
+        assert isinstance(params, list)
+
+    @pytest.mark.asyncio
+    async def test_relabel_carries_params(self):
+        # FINAL 实测修复：语义腿的 params（count/difficulty）必须被带出，供接管使用
+        from app.services.intent_extractor import IntentResult, MultiIntentResult
+
+        class _P:
+            async def extract_multi(self, message, max_intents=3, clarity_threshold=0.5):
+                return MultiIntentResult(
+                    intents=[IntentResult(intent="exercise_gen", confidence=0.9,
+                                          params={"count": 1, "difficulty": "hard"})],
+                    is_clear=True, raw_message=message,
+                )
+
+        *_, params = await semantic_relabel(message="x", intent_extractor=_P())
+        assert params == [{"count": 1, "difficulty": "hard"}]
 
     @pytest.mark.asyncio
     async def test_timeout_falls_back_without_raising(self):
-        intents, confidences, is_clear, inquiry, latency, err = await semantic_relabel(
+        intents, confidences, is_clear, inquiry, latency, err, params = await semantic_relabel(
             message="数据好难",
             intent_extractor=_SlowExtractor(hang=True),
         )
@@ -196,7 +213,7 @@ class TestSemanticRelabelBudget:
 
     @pytest.mark.asyncio
     async def test_exception_falls_back_without_raising(self):
-        intents, confidences, is_clear, inquiry, latency, err = await semantic_relabel(
+        intents, confidences, is_clear, inquiry, latency, err, params = await semantic_relabel(
             message="数据好难",
             intent_extractor=_SlowExtractor(raise_exc=RuntimeError("boom")),
         )

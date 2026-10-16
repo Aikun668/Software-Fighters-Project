@@ -209,11 +209,13 @@ async def semantic_relabel(
     intent_extractor: Any | None = None,
     max_intents: int = 3,
     clarity_threshold: float = 0.5,
-) -> tuple[list[str], list[float], bool, str, float | None, str | None]:
+) -> tuple[list[str], list[float], bool, str, float | None, str | None, list[dict]]:
     """按需语义重判：委托 IntentExtractor.extract_multi，超时/异常兜底。
 
-    返回 (intents, confidences, is_clear, inquiry_question, latency_ms, error)。
-    confidences 与 intents 同序，供接管方设置信度门槛；失败时为空列表。
+    返回 (intents, confidences, is_clear, inquiry_question, latency_ms, error, params_list)。
+    params_list 与 intents 同序，携带语义腿抽出的参数（如 exercise 的 count/difficulty、
+    code 的 language）——FINAL 实测：此前只取 intent/confidence 丢弃 params，导致
+    「生成一道题」的 count=1 在接管后被重建为默认 3。
     超时/失败时不抛异常，返回空列表让调用方兜底为原行为。
     """
     from app.services.intent_extractor import IntentExtractor  # noqa: E402 延迟导入，避免契约依赖
@@ -228,6 +230,7 @@ async def semantic_relabel(
         latency_ms = (time.perf_counter() - started) * 1000
         intents = [r.intent for r in result.intents]
         confidences = [r.confidence for r in result.intents]
+        params_list = [dict(r.params or {}) for r in result.intents]
         return (
             intents,
             confidences,
@@ -235,12 +238,16 @@ async def semantic_relabel(
             result.inquiry_question,
             latency_ms,
             None,
+            params_list,
         )
     except TimeoutError:
-        return ([], [], True, "", (time.perf_counter() - started) * 1000, "timeout")
+        return ([], [], True, "", (time.perf_counter() - started) * 1000, "timeout", [])
     except Exception as exc:  # 模型不可用 / 输出非法 → 兜底
         logger.warning("semantic_relabel failed: %s", exc)
-        return ([], [], True, "", (time.perf_counter() - started) * 1000, type(exc).__name__)
+        return (
+            [], [], True, "", (time.perf_counter() - started) * 1000,
+            type(exc).__name__, [],
+        )
 
 
 # ── T4-B：复合表达识别 ────────────────────────────────────────────

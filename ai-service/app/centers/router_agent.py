@@ -63,6 +63,16 @@ class RouterAgent:
 
         if mode != "auto":
             intent = self.MODE_TO_INTENT.get(mode, "tutor_question")
+            # FINAL 实测修复：手动模式此前把 params 写死为 {question, topic}，丢了数量/难度
+            # 等参数（"生成一道题" 的 count=1 落回默认 3）。改为按意图抽取真实参数；
+            # 抽取失败时回落到原有的 {question, topic} 形态（保持既有契约）。
+            params: dict = {"question": message, "topic": message}
+            try:
+                extracted = _mock_extract_params(intent, message)  # type: ignore[arg-type]
+                if extracted:
+                    params = extracted
+            except Exception:
+                pass
             return RouteDecision(
                 source="manual",
                 message=message,
@@ -71,7 +81,7 @@ class RouterAgent:
                     RouteCandidate(
                         intent=intent,
                         rule_score=1.0,
-                        params={"question": message, "topic": message},
+                        params=params,
                     ),
                 ),
             )
