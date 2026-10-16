@@ -739,6 +739,22 @@ public class PythonClient {
                             String eventData = dataBuffer.toString();
                             dataBuffer = new StringBuilder();
 
+                            // 修复「同一上下文被拆成多个会话」：done 帧此前不带
+                            // conversation_id，前端 onDone(null) 后下一轮又新建会话。
+                            // Java 侧是会话 id 的权威来源，在此注入（不改 Python 的 SSE 契约）。
+                            Object convIdForEcho = request.get("conversation_id");
+                            try {
+                                Map<String, Object> peek = objectMapper.readValue(eventData, Map.class);
+                                if ("done".equals(peek.get("type"))
+                                        && convIdForEcho != null
+                                        && !peek.containsKey("conversation_id")) {
+                                    peek.put("conversation_id", convIdForEcho);
+                                    eventData = objectMapper.writeValueAsString(peek);
+                                }
+                            } catch (Exception ignore) {
+                                // 非 JSON 帧（心跳/残包）原样转发
+                            }
+
                             emitter.send(SseEmitter.event().data(eventData));
 
                             try {
@@ -757,6 +773,21 @@ public class PythonClient {
                                     Object tokenContent = event.get("content");
                                     if (tokenContent != null) {
                                         responseText.append(tokenContent.toString());
+                                    }
+                                } else if ("content".equals(type)) {
+                                    // 修复「对话内容显示不出来」：plan/resource 等中心不发 token，
+                                    // 其正文只在 content 帧的 data.response/content。
+                                    // 此前未累积 → 落库退化成占位符 [AI已回复]，刷新后正文丢失。
+                                    Object payload = event.get("data");
+                                    if (payload instanceof Map) {
+                                        Object text = ((Map<?, ?>) payload).get("response");
+                                        if (text == null) {
+                                            text = ((Map<?, ?>) payload).get("content");
+                                        }
+                                        if (text instanceof String && !((String) text).isBlank()
+                                                && responseText.length() == 0) {
+                                            responseText.append((String) text);
+                                        }
                                     }
                                 } else if ("inquiry".equals(type)) {
                                     // 捕获inquiry追问数据
