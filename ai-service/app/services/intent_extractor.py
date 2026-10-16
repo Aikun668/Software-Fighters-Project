@@ -202,7 +202,9 @@ INTENT_REGISTRY: list[IntentDef] = [
         params_model=CodeExampleParams,
         prompt="用户想要代码示例。从消息中提取：topic(主题)、language(编程语言,默认python)",
         keywords=["代码", "例子", "示例", "代码示例", "写一个", "怎么写", "实现", "写个", "编程"],
-        exclusive_keywords=["出题"],
+        # FINAL 实测：通用"写一个/写个"会命中"写一个计划/作文"→ 误判为要代码。
+        # 用 exclusive_keywords 一票否决"写作类产物"（非编程产物），保留"写一个快排"这类真代码请求。
+        exclusive_keywords=["出题", "计划", "作文", "文章", "报告", "总结", "汇报", "简历"],
     ),
     IntentDef(
         intent="tutor_question",
