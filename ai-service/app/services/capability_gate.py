@@ -94,7 +94,7 @@ _CAPABILITY_RULES: list[tuple[CapabilityKind, str, re.Pattern[str]]] = [
         CapabilityKind.EXERCISE,
         "verb_topic_exercise",
         re.compile(
-            r"(出|来|做|生成|设计|给我|帮我|请)" + _NO_PAST + (_FILL % 12)
+            r"(?<!要)(?<!得)(出|来|做|生成|设计|给我|帮我|请)" + _NO_PAST + (_FILL % 12)
             + r"(?<!这道)(?<!那道)(?<!该)"
             + r"(题|题目|试题|练习题|习题|试卷|卷子|填空|选词填空|选择题|判断题"
             r"|简答题|计算题|阅读理解|完形填空)"
@@ -120,13 +120,14 @@ _CAPABILITY_RULES: list[tuple[CapabilityKind, str, re.Pattern[str]]] = [
             + (_FILL % 6) + r"(知识图谱|图谱)"
         ),
     ),
-    # 制定/规划/安排 + 计划/路径："基于本周课程制定7天计划""帮我规划复习路径"
+    # 制定/规划/安排/写 + 计划/路径："基于本周课程制定7天计划""希望你写一个计划"
+    # （FINAL 实测：'写'此前不在动词表 → '希望你写一个计划' 漏判）
     (
         CapabilityKind.PLAN,
         "make_plan",
         re.compile(
-            r"(制定|规划|安排|生成|设计|做)" + _NO_PAST + (_FILL % 8)
-            + r"(学习计划|计划|学习路径|路径|路线|日程)"
+            r"(制定|规划|安排|生成|设计|做|写|拟|列)" + _NO_PAST + (_FILL % 8)
+            + r"(学习计划|计划|学习路径|路径|路线|日程|复习安排|备考计划)"
         ),
     ),
     # 祈使/整理动词 + 资料类产物："帮我找几个学习资源""生成10张闪卡"

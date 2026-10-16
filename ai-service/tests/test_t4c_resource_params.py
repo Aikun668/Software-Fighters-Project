@@ -5,7 +5,7 @@ flashcard_gen 产出 topic + count + suggested_types=["flashcard"]。
 这样 ResourceCenter 能 type_direct 直通对应 Specialist，不再词根碰运气。
 """
 
-from app.services.intent_extractor import _mock_extract_params
+from app.services.intent_extractor import _mock_extract_params, extract_count
 
 
 class TestCodeExampleParams:
@@ -32,3 +32,30 @@ class TestFlashcardParams:
     def test_flashcard_count(self):
         p = _mock_extract_params("flashcard_gen", "帮我生成10张关于进程的闪卡")
         assert p.get("count") == 10
+
+
+class TestChineseNumeralCount:
+    """FINAL 实测修复（会话 98/99）：'一道' 此前落到默认 3 道。"""
+
+    def test_chinese_one(self):
+        assert extract_count("帮我生成一道高数题", 3) == 1
+
+    def test_chinese_two(self):
+        assert extract_count("给我来两道题", 3) == 2
+
+    def test_chinese_ten_plus(self):
+        assert extract_count("出十五道题", 3) == 15
+
+    def test_arabic_still_works(self):
+        assert extract_count("帮我出5道题", 3) == 5
+
+    def test_vague_falls_back_to_default(self):
+        assert extract_count("给我来几道题", 3) == 3
+
+    def test_exercise_params_use_chinese_count(self):
+        p = _mock_extract_params("exercise_gen", "帮我生成一道高数题，很难的那种")
+        assert p.get("count") == 1
+
+    def test_flashcard_params_use_chinese_count(self):
+        p = _mock_extract_params("flashcard_gen", "帮我生成三张闪卡")
+        assert p.get("count") == 3

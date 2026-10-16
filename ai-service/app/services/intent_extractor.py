@@ -106,6 +106,48 @@ TOPIC_KEYWORDS = [
 
 COUNT_PATTERN = re.compile(r"(\d+)\s*[道个题张卡]")
 
+# 中文数字 → 阿拉伯数字（FINAL 实测修复：'一道题' 此前落到默认 3 道）
+_CN_DIGITS: dict[str, int] = {
+    "零": 0, "一": 1, "两": 2, "二": 2, "三": 3, "四": 4, "五": 5,
+    "六": 6, "七": 7, "八": 8, "九": 9,
+}
+_COUNT_UNITS = r"[道个题张卡]"  # 量词（与 COUNT_PATTERN 一致）
+
+
+def _cn_numeral_to_int(text: str) -> int | None:
+    """把「十五 / 二十 / 两 / 三」这类中文数字转成 int；无法解析返回 None。"""
+    if not text:
+        return None
+    if "十" in text:
+        left, _, right = text.partition("十")
+        tens = _CN_DIGITS.get(left, 1) if left else 1
+        ones = _CN_DIGITS.get(right, 0) if right else 0
+        return tens * 10 + ones
+    if len(text) == 1:
+        return _CN_DIGITS.get(text)
+    return None
+
+
+def extract_count(message: str, default: int) -> int:
+    """从消息里抽取数量，**同时支持阿拉伯数字与中文数字**。
+
+    - "出5道题"   -> 5
+    - "生成一道题" -> 1
+    - "来两道题"   -> 2
+    - "出十五道题" -> 15
+    抽取失败返回 default。
+    """
+    m = re.search(r"(\d+)\s*" + _COUNT_UNITS, message)
+    if m:
+        return int(m.group(1))
+    m2 = re.search(r"([零一两二三四五六七八九十]{1,3})\s*" + _COUNT_UNITS, message)
+    if m2:
+        val = _cn_numeral_to_int(m2.group(1))
+        if val is not None:
+            return val
+    return default
+
+
 DIFFICULTY_EASY = {"简单", "容易", "基础", "入门"}
 DIFFICULTY_HARD = {"困难", "高级", "挑战", "很难"}
 
@@ -336,8 +378,7 @@ def _extract_topic(message: str) -> str:
 def _mock_extract_params(intent: INTENT_TYPES, message: str) -> dict:
     if intent == "exercise_gen":
         topic = _extract_topic(message)
-        cm = COUNT_PATTERN.search(message)
-        count = int(cm.group(1)) if cm else 3
+        count = extract_count(message, 3)
         difficulty = "medium"
         if any(kw in message for kw in DIFFICULTY_EASY):
             difficulty = "easy"
@@ -359,8 +400,7 @@ def _mock_extract_params(intent: INTENT_TYPES, message: str) -> dict:
 
     if intent == "flashcard_gen":
         topic = _extract_topic(message)
-        cm = COUNT_PATTERN.search(message)
-        count = int(cm.group(1)) if cm else 5
+        count = extract_count(message, 5)
         # T4-C：补 suggested_types 让 ResourceCenter type_direct 直通 flashcard Agent，
         # 不再依赖 _rule_route 词根碰运气。
         return {"topic": topic, "count": count, "suggested_types": ["flashcard"]}

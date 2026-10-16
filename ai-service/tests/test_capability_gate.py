@@ -43,6 +43,35 @@ class TestGateContractSamples:
 
 
 # ═══════════════════════════════════════════════════════════════
+# FINAL 实测修复（用户真实会话暴露，合成用例未覆盖）
+# ═══════════════════════════════════════════════════════════════
+
+class TestLiveFindingsRegressions:
+    """2026-10-15 真实测试暴露的两类缺陷的回归锁。"""
+
+    def test_write_a_plan_is_plan(self, gate):
+        # 会话 104：「希望你写一个计划」——"写"此前不在 make_plan 动词表，漏判
+        assert gate.decide("希望你写一个计划").kind is CapabilityKind.PLAN
+        assert gate.decide("写一个学习计划").kind is CapabilityKind.PLAN
+
+    def test_declarative_do_questions_is_not_exercise(self, gate):
+        # 会话 104：「因为明天要做很多很多题」是陈述，不是请求出题
+        assert gate.decide("因为明天要做很多很多题").kind is CapabilityKind.NORMAL_CHAT
+        assert gate.decide("明天要做很多题").kind is CapabilityKind.NORMAL_CHAT
+
+    def test_full_live_message_routes_to_plan_not_exercise(self, gate):
+        # 会话 104 原句：主诉求是计划，从句"要做很多题"不得劫持
+        msg = "我现在准备睡觉了，但是希望你写一个计划，因为明天要做很多很多题，所以我想有顺序地做"
+        assert gate.decide(msg).kind is CapabilityKind.PLAN
+
+    def test_real_exercise_request_still_works(self, gate):
+        # 修复不得误伤真正的出题请求
+        assert gate.decide("帮我出 5 道题").kind is CapabilityKind.EXERCISE
+        assert gate.decide("给我出几道练习题").kind is CapabilityKind.EXERCISE
+        assert gate.decide("生成 10 道选择题").kind is CapabilityKind.EXERCISE
+
+
+# ═══════════════════════════════════════════════════════════════
 # 保守回退规则
 # ═══════════════════════════════════════════════════════════════
 
