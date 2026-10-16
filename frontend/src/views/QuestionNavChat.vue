@@ -250,7 +250,15 @@ const send = async () => {
         void scrollToEnd()
       },
       (conversationId) => {
-        if (conversationId !== null) currentConversationId.value = conversationId
+        if (conversationId !== null) {
+          currentConversationId.value = conversationId
+          // 同步到 URL：侧栏据 route.query.conversationId 高亮"当前会话"；
+          // 用 replace 避免产生一条多余的历史记录。
+          void router.replace({
+            path: '/question-nav-chat',
+            query: { conversationId: String(conversationId) },
+          })
+        }
         const msg = findMessage(assistantId)
         if (msg) {
           msg.streaming = false

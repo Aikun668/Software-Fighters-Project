@@ -25,7 +25,8 @@ vi.mock('@/api/files', () => ({
 }))
 
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  // 生产 router 同时具备 push/replace（done 后会 replace 同步会话 id 到 URL）
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
   useRoute: () => ({ query: routeQuery }),
 }))
 

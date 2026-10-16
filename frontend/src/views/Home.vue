@@ -72,6 +72,72 @@ const deleteTarget = ref<Conversation | null>(null)
 /** 正在提交的会话 id，用于禁用重复提交 */
 const busyId = ref<number | null>(null)
 
+/**
+ * 批量管理（FINAL 用户需求：只能一条条删太麻烦）。
+ * 「管理」进入选择模式 → 行前出现勾选框 → 勾选若干 → 「删除所选」（带确认）。
+ * 进入/退出选择模式都会清掉行内浮层，避免与勾选框叠加。
+ */
+const selectionMode = ref(false)
+const selectedIds = ref<Set<number>>(new Set())
+const batchConfirming = ref(false)
+const batchBusy = ref(false)
+
+const toggleSelectionMode = () => {
+  selectionMode.value = !selectionMode.value
+  selectedIds.value = new Set()
+  batchConfirming.value = false
+  closeRowOverlays()
+}
+const exitSelectionMode = () => {
+  selectionMode.value = false
+  selectedIds.value = new Set()
+  batchConfirming.value = false
+}
+const toggleSelect = (id: number) => {
+  const next = new Set(selectedIds.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  selectedIds.value = next
+}
+const selectedCount = computed(() => selectedIds.value.size)
+const selectAllVisible = () => {
+  if (selectedIds.value.size === conversations.value.length) {
+    selectedIds.value = new Set()
+  } else {
+    selectedIds.value = new Set(conversations.value.map((item) => item.id))
+  }
+}
+
+/** 批量删除：逐个调用既有接口；已删除/不存在的会话忽略失败，最后统一刷新 */
+const confirmBatchDelete = async () => {
+  if (!batchConfirming.value || batchBusy.value || !selectedIds.value.size) return
+  batchBusy.value = true
+  const ids = [...selectedIds.value]
+  let failed = 0
+  try {
+    for (const id of ids) {
+      try {
+        await deleteConversation(id)
+      } catch (error) {
+        failed += 1
+        console.error('批量删除会话失败', id, error)
+      }
+    }
+    conversations.value = conversations.value.filter((item) => !selectedIds.value.has(item.id))
+    ElMessage.success(failed ? `已删除 ${ids.length - failed} 条，${failed} 条失败` : `已删除 ${ids.length} 条会话`)
+    // 若删的包含当前打开的会话，退出选择模式并回到新对话页
+    const currentId = Number(route.query.conversationId)
+    if (Number.isInteger(currentId) && selectedIds.value.has(currentId)) {
+      exitSelectionMode()
+      void router.push({ path: '/question-nav-chat' })
+    } else {
+      exitSelectionMode()
+    }
+  } finally {
+    batchBusy.value = false
+  }
+}
+
 const navItems = [
   { label: '对话辅导', path: '/question-nav-chat', icon: MessageSquare },
   { label: '知识图谱', path: '/learning-resource-network', icon: Network },
@@ -84,6 +150,14 @@ const navItems = [
 const activePath = computed(() => route.path)
 const go = (path: string) => router.push(path)
 const formatConversationTime = (value: string) => value.replace('T', ' ').slice(0, 16)
+
+/** 当前打开的会话 id（来自路由 query）；侧栏据此高亮正在聊的那一条 */
+const activeConversationId = computed(() => {
+  const raw = route.query.conversationId
+  const value = Array.isArray(raw) ? raw[0] : raw
+  const id = Number(value)
+  return Number.isInteger(id) && id > 0 ? id : null
+})
 
 const loadConversations = async () => {
   listLoading.value = true
@@ -257,6 +331,35 @@ onBeforeUnmount(() => {
             <span>最近对话</span>
             <ChevronDown :size="15" :class="{ rotated: !historyOpen }" />
           </button>
+          <!-- 批量管理工具行（FINAL 用户需求：只能一条条删太麻烦） -->
+          <div v-if="historyOpen && conversations.length" class="batch-bar">
+            <button type="button" class="batch-toggle" @click="toggleSelectionMode">
+              {{ selectionMode ? '取消管理' : '管理' }}
+            </button>
+            <template v-if="selectionMode">
+              <button type="button" class="batch-toggle" @click="selectAllVisible">
+                {{ selectedCount === conversations.length ? '全不选' : '全选' }}
+              </button>
+              <button
+                type="button"
+                class="batch-toggle is-danger"
+                :disabled="!selectedCount || batchBusy"
+                @click="batchConfirming = true"
+              >
+                删除所选{{ selectedCount ? `（${selectedCount}）` : '' }}
+              </button>
+            </template>
+          </div>
+          <div v-if="batchConfirming" class="batch-confirm" role="dialog" aria-label="确认批量删除">
+            <p>删除选中的 {{ selectedCount }} 条会话？</p>
+            <span class="confirm-sub">会话与消息将一并删除，不可撤销。</span>
+            <div class="confirm-actions">
+              <button type="button" :disabled="batchBusy" @click="batchConfirming = false">取消</button>
+              <button type="button" class="is-danger batch-delete-btn" :disabled="batchBusy" @click="confirmBatchDelete">
+                {{ batchBusy ? '删除中…' : '删除' }}
+              </button>
+            </div>
+          </div>
           <div v-if="historyOpen" class="conversation-list">
             <span v-if="listLoading" class="conversation-state">正在加载…</span>
             <span v-else-if="!conversations.length" class="conversation-state">还没有历史对话</span>
@@ -265,9 +368,25 @@ onBeforeUnmount(() => {
                 v-for="conversation in conversations"
                 :key="conversation.id"
                 class="conversation-row"
-                :class="{ 'is-menu-open': menuOpenId === conversation.id, 'is-confirming': deleteTarget?.id === conversation.id }"
+                :class="{
+                  'is-menu-open': menuOpenId === conversation.id,
+                  'is-confirming': deleteTarget?.id === conversation.id,
+                  'is-active': activeConversationId === conversation.id,
+                }"
               >
                 <div class="conversation-line">
+                  <label
+                    v-if="selectionMode"
+                    class="row-check"
+                    :aria-label="`选择对话：${displayTitleOf(conversation)}`"
+                    @click.stop
+                  >
+                    <input
+                      type="checkbox"
+                      :checked="selectedIds.has(conversation.id)"
+                      @change="toggleSelect(conversation.id)"
+                    />
+                  </label>
                   <template v-if="renamingId === conversation.id">
                     <span class="status-dot" />
                     <input
@@ -409,6 +528,11 @@ onBeforeUnmount(() => {
 .conversation-line:hover .row-more, .row-more:focus-visible, .conversation-row.is-menu-open .row-more, .conversation-row.is-confirming .row-more { opacity: 1; }
 .row-more:hover, .row-more:focus-visible { background: rgba(255,255,255,.9); color: var(--ink); }
 .status-dot { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: #6fbea1; }.conversation-title { overflow: hidden; flex: 1; text-overflow: ellipsis; white-space: nowrap; }.conversation-item time { color: var(--soft-muted); font-size: 11px; }
+/* 当前正在聊的会话：左侧圆点变实色 + 整行浅底，一眼能对上"我现在聊的是哪条" */
+.conversation-row.is-active .conversation-line { background: var(--surface-muted); }
+.conversation-row.is-active .conversation-item { color: var(--ink); font-weight: 600; }
+.conversation-row.is-active .status-dot { background: var(--sage); box-shadow: 0 0 0 3px var(--sage-soft, rgba(111,190,161,.28)); }
+.conversation-row.is-active .conversation-item time { color: var(--muted); }
 /* 行内重命名：替换整行内容，避免与列表布局打架 */
 .conversation-rename { flex: 1; min-width: 0; margin: 6px 4px; padding: 3px 7px; border: 1px solid var(--sage); border-radius: 7px; background: var(--surface); color: var(--ink); font-size: 12px; outline: none; }
 /* 行内小浮层：紧贴现所在行向下展开，宽高由内容决定，不做全屏遮罩 */
@@ -423,6 +547,26 @@ onBeforeUnmount(() => {
 .confirm-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 3px; }
 .confirm-actions button { padding: 4px 10px; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; }
 .confirm-actions button:hover:not(:disabled) { background: var(--surface-muted); color: var(--ink); }
+.confirm-actions button.is-danger { border-color: #d8b0a4; color: #a4553c; }
+.confirm-actions button.is-danger:hover:not(:disabled) { background: var(--clay-soft); }
+
+/* ── 批量管理（多选删除）── */
+.batch-bar { display: flex; align-items: center; gap: 4px; padding: 0 4px 8px; }
+.batch-toggle { flex: 1; padding: 5px 6px; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--muted); font-size: 11px; cursor: pointer; white-space: nowrap; }
+.batch-toggle:hover:not(:disabled) { background: var(--surface-muted); color: var(--ink); }
+.batch-toggle.is-danger { color: #a4553c; border-color: #d8b0a4; }
+.batch-toggle.is-danger:hover:not(:disabled) { background: var(--clay-soft); }
+.batch-toggle:disabled { opacity: .45; cursor: not-allowed; }
+.batch-confirm { margin: 0 4px 8px 4px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: 0 6px 18px rgba(36,35,31,.09); }
+.batch-confirm p { margin: 0; color: var(--ink); font-size: 12px; }
+.batch-delete-btn { background: #a4553c !important; color: #fff !important; border-color: #a4553c !important; }
+.batch-delete-btn:hover:not(:disabled) { background: #8f4632 !important; }
+
+/* 选择模式下行首勾选框 */
+.row-check { display: grid; place-items: center; flex: 0 0 auto; padding: 0 2px 0 4px; cursor: pointer; }
+.row-check input { width: 14px; height: 14px; accent-color: var(--sage); cursor: pointer; }
+/* 选择模式下隐藏 [⋮]，避免两种操作叠在一起 */
+.conversation-row:has(.row-check) .row-more { display: none; }
 .confirm-actions button.is-danger { border-color: var(--clay); background: var(--clay); color: #fff; }
 .confirm-actions button.is-danger:hover:not(:disabled) { background: #b87d66; }
 .confirm-actions button:disabled { opacity: .6; cursor: default; }

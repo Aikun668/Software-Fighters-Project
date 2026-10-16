@@ -84,6 +84,32 @@ describe('Home 全局侧边栏会话入口', () => {
     })
   })
 
+  it('路由里的 conversationId 对应的会话行高亮为当前会话（FINAL 用户需求A）', async () => {
+    routeQuery.conversationId = '23'
+    getConversationsMock.mockResolvedValue([
+      makeConversation({ id: 22, title: '别的会话' }),
+      makeConversation({ id: 23, title: '当前正在聊的会话' }),
+    ])
+
+    const wrapper = mountPage()
+    await flushPromises()
+
+    const rows = wrapper.findAll('.conversation-row')
+    expect(rows).toHaveLength(2)
+    // 22 不是当前 → 无 is-active；23 是当前 → 有 is-active
+    expect(rows[0].classes()).not.toContain('is-active')
+    expect(rows[1].classes()).toContain('is-active')
+  })
+
+  it('没有 conversationId 时任何一行都不高亮', async () => {
+    getConversationsMock.mockResolvedValue([makeConversation({ id: 22 })])
+
+    const wrapper = mountPage()
+    await flushPromises()
+
+    expect(wrapper.findAll('.conversation-row.is-active')).toHaveLength(0)
+  })
+
   it('点击现有的新建对话按钮回到无会话 ID 的聊天入口', async () => {
     const wrapper = mountPage()
     await wrapper.get('.new-chat').trigger('click')
@@ -308,5 +334,74 @@ describe('侧边栏会话行内管理', () => {
     await flushPromises()
 
     expect(wrapper.find('.row-menu').exists()).toBe(false)
+  })
+})
+
+describe('Home 侧边栏批量删除会话', () => {
+  it('进入管理模式出现勾选框，勾选两条并确认后批量删除', async () => {
+    getConversationsMock.mockResolvedValue([
+      makeConversation({ id: 22, title: '会话A' }),
+      makeConversation({ id: 23, title: '会话B' }),
+      makeConversation({ id: 24, title: '会话C' }),
+    ])
+    deleteConversationMock.mockResolvedValue(true)
+
+    const wrapper = mountPage()
+    await flushPromises()
+
+    // 1. 点「管理」进入选择模式，出现勾选框
+    await wrapper.get('.batch-bar .batch-toggle').trigger('click')
+    const boxes = wrapper.findAll('.row-check input')
+    expect(boxes).toHaveLength(3)
+
+    // 2. 勾选前两条
+    await boxes[0].setValue(true)
+    await boxes[1].setValue(true)
+    expect(wrapper.get('.batch-bar button.is-danger').text()).toContain('（2）')
+
+    // 3. 点「删除所选」→ 出现确认卡 → 确认
+    await wrapper.get('.batch-bar button.is-danger').trigger('click')
+    await wrapper.get('.batch-confirm .batch-delete-btn').trigger('click')
+    await flushPromises()
+
+    // 4. 逐条调用删除接口（只删勾选的两条），列表本地移除，成功 toast
+    expect(deleteConversationMock).toHaveBeenCalledTimes(2)
+    expect(deleteConversationMock).toHaveBeenNthCalledWith(1, 22)
+    expect(deleteConversationMock).toHaveBeenNthCalledWith(2, 23)
+    expect(wrapper.findAll('.conversation-item')).toHaveLength(1)
+    expect(successMock).toHaveBeenCalled()
+  })
+
+  it('删除的会话包含当前打开的会话时，回到新对话页', async () => {
+    routeQuery.conversationId = '22'
+    getConversationsMock.mockResolvedValue([
+      makeConversation({ id: 22, title: '当前会话' }),
+      makeConversation({ id: 23, title: '别的会话' }),
+    ])
+    deleteConversationMock.mockResolvedValue(true)
+
+    const wrapper = mountPage()
+    await flushPromises()
+
+    await wrapper.get('.batch-bar .batch-toggle').trigger('click')
+    await wrapper.findAll('.row-check input')[0].setValue(true)
+    await wrapper.get('.batch-bar button.is-danger').trigger('click')
+    await wrapper.get('.batch-confirm .batch-delete-btn').trigger('click')
+    await flushPromises()
+
+    expect(pushMock).toHaveBeenCalledWith({ path: '/question-nav-chat' })
+    // 删除后退出管理模式
+    expect(wrapper.find('.row-check').exists()).toBe(false)
+  })
+
+  it('未勾选任何会话时「删除所选」不可点', async () => {
+    getConversationsMock.mockResolvedValue([makeConversation()])
+
+    const wrapper = mountPage()
+    await flushPromises()
+    await wrapper.get('.batch-bar .batch-toggle').trigger('click')
+
+    const deleteBtn = wrapper.get('.batch-bar button.is-danger')
+    expect((deleteBtn.element as HTMLButtonElement).disabled).toBe(true)
   })
 })
