@@ -2,7 +2,7 @@
 /**
  * 注意力可访问关系矩阵（MVP）。
  *
- * 只展示 Mask 决定的可访问关系；未提供 weights 时绝不渲染强弱热力或概率文字。
+ * 只展示 Mask 决定的可访问关系；不支持 weights，颜色不代表真实 Attention 权重（D-007）。
  */
 import { computed, ref, watch } from 'vue'
 
@@ -13,7 +13,6 @@ const props = defineProps<{
   mode: AttentionMode
   queryLabels?: string[]
   keyLabels?: string[]
-  weights?: number[][]
 }>()
 
 const MIN_TOKENS = 3
@@ -53,20 +52,6 @@ const allowedTotal = computed(() => {
 })
 const maskedTotal = computed(() => tokenCount.value * tokenCount.value - allowedTotal.value)
 
-const hasWeights = computed(() => {
-  const w = props.weights
-  const n = tokenCount.value
-  return !!w && w.length === n && w.every((row) => row.length === n)
-})
-
-const maxWeight = computed(() => Math.max(0, ...(props.weights ?? []).flat()))
-
-const relativeWeight = (q: number, k: number): number | null => {
-  const value = props.weights?.[q]?.[k]
-  if (!hasWeights.value || maxWeight.value <= 0 || value === undefined) return null
-  return value / maxWeight.value
-}
-
 const activeSelection = computed(() => {
   const s = selected.value
   if (!s || s.q >= tokenCount.value || s.k >= tokenCount.value) return null
@@ -79,16 +64,12 @@ interface MatrixCell {
   allowed: boolean
   selected: boolean
   inSelectedRow: boolean
-  strength: number | null
   label: string
-  style?: Record<string, string>
 }
 
 const buildCell = (q: number, k: number): MatrixCell => {
   const allowed = isAllowed(q, k)
-  const strength = allowed ? relativeWeight(q, k) : null
   const stateText = allowed ? '可访问' : '被 Mask 屏蔽，不可访问'
-  const weightText = strength === null ? '' : `，相对权重 ${Math.round(strength * 100)}%`
   const current = activeSelection.value
   return {
     q,
@@ -96,9 +77,7 @@ const buildCell = (q: number, k: number): MatrixCell => {
     allowed,
     selected: current?.q === q && current?.k === k,
     inSelectedRow: allowed && current?.q === q && current?.k !== k,
-    strength,
-    label: `${queryName(q)} → ${keyName(k)}：${stateText}${weightText}`,
-    style: strength === null ? undefined : { '--attn-strength': strength.toFixed(3) },
+    label: `${queryName(q)} → ${keyName(k)}：${stateText}`,
   }
 }
 
@@ -120,7 +99,6 @@ const cellClass = (cell: MatrixCell) => ({
   'attn-cell--masked': !cell.allowed,
   'attn-cell--selected': cell.selected,
   'attn-cell--row': cell.inSelectedRow,
-  'attn-cell--heat': cell.strength !== null,
 })
 
 const modeLabel = computed(() => (mode.value === 'causal' ? '因果' : '双向'))
@@ -201,7 +179,6 @@ const explanation = computed(() => {
               type="button"
               class="attn-cell"
               :class="cellClass(cell)"
-              :style="cell.style"
               :disabled="!cell.allowed"
               :aria-label="cell.label"
               :aria-pressed="cell.selected"
@@ -225,9 +202,6 @@ const explanation = computed(() => {
 
     <footer class="attn-matrix__footer">
       <p class="attn-matrix__legend">颜色表示 Mask/可访问关系，不代表真实 Attention 权重。</p>
-      <p v-if="hasWeights" class="attn-matrix__legend">
-        已提供相对权重：深浅按全矩阵最大值归一化。
-      </p>
       <p class="attn-matrix__stats">
         可访问 {{ allowedTotal }} · 灰色 {{ maskedTotal }} · 共 {{ tokenCount * tokenCount }} 格
       </p>
@@ -345,10 +319,6 @@ const explanation = computed(() => {
 .attn-cell--masked {
   background: var(--viz-disabled);
   cursor: not-allowed;
-}
-
-.attn-cell--heat {
-  background: rgb(68 127 159 / calc(var(--attn-strength, 0) * 0.9));
 }
 
 .attn-cell:focus-visible {

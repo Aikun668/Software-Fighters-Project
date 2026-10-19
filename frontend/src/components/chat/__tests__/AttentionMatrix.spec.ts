@@ -66,7 +66,7 @@ describe('AttentionMatrix', () => {
     wrapper.unmount()
   })
 
-  it('无 weights 时不出现强弱/概率文字与热力着色，图例说明 Mask 关系', () => {
+  it('不出现强弱/概率文字与热力着色，图例说明 Mask 关系', () => {
     const wrapper = mountMatrix()
 
     const text = wrapper.text()
@@ -89,7 +89,7 @@ describe('AttentionMatrix', () => {
     wrapper.unmount()
   })
 
-  it('提供 weights 时按相对权重着色并在 aria-label 中给出百分比', () => {
+  it('提供 weights 时被忽略：不出现热力着色与百分比文字（D-007）', () => {
     const weights = [
       [1, 0, 0],
       [0.5, 0.5, 0],
@@ -97,8 +97,9 @@ describe('AttentionMatrix', () => {
     ]
     const wrapper = mountMatrix({ tokenCount: 3, weights })
 
-    expect(wrapper.findAll('.attn-cell--heat')).toHaveLength(6)
-    expect(findCell(wrapper, 1, 1).attributes('aria-label')).toContain('相对权重 100%')
+    expect(wrapper.findAll('.attn-cell--heat')).toHaveLength(0)
+    expect(wrapper.text()).not.toMatch(/相对权重|%/)
+    expect(findCell(wrapper, 1, 1).attributes('aria-label')).not.toContain('相对权重')
     wrapper.unmount()
   })
 })
