@@ -5,6 +5,8 @@ import { createPinia } from 'pinia'
 import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'
 import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
+// KaTeX 公式样式：对话正文里的数学公式排版依赖它（缺了会退化成错位的裸字符）
+import 'katex/dist/katex.min.css'
 import './styles/variables.css'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 // @ts-ignore
