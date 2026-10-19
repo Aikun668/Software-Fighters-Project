@@ -20,6 +20,7 @@ class StreamEventType(str, Enum):
     TOKEN = "token"
     STEPS = "steps"           # 练习域解题步骤
     CONFIDENCE = "confidence"  # 练习域解题置信度
+    VISUALIZATION = "visualization"  # 结构化 UI block（图表）独立事件，正文仍是 Markdown（D-004，方案 A）
 
 
 @dataclass
