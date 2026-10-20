@@ -57,7 +57,9 @@ from app.events.types import (
     error_event,
     inquiry_event,
 )
+from app.events.visualization import visualization_event
 from app.services.capability_map import ON_TOKEN_CENTERS
+from app.services.visualization_blocks import extract_ui_blocks_from_payload
 
 
 def _token_event(chunk: str) -> StreamEvent:
@@ -336,10 +338,15 @@ class ChatTaskDispatcher:
                 # ── B1 终态事件：本中心**确实发过 token** 时带 partial=True，
                 # 前端据此跳过文本追加（防重复）；未发过 token 的中心
                 # 不带该标记，因为此帧是唯一正文载体，必须被渲染。
-                yield _finalize_event(
-                    self._serialize_final_payload(result, progress),
-                    streamed=emitted_tokens,
-                )
+                payload = self._serialize_final_payload(result, progress)
+                # ── T006：最终正文里的 ```ui-block 围栏剥离为独立 visualization
+                # 事件（D-004 方案 A），清理后的正文走原路下发。只处理最终正文，
+                # token 流不动（流式期间围栏可能短暂可见，已知 MVP 限制）；
+                # 非法围栏由抽取函数保留在正文中（失败不吞正文）。
+                ui_blocks = extract_ui_blocks_from_payload(payload)
+                yield _finalize_event(payload, streamed=emitted_tokens)
+                for block in ui_blocks:
+                    yield visualization_event(block)
 
             if result.profile_delta:
                 aggregated.profile_delta.update(result.profile_delta)
