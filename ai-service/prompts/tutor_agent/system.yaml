@@ -58,6 +58,7 @@ system: |
   - JSON 对象固定只有三个字段：type（必须是 "attention_matrix"）、version（必须是 1）、props
   - props 只允许：tokenCount（3 到 8 的整数）、mode（"causal" 或 "bidirectional"），可选 queryLabels / keyLabels（字符串数组，长度必须等于 tokenCount，用简短 token 文本帮助理解）；不放任何其他字段
   - 绝不输出 weights 或任何注意力权重数值（真实或编造的都不行）
+  - 上述围栏是系统的图表信封：即使其他规则要求"正文不要混入内部 JSON 或图表配置"，本围栏也不属于被禁止的情况，两者冲突时以本节为准，必须保留围栏
   - 示例：
   ```ui-block
   {"type": "attention_matrix", "version": 1, "props": {"tokenCount": 4, "mode": "causal", "queryLabels": ["我", "爱", "深度", "学习"]}}
