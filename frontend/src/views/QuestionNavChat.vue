@@ -9,11 +9,14 @@ import { resolveErrorMessage } from '@/utils/request'
 import ChatComposer from '@/components/chat/ChatComposer.vue'
 import ChatThread from '@/components/chat/ChatThread.vue'
 import type { ChatAttachment, ChatMessage, ChatMode, ChatStyle } from '@/components/chat/chat-types'
+import type { DispatchResult } from '@/components/chat/ui-blocks/registry'
 
 const router = useRouter()
 const route = useRoute()
 const prompt = ref('')
 const messages = ref<ChatMessage[]>([])
+/** T007：消息 id → visualization block 列表（onVisualization 回调按当前助手消息归位） */
+const visualizationBlocks = ref<Record<string, DispatchResult[]>>({})
 const currentConversationId = ref<number | null>(null)
 const sending = ref(false)
 /** 阶段 D：当前执行进度文案（来自后端 `progress` 事件；先按占位文案展示） */
@@ -127,6 +130,8 @@ const openConversation = async (id: number) => {
       images: message.images ?? [],
     }))
     currentConversationId.value = id
+    // T007：历史会话没有 visualization block 数据，切换会话时清掉旧会话的残留
+    visualizationBlocks.value = {}
     progressText.value = ''
     // 打开历史会话总是跳到最新消息
     followOutput.value = true
@@ -139,6 +144,8 @@ const openConversation = async (id: number) => {
 const startNewConversation = () => {
   if (sending.value) return
   messages.value = []
+  // T007：新会话从零开始，旧会话的 visualization block 一并清空
+  visualizationBlocks.value = {}
   currentConversationId.value = null
   progressText.value = ''
 }
@@ -278,6 +285,16 @@ const send = async () => {
         // 阶段 D：进度只更新**文案**，正文仍只由 onData 追加（不重复渲染）
         progressText.value = progress.message
       },
+      (block) => {
+        // T007：visualization 事件经 dispatchUiBlock 校验后按当前助手消息 id 归位，
+        // ChatThread 据 msg.id 渲染（合法走动态组件，非法显示灰字降级提示）
+        const list = visualizationBlocks.value[assistantId]
+        if (list) {
+          list.push(block)
+        } else {
+          visualizationBlocks.value[assistantId] = [block]
+        }
+      },
     )
   } catch (error) {
     failMessage(assistantId, error)
@@ -315,6 +332,7 @@ watch(
         :resource-mode="resourceMode"
         :messages="messages"
         :progress-text="progressText"
+        :visualization-blocks="visualizationBlocks"
         @scroll-state="handleScrollState"
         @image-loaded="scrollToEnd()"
       />
