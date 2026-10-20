@@ -66,14 +66,26 @@ describe('AttentionMatrix', () => {
     wrapper.unmount()
   })
 
-  it('不出现强弱/概率文字与热力着色，图例说明 Mask 关系', () => {
+  it('不出现强弱/概率文字与热力着色，图例说明位置示意语义', () => {
     const wrapper = mountMatrix()
 
     const text = wrapper.text()
     expect(text).not.toMatch(/概率|强弱|%/)
     expect(wrapper.find('.attn-cell--heat').exists()).toBe(false)
-    allCells(wrapper).forEach((cell) => expect(cell.attributes('style')).toBeUndefined())
-    expect(text).toContain('颜色表示 Mask/可访问关系，不代表真实 Attention 权重')
+    expect(text).toContain('位置示意')
+    expect(text).toContain('不代表真实 Attention 权重')
+    wrapper.unmount()
+  })
+
+  it('因果模式下行色按 Query 位置渐变，被 Mask 的格子无渐变', async () => {
+    const wrapper = mountMatrix()
+
+    expect(findCell(wrapper, 1, 1).attributes('style') ?? '').toMatch(/--attn-depth:\s*0\.000/)
+    expect(findCell(wrapper, 5, 1).attributes('style') ?? '').toMatch(/--attn-depth:\s*1\.000/)
+    expect(findCell(wrapper, 2, 5).attributes('style')).toBeUndefined()
+
+    await modeButton(wrapper, '双向').trigger('click')
+    expect(findCell(wrapper, 5, 5).attributes('style')).toBeUndefined()
     wrapper.unmount()
   })
 

@@ -3,6 +3,7 @@
  * 注意力可访问关系矩阵（MVP）。
  *
  * 只展示 Mask 决定的可访问关系；不支持 weights，颜色不代表真实 Attention 权重（D-007）。
+ * 因果模式下行色由浅到深为位置示意（靠后的 Query 能看到的上文越多），还原参考设计。
  */
 import { computed, ref, watch } from 'vue'
 
@@ -65,6 +66,8 @@ interface MatrixCell {
   selected: boolean
   inSelectedRow: boolean
   label: string
+  /** 行深浅：位置示意（非权重），仅因果模式的可访问格携带 */
+  depthStyle?: Record<string, string>
 }
 
 const buildCell = (q: number, k: number): MatrixCell => {
@@ -78,6 +81,10 @@ const buildCell = (q: number, k: number): MatrixCell => {
     selected: current?.q === q && current?.k === k,
     inSelectedRow: allowed && current?.q === q && current?.k !== k,
     label: `${queryName(q)} → ${keyName(k)}：${stateText}`,
+    depthStyle:
+      allowed && mode.value === 'causal'
+        ? { '--attn-depth': (q / Math.max(1, tokenCount.value - 1)).toFixed(3) }
+        : undefined,
   }
 }
 
@@ -179,6 +186,7 @@ const explanation = computed(() => {
               type="button"
               class="attn-cell"
               :class="cellClass(cell)"
+              :style="cell.depthStyle"
               :disabled="!cell.allowed"
               :aria-label="cell.label"
               :aria-pressed="cell.selected"
@@ -201,7 +209,7 @@ const explanation = computed(() => {
     </div>
 
     <footer class="attn-matrix__footer">
-      <p class="attn-matrix__legend">颜色表示 Mask/可访问关系，不代表真实 Attention 权重。</p>
+      <p class="attn-matrix__legend">颜色表示 Mask/可访问关系；因果模式下行色越深代表能看到的上文越多（位置示意），不代表真实 Attention 权重。</p>
       <p class="attn-matrix__stats">
         可访问 {{ allowedTotal }} · 灰色 {{ maskedTotal }} · 共 {{ tokenCount * tokenCount }} 格
       </p>
@@ -304,7 +312,8 @@ const explanation = computed(() => {
 }
 
 .attn-cell--allowed {
-  background: var(--viz-cell);
+  /* 行深浅：--attn-depth 由 0 → 1，浅雾蓝渐入中雾蓝（位置示意，非权重） */
+  background: color-mix(in srgb, var(--viz-cell), var(--viz-blue) calc(var(--attn-depth, 0) * 55%));
 }
 
 .attn-cell--row {
@@ -312,8 +321,21 @@ const explanation = computed(() => {
 }
 
 .attn-cell--selected {
+  position: relative;
   background: var(--viz-blue-strong);
   border-color: var(--viz-blue-strong);
+}
+
+.attn-cell--selected::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #fff;
+  transform: translate(-50%, -50%);
 }
 
 .attn-cell--masked {
