@@ -5,12 +5,17 @@ import DOMPurify from 'dompurify'
 import type { ChatMessage } from './chat-types'
 import MessageActions from './MessageActions.vue'
 import { renderMermaidBlocks } from '@/utils/mermaid'
+import type { DispatchResult } from './ui-blocks/registry'
 
 const props = defineProps<{
   conversationStarted: boolean
   resourceMode: boolean
   messages: ChatMessage[]
   progressText: string
+  /** T004：消息 id → visualization block 列表（来自 parseSSEStream 的 onVisualization
+   *  回调，由父层装配到对应助手消息）。合法走动态组件渲染，非法显示灰字降级提示。
+   *  可选 prop：不传时行为与原先完全一致。 */
+  visualizationBlocks?: Record<string, DispatchResult[]>
 }>()
 
 const emit = defineEmits<{
@@ -102,6 +107,16 @@ const canShowActions = (msg: ChatMessage) =>
             <span v-if="msg.streaming && msg.content" class="stream-cursor">▍</span>
             <p v-if="msg.streaming && msg.content && progressText" class="msg-pending">{{ progressText }}</p>
             <p v-if="msg.error" class="msg-error">{{ msg.error }}</p>
+            <!-- T004：结构化 UI block（visualization 事件）渲染在正文下方；
+                 合法走动态组件 + props，非法显示灰字降级提示，均不影响正文 -->
+            <div
+              v-for="(block, bi) in visualizationBlocks?.[msg.id] ?? []"
+              :key="`viz-${bi}`"
+              class="msg-visualization"
+            >
+              <component :is="block.ok ? block.component : null" v-if="block.ok" v-bind="block.ok ? block.props : {}" />
+              <p v-else class="msg-visualization-fallback">图表数据不合法，已隐藏（{{ block.error }}）</p>
+            </div>
             <MessageActions
               v-if="canShowActions(msg)"
               :message-id="msg.id"
@@ -204,4 +219,10 @@ const canShowActions = (msg: ChatMessage) =>
 .stream-cursor { display: inline-block; margin-left: 1px; color: var(--clay); animation: blink 1s steps(2) infinite; }
 @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
 @media (max-width: 620px) { .msg-bubble { max-width: 90%; } }
+
+/* ── T004：结构化 UI block（visualization 事件） ─────────────
+   合法 block 的动态组件容器 + 非法 block 的灰字降级提示（与 msg-pending 同色调）。 */
+.msg-visualization { margin: 10px 0 2px; }
+.msg-visualization :deep(.attention-wrap) { max-width: 100%; }
+.msg-visualization-fallback { margin: 0; color: var(--muted); font-size: 13px; }
 </style>

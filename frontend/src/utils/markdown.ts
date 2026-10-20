@@ -20,6 +20,10 @@ import { Marked } from 'marked'
 import type { TokenizerAndRendererExtension, TokenizerThis } from 'marked'
 import markedKatex from 'marked-katex-extension'
 import DOMPurify from 'dompurify'
+import {
+  parseUiBlockEnvelope,
+  validateAttentionMatrixProps,
+} from '@/components/chat/ui-blocks/schema'
 
 /**
  * CJK 紧邻加粗的放宽规则（T001）。
@@ -201,6 +205,54 @@ export const escapeCurrencyDollars = (content: string): string => {
 }
 
 /**
+ * 剥离正文里**合法**的 ```ui-block 围栏（T004，渲染层兜底）。
+ *
+ * 背景：后端只在**最终正文下发前**抽取围栏转成 visualization SSE 事件，
+ * 但 token 流式期间、以及 partial 收尾帧被跳过时，正文里仍会出现围栏
+ * 残留（T006 确认的结构性问题）。渲染层剥离一劳永逸。
+ *
+ * 口径与后端 `visualization_blocks.py` / `visualization.py` 严格一致，否则会丢内容：
+ * - 识别：3-backtick、info string 恰为 `ui-block`（允许两侧空白）、开/闭围栏独立成行；
+ * - 剥离条件：JSON 可解析 + envelope 校验（schema.ts）+ 类型/版本已注册 + props 校验通过
+ *   ——恰好等于"后端会为之发出 visualization 事件"的围栏；
+ * - **失败不吞正文**：JSON 非法或校验不过的围栏**原样保留**（后端同样不发事件、
+ *   围栏留在正文里，用户至少能看到一段 JSON 代码块，不会凭空消失）。
+ * - 闭围栏后的一个换行（及至多一个空行）随围栏一起剥掉，剥离后前后文之间
+ *   恰保留一个空行分隔（围栏通常独占一段）。
+ *
+ * 注意：类型→版本→校验器的映射必须与 `ui-blocks/registry.ts` 的 REGISTRY 保持
+ * 同步（registry 新增类型时这里也要注册，否则该类型围栏会被误判为非法而残留；
+ * 反之这里多注册会误剥离）。此映射只引 schema.ts 的纯函数，不引入 Vue 组件。
+ */
+const UI_BLOCK_FENCE_RE = /^```[ \t]*ui-block[ \t]*\n([\s\S]*?)^```[ \t]*(?:\n\n?|$)/gm
+
+/** (type, version) → props 校验器。与 registry.ts 的 REGISTRY 同步维护。 */
+const UI_BLOCK_PROP_VALIDATORS: Record<
+  string,
+  Record<number, (props: unknown) => { ok: boolean }>
+> = {
+  attention_matrix: { 1: validateAttentionMatrixProps },
+}
+
+export const stripValidUiBlockFences = (content: string): string => {
+  if (!content) return content
+  return content.replace(UI_BLOCK_FENCE_RE, (fence, body: string) => {
+    let candidate: unknown
+    try {
+      candidate = JSON.parse(body)
+    } catch {
+      return fence // JSON 非法：围栏原样保留
+    }
+    const envelope = parseUiBlockEnvelope(candidate)
+    if (!envelope.ok) return fence
+    const { type, version, props } = envelope.value
+    const validator = UI_BLOCK_PROP_VALIDATORS[type]?.[version]
+    if (!validator) return fence // 类型/版本未注册：后端不会发事件，围栏保留
+    return validator(props).ok ? '' : fence // props 校验不过：围栏保留
+  })
+}
+
+/**
  * 把助手正文渲染成可安全注入的 HTML（Markdown + 数学公式 + 表格/删除线）。
  *
  * @param content Markdown 原文（含 `$...$` / `$$...$$`）
@@ -208,7 +260,7 @@ export const escapeCurrencyDollars = (content: string): string => {
  */
 export const renderChatMarkdown = (content: string): string => {
   if (!content) return ''
-  const html = marked.parse(escapeCurrencyDollars(content), {
+  const html = marked.parse(stripValidUiBlockFences(escapeCurrencyDollars(content)), {
     breaks: true,
     gfm: true,
   }) as string
@@ -218,7 +270,7 @@ export const renderChatMarkdown = (content: string): string => {
 /** 供测试与调用方复用：渲染但不清洗（排查"是渲染问题还是清洗问题"时用） */
 export const renderChatMarkdownRaw = (content: string): string =>
   content
-    ? (marked.parse(escapeCurrencyDollars(content), {
+    ? (marked.parse(stripValidUiBlockFences(escapeCurrencyDollars(content)), {
         breaks: true,
         gfm: true,
       }) as string)

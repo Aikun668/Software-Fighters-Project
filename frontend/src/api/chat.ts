@@ -1,4 +1,5 @@
 import api from '@/utils/request'
+import { dispatchUiBlock, type DispatchResult } from '@/components/chat/ui-blocks/registry'
 
 /**
  * 发送消息（SSE流式）
@@ -128,6 +129,12 @@ const formatStructuredContent = (payload: Record<string, unknown>): string => {
  * @param onError - 错误回调
  * @param onProgress - 进度回调（阶段 D）：后端 `progress` 事件表示"正在执行某步骤"，
  *   只用于展示**进度文案**；**绝不可**当作正文追加（正文只来自 token/content 事件）。
+ * @param onVisualization - 结构化 UI block 回调（T004）：后端 `visualization` 事件
+ *   形状为 `{type:'visualization', data:{type,version,props}}`，经 `dispatchUiBlock`
+ *   完整校验（envelope + 类型注册 + props）后把结果原样交给上层：
+ *   合法 → `{ok:true, component, props}`（上层渲染到对应消息下方）；
+ *   非法 → `{ok:false, error}`（上层显示轻量降级提示）。
+ *   与 progress 一样**绝不混入正文**，且 dispatchUiBlock 对任意输入不抛异常。
  */
 export const parseSSEStream = async (
   stream: ReadableStream,
@@ -138,7 +145,8 @@ export const parseSSEStream = async (
     stage: string
     message: string
     phase: string
-  }) => void
+  }) => void,
+  onVisualization?: (block: DispatchResult) => void
 ) => {
   const reader = stream.getReader()
   const decoder = new TextDecoder('utf-8') // 处理中文必须指定utf-8
@@ -268,6 +276,15 @@ export const parseSSEStream = async (
                   phase:
                     typeof data.data?.phase === 'string' ? data.data.phase : '',
                 })
+              }
+              break
+            case 'visualization':
+              // T004：结构化 UI block 独立下发（payload 形状 {type,version,props}，
+              // 后端在最终正文下发前已剥离对应围栏）。dispatchUiBlock 做完整校验，
+              // 任意输入都不抛异常；结果原样交给上层（合法渲染 / 非法降级），
+              // 绝不混入 onData 正文、不影响 hasStreamedText 的收尾帧判定。
+              if (onVisualization) {
+                onVisualization(dispatchUiBlock(data.data))
               }
               break
             case 'done':

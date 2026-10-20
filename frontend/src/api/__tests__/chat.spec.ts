@@ -7,6 +7,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { parseSSEStream } from '../chat'
+import AttentionMatrix from '../../components/chat/AttentionMatrix.vue'
 
 const streamOf = (...frames: string[]) => {
   const encoder = new TextEncoder()
@@ -209,5 +210,136 @@ describe('parseSSEStream 合同：partial 收尾帧不得吞掉唯一正文', ()
     )
 
     expect(onData.mock.calls[0][0]).toBe('已为你生成学习计划，共 3 步。')
+  })
+})
+
+/**
+ * T004 合同：`visualization` 帧（结构化 UI block）的解析边界。
+ *
+ * 事件形状（后端 events/types.py 的 to_sse）：`{type:'visualization', data:{type,version,props}}`。
+ * 关键约束（与 progress 同理）：
+ * - 只驱动 onVisualization 回调，**绝不混入正文**（onData）；
+ * - 经 dispatchUiBlock 完整校验：合法 → 上层拿到 {ok:true, component, props}；
+ *   非法 → 上层拿到 {ok:false, error}（轻量降级提示），不抛异常、不影响正文。
+ */
+describe('parseSSEStream T004 合同：visualization 帧', () => {
+  const validBlock = { type: 'attention_matrix', version: 1, props: { tokenCount: 5, mode: 'causal' } }
+
+  it('合法 block → onVisualization 收到组件与规范化 props，正文不受影响', async () => {
+    const onData = vi.fn()
+    const onVisualization = vi.fn()
+
+    await parseSSEStream(
+      streamOf(
+        frame({ type: 'token', content: '先看图：' }),
+        frame({ type: 'visualization', data: validBlock }),
+        frame({ type: 'done' }),
+      ),
+      onData,
+      vi.fn(),
+      undefined,
+      undefined,
+      onVisualization,
+    )
+
+    expect(onVisualization).toHaveBeenCalledTimes(1)
+    expect(onVisualization).toHaveBeenCalledWith({
+      ok: true,
+      component: AttentionMatrix,
+      props: { tokenCount: 5, mode: 'causal' },
+    })
+    // 正文只来自 token，block 不得混入
+    expect(onData.mock.calls.map((call) => call[0])).toEqual(['先看图：'])
+  })
+
+  it('非法 block（props 含 weights，D-007）→ 降级结果交给上层，不抛异常', async () => {
+    const onData = vi.fn()
+    const onVisualization = vi.fn()
+
+    await expect(
+      parseSSEStream(
+        streamOf(
+          frame({
+            type: 'visualization',
+            data: { ...validBlock, props: { tokenCount: 5, mode: 'causal', weights: [[1]] } },
+          }),
+          frame({ type: 'done' }),
+        ),
+        onData,
+        vi.fn(),
+        undefined,
+        undefined,
+        onVisualization,
+      ),
+    ).resolves.toBeUndefined()
+
+    expect(onVisualization).toHaveBeenCalledTimes(1)
+    const block = onVisualization.mock.calls[0][0] as { ok: boolean; error?: string }
+    expect(block.ok).toBe(false)
+    expect(block.error).toContain('weights')
+    expect(onData).not.toHaveBeenCalled()
+  })
+
+  it('非法 block（未注册类型）→ 降级结果交给上层，正文回调不受影响', async () => {
+    const onData = vi.fn()
+    const onVisualization = vi.fn()
+
+    await parseSSEStream(
+      streamOf(
+        frame({ type: 'token', content: '正文' }),
+        frame({ type: 'visualization', data: { type: 'pie_chart', version: 1, props: {} } }),
+        frame({ type: 'done' }),
+      ),
+      onData,
+      vi.fn(),
+      undefined,
+      undefined,
+      onVisualization,
+    )
+
+    const block = onVisualization.mock.calls[0][0] as { ok: boolean; error?: string }
+    expect(block.ok).toBe(false)
+    expect(block.error).toContain('pie_chart')
+    expect(onData.mock.calls.map((call) => call[0])).toEqual(['正文'])
+  })
+
+  it('事件残缺（data 缺失）→ 降级为 {ok:false}，流不中断', async () => {
+    const onData = vi.fn()
+    const onDone = vi.fn()
+    const onVisualization = vi.fn()
+
+    await parseSSEStream(
+      streamOf(
+        frame({ type: 'visualization' }),
+        frame({ type: 'token', content: '正文照常' }),
+        frame({ type: 'done', conversation_id: 9 }),
+      ),
+      onData,
+      onDone,
+      undefined,
+      undefined,
+      onVisualization,
+    )
+
+    const block = onVisualization.mock.calls[0][0] as { ok: boolean }
+    expect(block.ok).toBe(false)
+    expect(onData.mock.calls.map((call) => call[0])).toEqual(['正文照常'])
+    expect(onDone).toHaveBeenCalledWith(9)
+  })
+
+  it('未传 onVisualization 时，visualization 帧被静默忽略（不得混入正文）', async () => {
+    const onData = vi.fn()
+
+    await parseSSEStream(
+      streamOf(
+        frame({ type: 'visualization', data: validBlock }),
+        frame({ type: 'token', content: '答' }),
+        frame({ type: 'done' }),
+      ),
+      onData,
+      vi.fn(),
+    )
+
+    expect(onData.mock.calls.map((call) => call[0])).toEqual(['答'])
   })
 })

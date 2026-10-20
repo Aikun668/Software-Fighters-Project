@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import ChatThread from '../ChatThread.vue'
 import MessageActions from '../MessageActions.vue'
+import AttentionMatrix from '../AttentionMatrix.vue'
 import type { ChatMessage } from '../chat-types'
+import type { DispatchResult } from '../ui-blocks/registry'
 
 /**
  * ChatThread 的正文渲染合同。
@@ -17,13 +19,17 @@ import type { ChatMessage } from '../chat-types'
  *   3. 朗读组件仍拿到**原始 Markdown 文本**（不能被 HTML 污染）。
  */
 
-const mountThread = (messages: ChatMessage[]) =>
+const mountThread = (
+  messages: ChatMessage[],
+  visualizationBlocks?: Record<string, DispatchResult[]>,
+) =>
   mount(ChatThread, {
     props: {
       conversationStarted: true,
       resourceMode: false,
       messages,
       progressText: '',
+      ...(visualizationBlocks ? { visualizationBlocks } : {}),
     },
     global: { config: { warnHandler: () => {} } },
   })
@@ -121,5 +127,84 @@ describe('ChatThread 操作条的显示条件', () => {
   it('用户消息不显示操作条', () => {
     const wrapper = mountThread([{ id: 'u-1', role: 'user', content: '你好' }])
     expect(wrapper.find('.message-actions').exists()).toBe(false)
+  })
+})
+
+/**
+ * T004 合同：visualization block 渲染到对应助手消息下方。
+ *
+ * 数据流：parseSSEStream 的 onVisualization 回调 →（父层装配）→
+ * visualizationBlocks prop（消息 id → DispatchResult 列表）。
+ * 锁三件事：合法 block 渲染出组件（props 正确）；非法 block 显示灰字
+ * 降级提示（不渲染组件）；正文渲染完全不受影响。
+ */
+describe('ChatThread T004：visualization block 渲染', () => {
+  const validBlock: DispatchResult = {
+    ok: true,
+    component: AttentionMatrix,
+    props: { tokenCount: 5, mode: 'causal' },
+  }
+
+  it('合法 block 在对应消息下方渲染出 AttentionMatrix 组件（props 正确传递）', () => {
+    const wrapper = mountThread(
+      [assistantMsg('先看图，再讲原理。', { id: 'a-1' })],
+      { 'a-1': [validBlock] },
+    )
+
+    const matrix = wrapper.findComponent(AttentionMatrix)
+    expect(matrix.exists()).toBe(true)
+    expect(matrix.props('tokenCount')).toBe(5)
+    expect(matrix.props('mode')).toBe('causal')
+    expect(wrapper.find('.msg-visualization').exists()).toBe(true)
+  })
+
+  it('非法 block 显示灰字降级提示，不渲染组件', () => {
+    const wrapper = mountThread(
+      [assistantMsg('正文如常。', { id: 'a-1' })],
+      { 'a-1': [{ ok: false, error: 'props 不允许包含 weights' }] },
+    )
+
+    expect(wrapper.findComponent(AttentionMatrix).exists()).toBe(false)
+    const fallback = wrapper.find('.msg-visualization-fallback')
+    expect(fallback.exists()).toBe(true)
+    expect(fallback.text()).toContain('图表数据不合法')
+    expect(fallback.text()).toContain('weights')
+  })
+
+  it('正文渲染不受 block 影响（Markdown 照常、朗读文本仍是原文）', () => {
+    const raw = '# 原理讲解\n\n**关键**内容'
+    const wrapper = mountThread(
+      [assistantMsg(raw, { id: 'a-1' })],
+      { 'a-1': [validBlock, { ok: false, error: '第二个 block 非法' }] },
+    )
+
+    expect(wrapper.find('.msg-markdown h1').text()).toBe('原理讲解')
+    const actions = wrapper.findComponent(MessageActions)
+    expect(actions.props('text')).toBe(raw)
+  })
+
+  it('block 只渲染到消息 id 匹配的那条助手消息下', () => {
+    const wrapper = mountThread(
+      [assistantMsg('第一条', { id: 'a-1' }), assistantMsg('第二条', { id: 'a-2' })],
+      { 'a-2': [validBlock] },
+    )
+
+    const matrices = wrapper.findAllComponents(AttentionMatrix)
+    expect(matrices).toHaveLength(1)
+    // 渲染在第二条消息的气泡内
+    const bubbles = wrapper.findAll('.msg-assistant .msg-bubble')
+    expect(bubbles[1].findComponent(AttentionMatrix).exists()).toBe(true)
+    expect(bubbles[0].findComponent(AttentionMatrix).exists()).toBe(false)
+  })
+
+  it('同一消息的多个 block 全部渲染（合法 + 非法并存）', () => {
+    const wrapper = mountThread(
+      [assistantMsg('两种情况都有。', { id: 'a-1' })],
+      { 'a-1': [validBlock, { ok: false, error: '坏 block' }] },
+    )
+
+    expect(wrapper.findComponent(AttentionMatrix).exists()).toBe(true)
+    expect(wrapper.find('.msg-visualization-fallback').exists()).toBe(true)
+    expect(wrapper.findAll('.msg-visualization')).toHaveLength(2)
   })
 })
