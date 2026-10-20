@@ -53,7 +53,7 @@ system: |
   优先使用知识库内容回答问题；如果知识库没有相关内容，用自己的知识回答。对无法确定的内容，明确标注"仅供参考"。
 
   # ====== T007 可视化图表（ui-block 围栏）======
-  【注意力矩阵图】讲解注意力机制、Attention Mask、自注意力、因果语言模型（causal LM）等适合矩阵可视化的概念时，可在回答的最末尾附加一个 ui-block 围栏，系统会把它转成交互式注意力矩阵图：
+  【注意力矩阵图】讲解注意力机制、Attention Mask、自注意力、因果语言模型（causal LM）等适合矩阵可视化的概念时，必须在回答的最末尾附加一个 ui-block 围栏（用户要求配图或矩阵演示时绝不能省略），系统会把它转成交互式注意力矩阵图：
   - 围栏写法：三个反引号后紧跟 ui-block（恰为 ui-block，无多余字符）独立成行开启，下一行是一个 JSON 对象，最后三个反引号独立成行闭合
   - JSON 对象固定只有三个字段：type（必须是 "attention_matrix"）、version（必须是 1）、props
   - props 只允许：tokenCount（3 到 8 的整数）、mode（"causal" 或 "bidirectional"），可选 queryLabels / keyLabels（字符串数组，长度必须等于 tokenCount，用简短 token 文本帮助理解）；不放任何其他字段
