@@ -1,0 +1,183 @@
+{
+  "_comment": "双端契约 fixtures：同一批 block 分别经后端 parse_ui_block（app/events/visualization.py）与前端 dispatchUiBlock（frontend/src/components/chat/ui-blocks/registry.ts）校验，ok 布尔结论必须一致。error 文案允许各端自述，只比对结论。新增 block 类型时在此追加 fixtures，双端测试会自动参数化。",
+  "fixtures": [
+    {
+      "name": "attention_matrix_valid_full",
+      "ok": true,
+      "block": {
+        "type": "attention_matrix",
+        "version": 1,
+        "props": {
+          "tokenCount": 3,
+          "mode": "causal",
+          "queryLabels": ["我", "爱", "NLP"],
+          "keyLabels": ["我", "爱", "NLP"]
+        }
+      }
+    },
+    {
+      "name": "attention_matrix_valid_minimal",
+      "ok": true,
+      "block": {
+        "type": "attention_matrix",
+        "version": 1,
+        "props": { "tokenCount": 8, "mode": "bidirectional" }
+      }
+    },
+    {
+      "name": "attention_matrix_weights_rejected_d007",
+      "ok": false,
+      "block": {
+        "type": "attention_matrix",
+        "version": 1,
+        "props": {
+          "tokenCount": 3,
+          "mode": "causal",
+          "weights": [[0.1, 0.2, 0.7]]
+        }
+      }
+    },
+    {
+      "name": "attention_matrix_bad_token_count",
+      "ok": false,
+      "block": {
+        "type": "attention_matrix",
+        "version": 1,
+        "props": { "tokenCount": 9, "mode": "causal" }
+      }
+    },
+    {
+      "name": "attention_matrix_bad_mode",
+      "ok": false,
+      "block": {
+        "type": "attention_matrix",
+        "version": 1,
+        "props": { "tokenCount": 3, "mode": "full" }
+      }
+    },
+    {
+      "name": "attention_matrix_label_length_mismatch",
+      "ok": false,
+      "block": {
+        "type": "attention_matrix",
+        "version": 1,
+        "props": { "tokenCount": 3, "mode": "causal", "queryLabels": ["a", "b"] }
+      }
+    },
+    {
+      "name": "attention_matrix_version_2_rejected",
+      "ok": false,
+      "block": {
+        "type": "attention_matrix",
+        "version": 2,
+        "props": { "tokenCount": 3, "mode": "causal" }
+      }
+    },
+    {
+      "name": "conv_window_valid_defaults",
+      "ok": true,
+      "block": {
+        "type": "conv_window",
+        "version": 1,
+        "props": { "inputRows": 5, "inputCols": 5, "kernelSize": 3 }
+      }
+    },
+    {
+      "name": "conv_window_valid_stride2",
+      "ok": true,
+      "block": {
+        "type": "conv_window",
+        "version": 1,
+        "props": { "inputRows": 6, "inputCols": 8, "kernelSize": 2, "stride": 2 }
+      }
+    },
+    {
+      "name": "conv_window_kernel_exceeds_input",
+      "ok": false,
+      "block": {
+        "type": "conv_window",
+        "version": 1,
+        "props": { "inputRows": 3, "inputCols": 8, "kernelSize": 4 }
+      }
+    },
+    {
+      "name": "conv_window_bad_stride",
+      "ok": false,
+      "block": {
+        "type": "conv_window",
+        "version": 1,
+        "props": { "inputRows": 5, "inputCols": 5, "kernelSize": 3, "stride": 3 }
+      }
+    },
+    {
+      "name": "conv_window_stride_null",
+      "ok": false,
+      "block": {
+        "type": "conv_window",
+        "version": 1,
+        "props": { "inputRows": 5, "inputCols": 5, "kernelSize": 3, "stride": null }
+      }
+    },
+    {
+      "name": "conv_window_unknown_prop",
+      "ok": false,
+      "block": {
+        "type": "conv_window",
+        "version": 1,
+        "props": { "inputRows": 5, "inputCols": 5, "kernelSize": 3, "featureMap": [] }
+      }
+    },
+    {
+      "name": "conv_window_bad_rows",
+      "ok": false,
+      "block": {
+        "type": "conv_window",
+        "version": 1,
+        "props": { "inputRows": 2, "inputCols": 5, "kernelSize": 3 }
+      }
+    },
+    {
+      "name": "conv_window_version_2_rejected",
+      "ok": false,
+      "block": {
+        "type": "conv_window",
+        "version": 2,
+        "props": { "inputRows": 5, "inputCols": 5, "kernelSize": 3 }
+      }
+    },
+    {
+      "name": "envelope_unknown_key",
+      "ok": false,
+      "block": {
+        "type": "attention_matrix",
+        "version": 1,
+        "props": { "tokenCount": 3, "mode": "causal" },
+        "html": "<b>x</b>"
+      }
+    },
+    {
+      "name": "envelope_missing_props",
+      "ok": false,
+      "block": { "type": "attention_matrix", "version": 1 }
+    },
+    {
+      "name": "unregistered_type",
+      "ok": false,
+      "block": { "type": "pie_chart", "version": 1, "props": {} }
+    },
+    {
+      "name": "non_object_block",
+      "ok": false,
+      "block": [1, 2, 3]
+    },
+    {
+      "name": "non_integer_version",
+      "ok": false,
+      "block": {
+        "type": "attention_matrix",
+        "version": "1",
+        "props": { "tokenCount": 3, "mode": "causal" }
+      }
+    }
+  ]
+}

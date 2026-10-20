@@ -5,9 +5,11 @@
  */
 import type { Component } from 'vue'
 import AttentionMatrix from '../AttentionMatrix.vue'
+import ConvWindow from '../ConvWindow.vue'
 import {
   parseUiBlockEnvelope,
   validateAttentionMatrixProps,
+  validateConvWindowProps,
   type ValidationResult,
 } from './schema'
 
@@ -18,12 +20,20 @@ export interface RegistryEntry {
   validateProps: BlockPropsValidator
 }
 
-// 用 Map 而非普通对象，避免 type 为 "constructor" 等名字时命中 Object.prototype
+// 用 Map 而非普通对象，避免 type 为 "constructor" 等名字时命中 Object.prototype。
+// 新增类型：schema.ts 写校验器 + 新组件 + 这里登记一行，并同步后端
+// visualization.py 的 _BLOCK_PARSERS 与 tests/fixtures/ui_block_contract.json。
 const REGISTRY = new Map<string, Map<number, RegistryEntry>>([
   [
     'attention_matrix',
     new Map<number, RegistryEntry>([
       [1, { component: AttentionMatrix, validateProps: validateAttentionMatrixProps }],
+    ]),
+  ],
+  [
+    'conv_window',
+    new Map<number, RegistryEntry>([
+      [1, { component: ConvWindow, validateProps: validateConvWindowProps }],
     ]),
   ],
 ])

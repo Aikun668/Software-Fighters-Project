@@ -342,7 +342,8 @@ class ChatTaskDispatcher:
                 # ── T006：最终正文里的 ```ui-block 围栏剥离为独立 visualization
                 # 事件（D-004 方案 A），清理后的正文走原路下发。只处理最终正文，
                 # token 流不动（流式期间围栏可能短暂可见，已知 MVP 限制）；
-                # 非法围栏由抽取函数保留在正文中（失败不吞正文）。
+                # JSON 解析失败的围栏保留在正文，校验不过的可解析围栏剥离并
+                # 记日志、不下发（D-014，正文不留裸 JSON）。
                 ui_blocks = extract_ui_blocks_from_payload(payload)
                 yield _finalize_event(payload, streamed=emitted_tokens)
                 for block in ui_blocks:

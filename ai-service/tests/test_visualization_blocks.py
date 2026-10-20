@@ -139,32 +139,37 @@ class TestExtractUiBlocksValid:
 
 
 class TestExtractUiBlocksInvalid:
+    """失败围栏降级（D-014）：JSON 解析失败 → 保留；可解析但校验不过 → 剥离 + 无 block。"""
+
     def test_invalid_json_fence_kept(self):
         text = "正文前。\n\n" + _fence("{not json") + "\n\n正文后。"
         cleaned, blocks = extract_ui_blocks(text)
-        assert cleaned == text, "JSON 非法的围栏必须原样保留（失败不吞正文）"
+        assert cleaned == text, "JSON 非法的围栏必须原样保留（不吞正文）"
         assert blocks == []
 
-    def test_weights_fence_kept_d007(self):
+    def test_weights_fence_stripped_d007(self):
+        """weights 围栏（D-007）：可解析但校验不过 → 剥离，不下发，不裸留正文。"""
         block = _valid_block()
         block["props"]["weights"] = [[0.1, 0.2, 0.7]]
         text = "说明。\n\n" + _fenced_block(block)
         cleaned, blocks = extract_ui_blocks(text)
-        assert "weights" in cleaned
-        assert "ui-block" in cleaned
+        assert "weights" not in cleaned
+        assert "ui-block" not in cleaned
+        assert cleaned.rstrip("\n") == "说明。"
         assert blocks == []
 
-    def test_json_object_but_schema_invalid_kept(self):
+    def test_json_object_but_schema_invalid_stripped(self):
         block = {"type": "other_chart", "version": 1, "props": {}}
         text = _fenced_block(block)
         cleaned, blocks = extract_ui_blocks(text)
-        assert cleaned == text
+        assert cleaned == ""
         assert blocks == []
 
-    def test_json_non_object_kept(self):
+    def test_json_non_object_stripped(self):
+        """[1,2,3] 可被 json.loads 解析 → 剥离；只有解析失败才保留。"""
         text = _fence("[1, 2, 3]")
         cleaned, blocks = extract_ui_blocks(text)
-        assert cleaned == text
+        assert cleaned == ""
         assert blocks == []
 
     def test_unclosed_fence_kept(self):
@@ -174,13 +179,29 @@ class TestExtractUiBlocksInvalid:
         assert blocks == []
 
     def test_valid_and_invalid_fences_mixed(self):
-        """合法的剥离、非法的保留，互不影响。"""
+        """合法的剥离下发、JSON 非法的保留，互不影响。"""
         bad = _fence("{oops")
         text = "前。\n\n" + _fenced_block(_valid_block()) + "\n\n" + bad + "\n\n后。"
         cleaned, blocks = extract_ui_blocks(text)
         assert len(blocks) == 1
         assert bad in cleaned
         assert "attention_matrix" not in cleaned
+
+    def test_conv_window_fence_extracted(self):
+        conv = {
+            "type": "conv_window",
+            "version": 1,
+            "props": {"inputRows": 5, "inputCols": 5, "kernelSize": 3},
+        }
+        cleaned, blocks = extract_ui_blocks("卷积如下：\n\n" + _fenced_block(conv))
+        assert cleaned.rstrip("\n") == "卷积如下："
+        assert blocks == [
+            {
+                "type": "conv_window",
+                "version": 1,
+                "props": {"inputRows": 5, "inputCols": 5, "kernelSize": 3, "stride": 1},
+            }
+        ]
 
 
 class TestExtractUiBlocksFromPayload:
@@ -267,8 +288,40 @@ class TestDispatcherWiring:
         types = [e.type.value for e in events]
 
         content = next(e for e in events if e.type.value == "content")
-        assert content.data["response"] == fenced, "非法围栏正文必须原样下发"
+        assert content.data["response"] == fenced, "JSON 非法围栏正文必须原样下发"
         assert "visualization" not in types
+
+    @pytest.mark.asyncio
+    async def test_parseable_invalid_block_stripped_no_event_d013(self):
+        """可解析但校验不过的围栏：正文剥离（不裸留 JSON），也不产生事件。"""
+        block = {"type": "other_chart", "version": 1, "props": {}}
+        events = await self._run("说明。\n\n" + _fenced_block(block))
+        types = [e.type.value for e in events]
+
+        content = next(e for e in events if e.type.value == "content")
+        assert content.data["response"].rstrip("\n") == "说明。"
+        assert "ui-block" not in content.data["response"]
+        assert "visualization" not in types
+
+    @pytest.mark.asyncio
+    async def test_conv_block_yields_visualization_event(self):
+        conv = {
+            "type": "conv_window",
+            "version": 1,
+            "props": {"inputRows": 5, "inputCols": 5, "kernelSize": 3, "stride": 2},
+        }
+        events = await self._run("卷积如下：\n\n" + _fenced_block(conv))
+        types = [e.type.value for e in events]
+
+        content = next(e for e in events if e.type.value == "content")
+        assert content.data["response"].rstrip("\n") == "卷积如下："
+
+        assert "visualization" in types
+        viz = next(e for e in events if e.type.value == "visualization")
+        assert viz.data["type"] == "conv_window"
+        assert viz.data["props"] == {
+            "inputRows": 5, "inputCols": 5, "kernelSize": 3, "stride": 2,
+        }
 
     @pytest.mark.asyncio
     async def test_no_fence_no_visualization_event(self):

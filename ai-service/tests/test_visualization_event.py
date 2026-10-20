@@ -182,6 +182,65 @@ class TestParseUiBlockPropsRejections:
         assert "color" in result["error"]
 
 
+class TestParseConvWindow:
+    """conv_window v1：CNN/卷积/特征图等滑窗概念的网格可视化（D-014）。"""
+
+    def _conv_block(self, **overrides) -> dict:
+        props = {"inputRows": 5, "inputCols": 5, "kernelSize": 3}
+        props.update(overrides)
+        return {"type": "conv_window", "version": 1, "props": props}
+
+    def test_valid_conv_normalized_with_default_stride(self):
+        result = parse_ui_block(self._conv_block())
+        assert result["ok"] is True
+        assert result["value"]["props"] == {
+            "inputRows": 5, "inputCols": 5, "kernelSize": 3, "stride": 1,
+        }
+
+    def test_valid_conv_with_stride_2(self):
+        result = parse_ui_block(self._conv_block(stride=2))
+        assert result["ok"] is True
+        assert result["value"]["props"]["stride"] == 2
+
+    def test_boundary_dims_accepted(self):
+        assert parse_ui_block(self._conv_block(inputRows=3, inputCols=8, kernelSize=2))["ok"] is True
+        assert parse_ui_block(self._conv_block(inputRows=8, inputCols=8, kernelSize=5))["ok"] is True
+
+    @pytest.mark.parametrize(
+        "overrides",
+        [
+            {"inputRows": 2}, {"inputRows": 9}, {"inputCols": 2}, {"inputCols": 9},
+            {"kernelSize": 1}, {"kernelSize": 6}, {"stride": 0}, {"stride": 3},
+            {"inputRows": 5.5}, {"kernelSize": "3"}, {"stride": None},
+        ],
+    )
+    def test_bad_dims_rejected(self, overrides):
+        result = parse_ui_block(self._conv_block(**overrides))
+        assert result["ok"] is False
+        assert result["error"]
+
+    def test_kernel_larger_than_input_rejected(self):
+        result = parse_ui_block(self._conv_block(inputRows=3, inputCols=8, kernelSize=4))
+        assert result["ok"] is False
+        assert "kernelSize" in result["error"]
+
+    def test_unknown_conv_prop_rejected(self):
+        result = parse_ui_block(self._conv_block(featureMap=[[1]]))
+        assert result["ok"] is False
+        assert "featureMap" in result["error"]
+
+    def test_conv_event_sse_shape(self):
+        event = visualization_event(self._conv_block(stride=2))
+        assert event.type is StreamEventType.VISUALIZATION
+        payload = json.loads(event.to_sse().removeprefix("data: "))
+        assert payload["type"] == "visualization"
+        assert payload["data"] == {
+            "type": "conv_window",
+            "version": 1,
+            "props": {"inputRows": 5, "inputCols": 5, "kernelSize": 3, "stride": 2},
+        }
+
+
 class TestVisualizationEvent:
     def test_event_type_and_sse_shape(self):
         event = visualization_event(_valid_block())

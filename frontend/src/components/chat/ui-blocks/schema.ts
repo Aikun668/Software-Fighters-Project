@@ -17,6 +17,24 @@ export interface AttentionMatrixProps {
   keyLabels?: string[]
 }
 
+// conv_window v1：网格 + 卷积核滑窗（CNN/卷积/特征图/感受野）
+export const CONV_ROWS_MIN = 3
+export const CONV_ROWS_MAX = 8
+export const CONV_COLS_MIN = 3
+export const CONV_COLS_MAX = 8
+export const CONV_KERNEL_MIN = 2
+export const CONV_KERNEL_MAX = 5
+export const CONV_STRIDE_MIN = 1
+export const CONV_STRIDE_MAX = 2
+
+/** stride 未提供时规范化为默认值 1（校验通过后 props 恒携带 stride） */
+export interface ConvWindowProps {
+  inputRows: number
+  inputCols: number
+  kernelSize: number
+  stride: number
+}
+
 export interface UiBlockEnvelope {
   type: string
   version: number
@@ -27,6 +45,7 @@ export type ValidationResult<T> = { ok: true; value: T } | { ok: false; error: s
 
 const ENVELOPE_KEYS = ['type', 'version', 'props'] as const
 const ATTENTION_PROP_KEYS = ['tokenCount', 'mode', 'queryLabels', 'keyLabels'] as const
+const CONV_PROP_KEYS = ['inputRows', 'inputCols', 'kernelSize', 'stride'] as const
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -76,6 +95,9 @@ const parseLabels = (
   }
   return { ok: true, value: [...value] }
 }
+
+const isIntInRange = (value: unknown, min: number, max: number): value is number =>
+  typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max
 
 /** 校验 attention_matrix v1 的 props，并返回规范化后的副本。 */
 export const validateAttentionMatrixProps = (
@@ -128,4 +150,53 @@ export const validateAttentionMatrixProps = (
       ...(keyLabels.value && { keyLabels: keyLabels.value }),
     },
   }
+}
+
+/** 校验 conv_window v1 的 props（镜像后端 _parse_conv_props），返回规范化副本（stride 默认 1）。 */
+export const validateConvWindowProps = (
+  input: unknown,
+): ValidationResult<ConvWindowProps> => {
+  if (!isPlainObject(input)) {
+    return { ok: false, error: 'conv_window 的 props 必须是对象' }
+  }
+  const unknownKey = findUnknownKey(input, CONV_PROP_KEYS)
+  if (unknownKey !== undefined) {
+    return { ok: false, error: `props 含有未知字段 "${unknownKey}"` }
+  }
+
+  const { inputRows, inputCols, kernelSize, stride } = input
+  if (!isIntInRange(inputRows, CONV_ROWS_MIN, CONV_ROWS_MAX)) {
+    return {
+      ok: false,
+      error: `inputRows 必须是 ${CONV_ROWS_MIN}..${CONV_ROWS_MAX} 之间的整数，当前为 ${JSON.stringify(inputRows)}`,
+    }
+  }
+  if (!isIntInRange(inputCols, CONV_COLS_MIN, CONV_COLS_MAX)) {
+    return {
+      ok: false,
+      error: `inputCols 必须是 ${CONV_COLS_MIN}..${CONV_COLS_MAX} 之间的整数，当前为 ${JSON.stringify(inputCols)}`,
+    }
+  }
+  if (!isIntInRange(kernelSize, CONV_KERNEL_MIN, CONV_KERNEL_MAX)) {
+    return {
+      ok: false,
+      error: `kernelSize 必须是 ${CONV_KERNEL_MIN}..${CONV_KERNEL_MAX} 之间的整数，当前为 ${JSON.stringify(kernelSize)}`,
+    }
+  }
+  if (kernelSize > inputRows || kernelSize > inputCols) {
+    return {
+      ok: false,
+      error: `kernelSize (${kernelSize}) 不得大于输入行数/列数 (${inputRows}/${inputCols})`,
+    }
+  }
+  if (stride !== undefined) {
+    if (!isIntInRange(stride, CONV_STRIDE_MIN, CONV_STRIDE_MAX)) {
+      return {
+        ok: false,
+        error: `stride 必须是 ${CONV_STRIDE_MIN} 或 ${CONV_STRIDE_MAX}，当前为 ${JSON.stringify(stride)}`,
+      }
+    }
+    return { ok: true, value: { inputRows, inputCols, kernelSize, stride } }
+  }
+  return { ok: true, value: { inputRows, inputCols, kernelSize, stride: 1 } }
 }

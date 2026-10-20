@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import AttentionMatrix from '../../AttentionMatrix.vue'
+import ConvWindow from '../../ConvWindow.vue'
 import { dispatchUiBlock } from '../registry'
 
 const block = (overrides: Record<string, unknown> = {}) => ({
@@ -17,6 +18,25 @@ describe('dispatchUiBlock', () => {
       component: AttentionMatrix,
       props: { tokenCount: 5, mode: 'causal' },
     })
+  })
+
+  it('dispatches a valid conv_window v1 block to ConvWindow with normalized stride', () => {
+    const result = dispatchUiBlock(
+      block({ type: 'conv_window', props: { inputRows: 5, inputCols: 5, kernelSize: 3 } }),
+    )
+    expect(result).toEqual({
+      ok: true,
+      component: ConvWindow,
+      props: { inputRows: 5, inputCols: 5, kernelSize: 3, stride: 1 },
+    })
+  })
+
+  it('rejects invalid conv_window props with a readable reason', () => {
+    const result = dispatchUiBlock(
+      block({ type: 'conv_window', props: { inputRows: 3, inputCols: 8, kernelSize: 4 } }),
+    )
+    expect(result.ok).toBe(false)
+    expect(!result.ok && result.error).toContain('kernelSize')
   })
 
   it('returns normalized props, dropping nothing the schema allows', () => {

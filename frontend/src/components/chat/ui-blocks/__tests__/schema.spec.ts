@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   parseUiBlockEnvelope,
   validateAttentionMatrixProps,
+  validateConvWindowProps,
   ATTENTION_TOKEN_MAX,
   ATTENTION_TOKEN_MIN,
 } from '../schema'
@@ -112,5 +113,58 @@ describe('validateAttentionMatrixProps', () => {
 
   it.each([null, [], 'props'])('rejects non-object props %j', (props) => {
     expect(validateAttentionMatrixProps(props).ok).toBe(false)
+  })
+})
+
+describe('validateConvWindowProps', () => {
+  const convProps = (overrides: Record<string, unknown> = {}) => ({
+    inputRows: 5,
+    inputCols: 5,
+    kernelSize: 3,
+    ...overrides,
+  })
+
+  it('accepts valid props and normalizes missing stride to 1', () => {
+    expect(validateConvWindowProps(convProps())).toEqual({
+      ok: true,
+      value: { inputRows: 5, inputCols: 5, kernelSize: 3, stride: 1 },
+    })
+  })
+
+  it('accepts stride 2 and boundary dims', () => {
+    expect(validateConvWindowProps(convProps({ stride: 2 })).ok).toBe(true)
+    expect(validateConvWindowProps(convProps({ inputRows: 3, inputCols: 8, kernelSize: 2 })).ok).toBe(true)
+    expect(validateConvWindowProps(convProps({ inputRows: 8, inputCols: 8, kernelSize: 5 })).ok).toBe(true)
+  })
+
+  it.each([2, 9, 5.5, '5', null, undefined])('rejects inputRows %s', (inputRows) => {
+    expect(validateConvWindowProps(convProps({ inputRows })).ok).toBe(false)
+  })
+
+  it.each([2, 9, 5.5, '5', null, undefined])('rejects inputCols %s', (inputCols) => {
+    expect(validateConvWindowProps(convProps({ inputCols })).ok).toBe(false)
+  })
+
+  it.each([1, 6, 3.5, '3', null, undefined])('rejects kernelSize %s', (kernelSize) => {
+    expect(validateConvWindowProps(convProps({ kernelSize })).ok).toBe(false)
+  })
+
+  it('rejects kernelSize larger than input dims', () => {
+    const result = validateConvWindowProps(convProps({ inputRows: 3, kernelSize: 4 }))
+    expect(result.ok).toBe(false)
+    expect(!result.ok && result.error).toContain('kernelSize')
+  })
+
+  it.each([0, 3, 1.5, '2', null])('rejects stride %s', (stride) => {
+    expect(validateConvWindowProps(convProps({ stride })).ok).toBe(false)
+  })
+
+  it('rejects unknown prop keys (含 weights)', () => {
+    expect(validateConvWindowProps(convProps({ weights: [[1]] })).ok).toBe(false)
+    expect(validateConvWindowProps(convProps({ featureMap: [] })).ok).toBe(false)
+  })
+
+  it.each([null, [], 'props'])('rejects non-object props %j', (props) => {
+    expect(validateConvWindowProps(props).ok).toBe(false)
   })
 })

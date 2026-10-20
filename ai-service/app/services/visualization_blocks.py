@@ -1,17 +1,24 @@
 """从 Markdown 正文中抽取 ```ui-block 围栏（T006，MVP 管线）。
 
 约定（D-004 方案 A / D-010）：LLM 把结构化 UI block 写在正文里的
-```ui-block 围栏中；后端在**最终正文下发前**把合法围栏剥离、转成独立
+```ui-block 围栏中；后端在**最终正文下发前**把围栏剥离、合法的转成独立
 visualization SSE 事件（接线见 chat_task_dispatcher），正文仍是纯 Markdown。
 
-失败不吞正文：JSON 解析失败或 parse_ui_block 校验不过（含 D-007 weights）
-的围栏**原样保留**在返回文本里——前端最多看到一段 JSON 代码块，不会丢内容。
+失败围栏的降级（D-014）：
+- JSON 解析失败 → 围栏**原样保留**在正文（无法断定意图，不吞内容）；
+- JSON 可解析但 parse_ui_block 校验不过（未注册类型 / 非法 props）→ 围栏
+  仍从正文**剥离**并记 warning 日志，不下发事件。围栏是机器配置而非给用户
+  的正文，留在正文里用户只会看到一段裸 JSON（旧 T006"失败不吞正文"就此
+  收窄为"JSON 解析失败的围栏保留"）。
 """
 
 import json
+import logging
 import re
 
 from app.events.visualization import parse_ui_block
+
+logger = logging.getLogger(__name__)
 
 # 只认 3-backtick 围栏、info string 恰为 ui-block（允许两侧空白），
 # 且开/闭围栏必须独立成行（行首，CommonMark fenced code 行为）。
@@ -33,9 +40,11 @@ def extract_ui_blocks(text: str) -> tuple[str, list[dict]]:
     """抽取正文中的 ```ui-block 围栏。
 
     返回 (清理后的文本, 合法 block 列表)：
-    - 围栏内容 JSON 解析 + parse_ui_block 校验都通过 → 规范化 block 进列表，
+    - JSON 解析 + parse_ui_block 校验都通过 → 规范化 block 进列表，
       围栏从文本剥离；
-    - 任一步失败 → 该围栏原样保留在文本中（失败不吞正文）；
+    - JSON 解析失败 → 围栏原样保留在文本中（无法断定意图，不吞内容）；
+    - JSON 可解析但校验不过（未注册类型 / 非法 props）→ 围栏剥离、
+      记 warning 日志、不产生 block（D-014，正文不留裸 JSON）；
     - 无围栏 → (原文, [])；多个围栏全部处理，block 按出现顺序排列。
     """
     blocks: list[dict] = []
@@ -47,9 +56,11 @@ def extract_ui_blocks(text: str) -> tuple[str, list[dict]]:
         except ValueError:
             continue  # JSON 非法：围栏保留
         parsed = parse_ui_block(candidate)
-        if not parsed["ok"]:
-            continue  # 校验不过（含 D-007）：围栏保留
-        blocks.append(parsed["value"])
+        if parsed["ok"]:
+            blocks.append(parsed["value"])
+        else:
+            # 校验不过：围栏是机器配置而非用户正文，剥离 + 日志，不裸留（D-014）
+            logger.warning("ui-block 校验失败，已从正文剥离：%s", parsed["error"])
         parts.append(text[last_end:match.start()])
         last_end = match.end()
     parts.append(text[last_end:])
