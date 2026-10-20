@@ -38,6 +38,9 @@ class VisualizationCenter:
 
         try:
             blocks = []
+            # 前置 tutor 的完整回答（仅 visualize 意图有值）：含 ui-block 围栏时
+            # 需要随 payload 下发（见最终 payload 组装处的 passthrough）
+            tutor_answer = ""
 
             if task.intent == "visualize":
                 try:
@@ -57,6 +60,7 @@ class VisualizationCenter:
                     except (asyncio.TimeoutError, Exception) as e:
                         logger.warning("可视化前置 tutor 失败: %s，使用问题文本降级", e)
                         answer = task.input
+                    tutor_answer = answer
 
                     # answer 为空壳 summary（如 ContentAgent 的"已为您生成...共 X 个内容块"）
                     # 时，用 question 驱动 AnalysisAgent，避免因"答案<100字"被误杀
@@ -124,15 +128,25 @@ class VisualizationCenter:
                 mindmap_blocks = state.get("blocks", [])
                 blocks.extend(mindmap_blocks)
 
+            payload = {
+                "type": "visualization",
+                "topic": topic,
+                "blocks": blocks,
+            }
+            # ui-block passthrough（D-014）：前置 tutor 的回答含 ```ui-block 围栏
+            # （= 概念在交互图能力清单内，如卷积/注意力）时，把完整讲解作为
+            # response 下发——ChatTaskDispatcher 的既有抽取链路会剥离围栏、
+            # 转成独立 visualization 事件并渲染交互图（D-004/D-010），用户得到
+            # 「完整讲解 + 交互图」。无围栏的其他可视化主题行为不变，
+            # 仍走 blocks 摘要通道。
+            if task.intent == "visualize" and "```ui-block" in tutor_answer:
+                payload["response"] = tutor_answer
+
             return CenterResult(
                 mode="visualization",
                 intent=task.intent,
                 event_type="visualization",
-                payload={
-                    "type": "visualization",
-                    "topic": topic,
-                    "blocks": blocks,
-                },
+                payload=payload,
                 agent="VisualizationCenter",
                 sequence=task.sequence,
             )

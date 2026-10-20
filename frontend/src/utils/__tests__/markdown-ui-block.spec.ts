@@ -13,8 +13,11 @@
  * - 普通代码块（其他 info string）完全不受影响。
  */
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 import { renderChatMarkdown, stripValidUiBlockFences } from '../markdown'
+import { dispatchUiBlock } from '@/components/chat/ui-blocks/registry'
 
 const VALID_FENCE =
   '```ui-block\n{"type":"attention_matrix","version":1,"props":{"tokenCount":5,"mode":"causal"}}\n```'
@@ -37,6 +40,20 @@ describe('stripValidUiBlockFences：合法围栏剥离', () => {
       '{"type":"attention_matrix","version":1,"props":{"tokenCount":3,"mode":"bidirectional","queryLabels":["a","b","c"]}}',
     )
     expect(stripValidUiBlockFences(`正文\n\n${fence}\n\n结尾`)).not.toContain('attention_matrix')
+  })
+
+  it('合法 conv_window v1 围栏被剥离（含省略 stride 与显式 stride 两种）', () => {
+    const noStride = fenceWith(
+      '{"type":"conv_window","version":1,"props":{"inputRows":5,"inputCols":5,"kernelSize":3}}',
+    )
+    const withStride = fenceWith(
+      '{"type":"conv_window","version":1,"props":{"inputRows":6,"inputCols":8,"kernelSize":2,"stride":2}}',
+    )
+    const stripped = stripValidUiBlockFences(`正文\n\n${noStride}\n\n中间\n\n${withStride}\n\n结尾`)
+    expect(stripped).not.toContain('conv_window')
+    expect(stripped).not.toContain('ui-block')
+    expect(stripped).toContain('正文')
+    expect(stripped).toContain('结尾')
   })
 
   it('多个围栏全部处理：合法的剥离、非法的保留', () => {
@@ -132,5 +149,40 @@ describe('renderChatMarkdown：围栏剥离接入渲染入口', () => {
     expect(html).toContain('正文后')
     // 围栏内容作为代码块可见
     expect(html).toContain('not-json')
+  })
+})
+
+/**
+ * 三端同步守卫（D-014）：同一批契约 fixtures 分别过三个注册表，结论必须一致——
+ * 1. 后端 parse_ui_block（test_ui_block_contract.py）
+ * 2. 前端 registry（contract.spec.ts 的 dispatchUiBlock）
+ * 3. 渲染层兜底剥离（本文件的 stripValidUiBlockFences）
+ *
+ * 不变量：block 校验 ok=true ⇒ 包进围栏必被渲染层剥离（否则正文残留裸 JSON）；
+ * ok=false ⇒ 围栏保留。历史上 conv_window 曾漏注册渲染层映射导致裸 JSON
+ * 留在正文（2026-10-20 真机事故），此守卫防止再次漂移。
+ */
+describe('三端同步守卫：fixtures 驱动的渲染层剥离', () => {
+  const fixturePath = resolve(
+    process.cwd(),
+    '../ai-service/tests/fixtures/ui_block_contract.json',
+  )
+  const fixtures: { name: string; ok: boolean; block: unknown }[] = JSON.parse(
+    readFileSync(fixturePath, 'utf-8'),
+  ).fixtures
+
+  it.each(fixtures)('$name：剥离结论与 registry/后端一致', ({ ok, block }) => {
+    // registry 结论必须先对齐（与 contract.spec.ts 同一断言，双保险）
+    expect(dispatchUiBlock(block).ok).toBe(ok)
+
+    const text = `正文前。\n\n${fenceWith(JSON.stringify(block))}\n\n正文后。`
+    const stripped = stripValidUiBlockFences(text)
+    if (ok) {
+      expect(stripped).not.toContain('```ui-block')
+      expect(stripped).toContain('正文前。')
+      expect(stripped).toContain('正文后。')
+    } else {
+      expect(stripped).toContain('```ui-block')
+    }
   })
 })

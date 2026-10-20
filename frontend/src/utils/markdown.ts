@@ -23,6 +23,7 @@ import DOMPurify from 'dompurify'
 import {
   parseUiBlockEnvelope,
   validateAttentionMatrixProps,
+  validateConvWindowProps,
 } from '@/components/chat/ui-blocks/schema'
 
 /**
@@ -232,6 +233,7 @@ const UI_BLOCK_PROP_VALIDATORS: Record<
   Record<number, (props: unknown) => { ok: boolean }>
 > = {
   attention_matrix: { 1: validateAttentionMatrixProps },
+  conv_window: { 1: validateConvWindowProps },
 }
 
 export const stripValidUiBlockFences = (content: string): string => {
