@@ -149,6 +149,12 @@ class AutoCenter:
         if not answer.strip():
             return []
 
+        # D-016：回答已附 ui-block 围栏（= 概念在交互图能力清单内，后端会
+        # 剥离围栏转成独立 visualization 事件渲染交互图）时，跳过 Chart.js
+        # 图解增强——避免同一概念重复出图，也省掉 30-45 秒的管线耗时。
+        if "```ui-block" in answer:
+            return []
+
         question = ""
         for m in reversed(messages):
             if m.get("role") == "user":

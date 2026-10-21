@@ -1,14 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
 import QuestionNavChat from '../QuestionNavChat.vue'
+import ConvWindow from '@/components/chat/ConvWindow.vue'
+
+// 每个测试结束后自动卸载已挂载组件：组件对 route.query 的 watcher
+// 若跨测试存活，会在别的测试改 conversationId 时触发会话重载（互相污染）
+enableAutoUnmount(beforeEach)
 
 // ── 模块级 mock：真实 SSE 客户端与路由 ──────────────────────────
-const { sendMessageStreamMock, parseSSEStreamMock, getConversationMessagesMock, uploadFileMock, routeQuery } = vi.hoisted(() => ({
+const { sendMessageStreamMock, parseSSEStreamMock, getConversationMessagesMock, uploadFileMock, routeState } = vi.hoisted(() => ({
   sendMessageStreamMock: vi.fn(),
   parseSSEStreamMock: vi.fn(),
   getConversationMessagesMock: vi.fn(),
   uploadFileMock: vi.fn(),
-  routeQuery: { conversationId: undefined as string | undefined },
+  routeState: { query: { conversationId: undefined as string | undefined } },
 }))
 
 vi.mock('@/api/chat', () => ({
@@ -24,11 +29,21 @@ vi.mock('@/api/files', () => ({
   uploadFile: (...args: unknown[]) => uploadFileMock(...args),
 }))
 
-vi.mock('vue-router', () => ({
-  // 生产 router 同时具备 push/replace（done 后会 replace 同步会话 id 到 URL）
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
-  useRoute: () => ({ query: routeQuery }),
-}))
+vi.mock('vue-router', async () => {
+  // route.query 用 reactive 包装，模拟「replace 改 URL → watch 触发」的真实链路
+  // （D-016：done 后 replace 同步会话 id 曾触发会话重载清掉交互图组件）
+  const { reactive } = await import('vue')
+  routeState.query = reactive(routeState.query)
+  const replace = vi.fn((to: { query?: { conversationId?: string | number } }) => {
+    if (to?.query?.conversationId !== undefined) {
+      routeState.query.conversationId = String(to.query.conversationId)
+    }
+  })
+  return {
+    useRouter: () => ({ push: vi.fn(), replace }),
+    useRoute: () => ({ query: routeState.query }),
+  }
+})
 
 const mountPage = () =>
   mount(QuestionNavChat, {
@@ -50,7 +65,7 @@ beforeEach(() => {
   getConversationMessagesMock.mockReset()
   uploadFileMock.mockReset()
   getConversationMessagesMock.mockResolvedValue([])
-  routeQuery.conversationId = undefined
+  routeState.query.conversationId = undefined
   localStorage.clear()
 })
 
@@ -613,7 +628,7 @@ describe('QuestionNavChat 执行进度展示（阶段 D 合同）', () => {
 
 describe('QuestionNavChat 历史图片回显（本轮合同）', () => {
   it('回读会话时把后端签发的 images 映射进消息并渲染图片', async () => {
-    routeQuery.conversationId = '70'
+    routeState.query.conversationId = '70'
     getConversationMessagesMock.mockResolvedValue([
       {
         id: 136,
@@ -637,7 +652,7 @@ describe('QuestionNavChat 历史图片回显（本轮合同）', () => {
   })
 
   it('没有图片的历史消息不渲染图片容器（不出现空占位）', async () => {
-    routeQuery.conversationId = '22'
+    routeState.query.conversationId = '22'
     getConversationMessagesMock.mockResolvedValue([
       { id: 201, conversationId: 22, role: 'user', content: '纯文字问题', mode: 'chat', createdAt: '2026-09-29T10:00:00' },
       { id: 202, conversationId: 22, role: 'assistant', content: '纯文字回答', mode: 'tutor', createdAt: '2026-09-29T10:00:01' },
@@ -774,7 +789,7 @@ describe('QuestionNavChat 滚动跟随（本轮合同）', () => {
   })
 
   it('打开历史会话时强制贴底（不沿用上一次的跟随状态）', async () => {
-    routeQuery.conversationId = '22'
+    routeState.query.conversationId = '22'
     getConversationMessagesMock.mockResolvedValue([
       { id: 301, conversationId: 22, role: 'user', content: '历史问题', mode: 'chat', createdAt: '2026-09-29T10:00:00' },
       { id: 302, conversationId: 22, role: 'assistant', content: '历史回答', mode: 'tutor', createdAt: '2026-09-29T10:00:01' },
@@ -801,7 +816,7 @@ describe('QuestionNavChat 滚动跟随（本轮合同）', () => {
 
 describe('QuestionNavChat 会话列表与回读（方案 A）', () => {
   it('根据全局侧栏传入的 conversationId 按顺序回显 user/assistant 消息', async () => {
-    routeQuery.conversationId = '22'
+    routeState.query.conversationId = '22'
     getConversationMessagesMock.mockResolvedValue([
       { id: 101, conversationId: 22, role: 'user', content: '什么是进程？', mode: 'chat', createdAt: '2026-09-29T10:00:00' },
       { id: 102, conversationId: 22, role: 'assistant', content: '进程是资源分配的基本单位。', mode: 'chat', createdAt: '2026-09-29T10:00:01' },
@@ -816,7 +831,7 @@ describe('QuestionNavChat 会话列表与回读（方案 A）', () => {
   })
 
   it('在已打开的会话里继续发送时复用当前 conversation_id', async () => {
-    routeQuery.conversationId = '22'
+    routeState.query.conversationId = '22'
     getConversationMessagesMock.mockResolvedValue([
       { id: 101, conversationId: 22, role: 'user', content: '上一问', mode: 'chat', createdAt: '2026-09-29T10:00:00' },
       { id: 102, conversationId: 22, role: 'assistant', content: '上一答', mode: 'chat', createdAt: '2026-09-29T10:00:01' },
@@ -846,4 +861,80 @@ describe('QuestionNavChat 会话列表与回读（方案 A）', () => {
     expect(sendMessageStreamMock.mock.calls[1][0]).toEqual(expect.objectContaining({ conversation_id: 22 }))
   })
 
+})
+
+describe('D-016：done 后 URL 同步不得清掉交互图（suppressAutoReload）', () => {
+  const vizBlock = () => ({
+    ok: true as const,
+    component: ConvWindow,
+    props: { inputRows: 5, inputCols: 5, kernelSize: 3, stride: 1 },
+  })
+
+  it('新会话首条消息：done 拿到会话 id 后不重载消息、交互图组件保留', async () => {
+    sendMessageStreamMock.mockResolvedValue(new ReadableStream())
+    parseSSEStreamMock.mockImplementation(
+      async (
+        _stream: ReadableStream,
+        _onData: (d: string) => void,
+        onDone: (id: number | null) => void,
+        _onError?: (e: Error) => void,
+        _onProgress?: (p: unknown) => void,
+        onVisualization?: (b: unknown) => void,
+      ) => {
+        onVisualization?.(vizBlock())
+        onDone(147)
+      },
+    )
+
+    const wrapper = mountPage()
+    await sendViaEnter(wrapper, '什么是卷积')
+    await flushPromises()
+
+    // URL 同步（null→147）被抑制：不触发会话重载
+    expect(getConversationMessagesMock).not.toHaveBeenCalled()
+    // 刚渲染的交互图组件不被数据库重载清掉
+    expect(wrapper.find('.msg-visualization').exists()).toBe(true)
+    expect(wrapper.find('.conv-window').exists()).toBe(true)
+  })
+
+  it('抑制标志只消费一次：用户随后主动切换会话仍正常重载', async () => {
+    const wrapper = mountPage()
+    await flushPromises()
+
+    getConversationMessagesMock.mockClear()
+    routeState.query.conversationId = '22'
+    await flushPromises()
+
+    expect(getConversationMessagesMock).toHaveBeenCalledWith(22)
+  })
+
+  it('URL 已是同一会话 id 时（会话内后续消息）不设抑制标志', async () => {
+    // 先进入既有会话 22
+    routeState.query.conversationId = '22'
+    getConversationMessagesMock.mockResolvedValue([])
+    sendMessageStreamMock.mockResolvedValue(new ReadableStream())
+    parseSSEStreamMock.mockImplementation(
+      async (
+        _stream: ReadableStream,
+        _onData: (d: string) => void,
+        onDone: (id: number | null) => void,
+      ) => {
+        onDone(22)
+      },
+    )
+
+    const wrapper = mountPage()
+    await flushPromises()
+    getConversationMessagesMock.mockClear()
+
+    await sendViaEnter(wrapper, '会话内第二问')
+    await flushPromises()
+
+    // replace 的 query 与当前一致 → 不触发 watch，也不残留抑制标志
+    expect(getConversationMessagesMock).not.toHaveBeenCalled()
+    // 主动切换会话（无抑制残留）→ 正常重载
+    routeState.query.conversationId = '33'
+    await flushPromises()
+    expect(getConversationMessagesMock).toHaveBeenCalledWith(33)
+  })
 })

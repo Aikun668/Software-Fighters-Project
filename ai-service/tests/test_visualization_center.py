@@ -119,3 +119,47 @@ class TestDispatcherFullChain:
         assert viz.data["props"] == {
             "inputRows": 5, "inputCols": 5, "kernelSize": 3, "stride": 1,
         }
+
+
+class TestAutoCenterSkipsEnhanceWhenFencePresent:
+    """D-016：tutor 回答已附 ui-block 围栏（交互图能力清单内的概念）时，
+    跳过 Chart.js 图解增强——避免同概念重复出图与 30-45 秒的冗余管线耗时。"""
+
+    @staticmethod
+    def _recording_center(calls: list) -> "AutoCenter":
+        from app.centers.auto_center import AutoCenter
+
+        class RecordingPipeline:
+            async def run(self, question: str, answer: str):
+                calls.append((question, answer))
+                return VisualizeResult.skip(reason="不应被调用")
+
+        return AutoCenter(visualize_pipeline=RecordingPipeline(), use_mock_llm=True)
+
+    @pytest.mark.asyncio
+    async def test_fence_in_answer_skips_chart_pipeline(self):
+        calls: list = []
+        center = self._recording_center(calls)
+        messages = [{"role": "user", "content": "画一张图讲讲卷积"}]
+        answer_with_fence = (
+            "卷积核在输入上按步长滑动：\n\n```ui-block\n"
+            '{"type": "conv_window", "version": 1, '
+            '"props": {"inputRows": 5, "inputCols": 5, "kernelSize": 3}}\n'
+            "```\n"
+        )
+        blocks = await center._maybe_visualize(messages, answer_with_fence)
+        assert blocks == []
+        assert calls == [], "回答含围栏时图解增强管线根本不应启动"
+
+    @pytest.mark.asyncio
+    async def test_answer_without_fence_still_runs_pipeline(self):
+        """无围栏（概念不在能力清单）→ 行为不变：预过滤通过则管线照常执行。"""
+        calls: list = []
+        center = self._recording_center(calls)
+        messages = [{"role": "user", "content": "画一张图讲讲快速排序的流程"}]
+        plain_answer = (
+            "快速排序分三步：选基准、分区、递归。整个流程的步骤如下……"
+            " partition 过程的对比与变化趋势如图所示。"
+        )
+        await center._maybe_visualize(messages, plain_answer)
+        assert len(calls) == 1, "无围栏时管线应照常执行（回归保护）"

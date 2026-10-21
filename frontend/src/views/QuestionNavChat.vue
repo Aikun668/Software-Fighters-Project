@@ -259,6 +259,12 @@ const send = async () => {
       (conversationId) => {
         if (conversationId !== null) {
           currentConversationId.value = conversationId
+          // D-016：URL 会因这次 replace 变化（新会话首条消息）时才设抑制标志——
+          // 若 URL 已是同一会话 id，replace 不触发 watch，标志会残留并误吞
+          // 用户下一次主动切换会话的重载。
+          if (routeConversationId(route.query.conversationId) !== conversationId) {
+            suppressAutoReload.value = true
+          }
           // 同步到 URL：侧栏据 route.query.conversationId 高亮"当前会话"；
           // 用 replace 避免产生一条多余的历史记录。
           void router.replace({
@@ -308,10 +314,27 @@ const routeConversationId = (value: unknown) => {
   return Number.isInteger(id) && id > 0 ? id : null
 }
 
+/**
+ * D-016：抑制「本轮对话自身的 URL 同步」引发的消息重载。
+ *
+ * onDone 首次拿到会话 id 后会 router.replace 把 conversationId 写进 URL
+ * （新会话首条消息时 URL 从无 id → 有 id），路由 watch 随之触发
+ * openConversation → 用数据库消息整体替换内存消息并清空 visualizationBlocks
+ * ——刚渲染出来的交互图组件就这样被"闪没"了（用户随机测试永远看不到图）。
+ * 该标志在 onDone 设置一次、路由 watch 消费一次：只同步 id，不重载不清空；
+ * 用户之后主动切换会话不受影响（标志已被消费）。
+ */
+const suppressAutoReload = ref(false)
+
 watch(
   () => route.query.conversationId,
   (value) => {
     const id = routeConversationId(value)
+    if (suppressAutoReload.value) {
+      suppressAutoReload.value = false
+      if (id !== null) currentConversationId.value = id
+      return
+    }
     if (id === null) {
       startNewConversation()
     } else {
