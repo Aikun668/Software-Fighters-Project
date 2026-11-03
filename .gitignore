@@ -5,6 +5,7 @@ __pycache__/
 .venv/
 venv/
 *.env.local
+.env
 
 # Tool caches
 .pytest_cache/
