@@ -5,6 +5,7 @@ __pycache__/
 .venv/
 venv/
 *.env.local
+.env
 
 # ChromaDB
 chroma_data/
