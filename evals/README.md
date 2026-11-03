@@ -1,8 +1,8 @@
 # evals — 对话底座评测集（Task 9 · P4）
 
 > 版本：`chat_foundation_v1`（2026-09-05 冻结）。
-> 隶属改造计划：`temp_file/9.5工程改造计划/2026-09-05-conversation-foundation-rescue.md` Task 9。
-> 评分标准：`temp_file/9.5工程改造计划/2026-09-05-eval-rubric.md`。
+> 隶属改造计划：`archive/temp_file/9.5工程改造计划/2026-09-05-conversation-foundation-rescue.md` Task 9。
+> 评分标准：`archive/temp_file/9.5工程改造计划/2026-09-05-eval-rubric.md`。
 
 ## 文件
 

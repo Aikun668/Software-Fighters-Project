@@ -1,6 +1,6 @@
 """SSE 终止合同测试（Task 3 · P0）
 
-合同（来自 temp_file/9.5工程改造计划/2026-09-05-conversation-foundation-rescue.md Task 3）：
+合同（来自 archive/temp_file/9.5工程改造计划/2026-09-05-conversation-foundation-rescue.md Task 3）：
 1. 成功请求：事件至少有一个 content，最后一个事件是 done。
 2. Agent 异常：流以 error 或项目既有的明确终止语义结束，不得无限悬挂。
 3. 非法请求：返回可识别错误，不进入 Agent 调度。

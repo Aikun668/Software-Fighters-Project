@@ -10,7 +10,7 @@
     **有意独立维护**：两者关键词集合不同，合并会改变路由行为（P3 决定：只登记，不合并）
   - 禁止：决定「是否进入专项能力」（一级属 `CapabilityGate`）；
     禁止选择资源 Agent（属 `Director`）
-  - 约定：`temp_file/9.15工程改造计划/0、产品方向与约束/三类决策与命名约定.md`
+  - 约定：`archive/temp_file/9.15工程改造计划/0、产品方向与约束/三类决策与命名约定.md`
 
 【命名澄清】名字叫 `RouterAgent`，但它 **不是 Center**（却位于 `app/centers/`）、
   **不是 LLM Agent**（`decide()` 全程无 LLM 调用），实为「关键词 → RouteDecision」

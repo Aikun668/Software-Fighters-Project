@@ -6,7 +6,7 @@
   - 唯一调用点：`TutorAgent._respond_node`（`app/agents/tutor_agent.py`）
   - 输出：`"ai"` / `"general"`，仅影响 KB 注入、类比与 system prompt 选择
   - 禁止：参与 Center / Agent 选择（**分类 ≠ 路由**）
-  - 约定：`temp_file/9.15工程改造计划/0、产品方向与约束/三类决策与命名约定.md`
+  - 约定：`archive/temp_file/9.15工程改造计划/0、产品方向与约束/三类决策与命名约定.md`
 
 【命名澄清】本类原名 `DomainRouter`（**P3-B2 已改名** `DomainClassifier`；模块同步由
   `domain_router.py` 改为 `domain_classifier.py`）。它**不路由任何请求**，实为内容二分类器；

@@ -15,7 +15,7 @@
 凭据：从 .env 的 DEEPSEEK_API_KEY / DEEPSEEK_BASE_URL / DEEPSEEK_MODEL_CHAT 读取，
      日志与证据文件不落 key（输出前经 _scrub 兜底脱敏）。
 证据：每次真实用例把审计指标合并写入
-     <仓库根>/temp_file/2026-09-06-llm-flash-acceptance-report.json
+     <仓库根>/archive/temp_file/归档/2026-09-06-llm-flash-acceptance-report.json
      （可用 LLM_ACCEPTANCE_EVIDENCE_PATH 覆盖路径）。
 不改业务路由、不改前端；本文件只新增。
 """
@@ -62,8 +62,8 @@ def _evidence_path() -> Path:
     if custom:
         p = Path(custom)
     else:
-        # ai-service/tests/xxx.py → 仓库根/temp_file/
-        p = Path(__file__).resolve().parents[2] / "temp_file" / _REPORT_NAME
+        # ai-service/tests/xxx.py → 仓库根/archive/temp_file/归档/
+        p = Path(__file__).resolve().parents[2] / "archive" / "temp_file" / "归档" / _REPORT_NAME
     p.parent.mkdir(parents=True, exist_ok=True)
     return p
 

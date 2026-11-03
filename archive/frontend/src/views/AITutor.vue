@@ -112,7 +112,7 @@
 
 <script setup lang="ts">
 import { ref, nextTick, onMounted } from 'vue'
-import { marked } from 'marked'
+import { renderChatMarkdown } from '@/utils/markdown'
 
 interface ChatMessage {
   id: string
@@ -142,12 +142,8 @@ const formatTime = (timestamp: number) => {
   return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 }
 
-const renderMarkdown = (content: string) => {
-  return marked(content, {
-    breaks: true,
-    gfm: true
-  })
-}
+/** 助手正文渲染统一走 `@/utils/markdown`（Markdown + KaTeX 公式 + XSS 清洗）。 */
+const renderMarkdown = renderChatMarkdown
 
 const scrollToBottom = async (force = false) => {
   await nextTick()

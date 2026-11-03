@@ -15,7 +15,7 @@
   - 唯一调用点：`ChatCenter.route`（`app/centers/chat_center.py`）
   - 输入：用户原始输入；输出：`CapabilityKind`
   - 禁止：在此选择 Center / Agent；禁止决定「进哪个业务域」（属二级 `RouterAgent`）
-  - 约定：`temp_file/9.15工程改造计划/0、产品方向与约束/三类决策与命名约定.md`
+  - 约定：`archive/temp_file/9.15工程改造计划/0、产品方向与约束/三类决策与命名约定.md`
 """
 
 import re

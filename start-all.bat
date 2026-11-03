@@ -16,7 +16,7 @@ REM    - MySQL 8.0 已运行且库表已初始化（sql/ 目录）
 REM    - Redis 7 已运行
 REM    - ai-service/.env 已填写 LLM API Key
 REM    - ai-service/venv 已存在（或系统 Python 装好了依赖）
-REM    - frontend/node_modules 已安装
+REM    - showcase-web/node_modules 已安装
 REM ===================================================================
 
 chcp65001 >nul
@@ -25,7 +25,7 @@ setlocal EnableDelayedExpansion
 set "ROOT=%~dp0"
 set "AI_DIR=%ROOT%ai-service"
 set "BACKEND_DIR=%ROOT%backend"
-set "FRONTEND_DIR=%ROOT%frontend"
+set "FRONTEND_DIR=%ROOT%showcase-web"
 
 echo.
 echo ==============================================================

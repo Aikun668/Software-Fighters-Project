@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { nextTick, ref, watch } from 'vue'
-import { marked } from 'marked'
-import DOMPurify from 'dompurify'
 import type { ChatMessage } from './chat-types'
 import MessageActions from './MessageActions.vue'
 import { renderMermaidBlocks } from '@/utils/mermaid'
+import { renderChatMarkdown } from '@/utils/markdown'
 import type { DispatchResult } from './ui-blocks/registry'
 
 const props = defineProps<{
@@ -25,18 +24,23 @@ const emit = defineEmits<{
   imageLoaded: []
 }>()
 
-const threadRef = ref<{ $el?: HTMLElement } | null>(null)
+const threadRef = ref<HTMLElement | { $el?: HTMLElement } | null>(null)
+
+/** ref 绑在普通 div 上拿到的是 DOM 元素本身（无 $el）；绑在组件上才是实例（有 $el）。两种都兼容。 */
+const threadEl = (): HTMLElement | null => {
+  const value = threadRef.value
+  if (!value) return null
+  return value instanceof HTMLElement ? value : (value.$el ?? null)
+}
 
 /**
- * 助手正文按 Markdown 渲染。
+ * 助手正文按 Markdown 渲染（含数学公式）。
  *
- * - `breaks: true` 让单个换行也生效（聊天场景下更贴近用户预期）；
- * - `gfm: true` 开启表格 / 删除线等 GitHub 风格语法；
- * - **必须经 DOMPurify 清洗**：`marked` 默认放行原始 HTML，而正文来自大模型，
- *   未经清洗直接 `v-html` 会形成 XSS 通道（`<img src=x onerror=...>` 之类）。
+ * 渲染实现已收敛到 `@/utils/markdown` 的单一入口：那边统一处理
+ * Markdown + KaTeX 公式 + DOMPurify 清洗，避免各处重复实现漂移。
+ * 本组件不再直接依赖 `marked` / `DOMPurify`。
  */
-const renderMarkdown = (content: string): string =>
-  DOMPurify.sanitize(marked.parse(content, { breaks: true, gfm: true }) as string)
+const renderMarkdown = renderChatMarkdown
 
 /**
  * FINAL 用户需求：AI 返回的 mermaid 图（mindmap/流程图…）此前只是代码块渲染不出来。
@@ -63,7 +67,7 @@ watch(
       })
     if (wasStreamingOnly) return
     await nextTick()
-    await renderMermaidBlocks(threadRef.value?.$el ?? null)
+    await renderMermaidBlocks(threadEl())
   },
   { immediate: true },
 )

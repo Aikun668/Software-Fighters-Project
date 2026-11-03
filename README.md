@@ -284,7 +284,7 @@ cd backend
 
 ### 4. 启动前端
 ```bash
-cd frontend
+cd showcase-web
 pnpm install
 pnpm dev                       # 启动 → localhost:5173
 ```
@@ -327,7 +327,7 @@ curl -X POST http://127.0.0.1:8001/internal/knowledge-graph/ai_course \
 
 ## 工程改造进展
 
-> 依据 `temp_file/9.15工程改造计划/`（渐进式架构收敛：API 只做协议、每个业务能力只有一个主入口）。
+> 依据 `archive/temp_file/9.15工程改造计划/`（渐进式架构收敛：API 只做协议、每个业务能力只有一个主入口）。
 > **阶段 E（取消 / 背压 / 断线重连 / 可观测）按决策跳过** —— 其四项与《学习闭环化五优先级技术路线与实施总纲》P4 逐条对应，并入后续"按需、由真实问题触发"的建设。
 > 主线转入 `3、学习闭环化`。当前阶段：**P0 已完成，准备进入 P1**。
 

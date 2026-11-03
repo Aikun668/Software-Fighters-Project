@@ -16,7 +16,7 @@
 #    - Redis 7 已运行
 #    - ai-service/.env 已填写 LLM API Key
 #    - ai-service/venv 已存在（或系统 Python 装好了依赖）
-#    - frontend/node_modules 已安装
+#    - showcase-web/node_modules 已安装
 # ===================================================================
 
 set -u
@@ -27,7 +27,7 @@ ROOT_WIN="$(cygpath -w "$ROOT" 2>/dev/null || echo "$ROOT")"
 
 AI_DIR="$ROOT/ai-service"
 BACKEND_DIR="$ROOT/backend"
-FRONTEND_DIR="$ROOT/frontend"
+FRONTEND_DIR="$ROOT/showcase-web"
 
 # cmd 的 cd /d 只认 Windows 形式路径（D:\...）。
 # 注意：不能用 ${AI_DIR//\//\\}，那会把 /d/My_... 变成 \d\My_...（丢掉盘符冒号），
@@ -123,7 +123,7 @@ else
 fi
 
 echo "[3/4] 启动前端 dev server  (窗口: Frontend) ..."
-write_launcher "frontend.bat" "Frontend (5173)" "$FRONTEND_DIR_WIN" "pnpm dev"
+write_launcher "showcase-web.bat" "Frontend (5173)" "$FRONTEND_DIR_WIN" "pnpm dev"
 
 echo ""
 echo "[4/4] 等待服务就绪（最多 90s）..."

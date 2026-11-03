@@ -6,7 +6,7 @@
 
 ## 解决的问题
 
-9.5 工程改造计划（`temp_file/9.5工程改造计划/2026-09-05-conversation-foundation-rescue.md`）
+9.5 工程改造计划（`archive/temp_file/9.5工程改造计划/2026-09-05-conversation-foundation-rescue.md`）
 收敛出的普通聊天合同，需要一套**每次改动后都能机器判定**的回归，重点盯五类风险：
 
 | 风险 | 回归手段 |

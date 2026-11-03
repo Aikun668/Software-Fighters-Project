@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>智学 Tutor · Attention 交互演示</title>
+  <style>
+    :root {
+      --app-bg: #FAF9F6;
+      --nav-bg: #F3F0E9;
+      --paper: #FFFEFC;
+      --ink: #27343A;
+      --muted: #77817F;
+      --line: #E8E5DE;
+      --clay: #A76F5D;
+      --clay-pale: #F6EDE7;
+      --sage: #719E89;
+      --blue: #80AEC8;
+      --blue-deep: #447F9F;
+      --blue-dark: #336987;
+      --blue-pale: #ECF4F8;
+      --blue-cell: #CDE2EE;
+      --blocked: #F0F0ED;
+      --radius: 17px;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--app-bg); color: var(--ink); font-size: 14px; }
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+    .app { min-height: 100vh; display: grid; grid-template-columns: 232px minmax(0,1fr); }
+    aside { background: var(--nav-bg); border-right: 1px solid #E9E3D9; padding: 27px 15px; display: flex; flex-direction: column; gap: 26px; }
+    .brand { display: flex; align-items: center; gap: 12px; padding: 0 9px; font-size: 18px; letter-spacing: -.3px; font-weight: 650; }
+    .brand-mark { background:#E7DACE; width:32px; height:32px; display:grid; place-items:center; border-radius:10px; font-size:18px; color:var(--clay); }
+    .newchat { width: 100%; border: 1px solid #E5DCCF; background: #FBFAF7; border-radius: 11px; padding: 12px; color:#5E625F; }
+    .navlabel { color: #98958E; font-size: 11px; letter-spacing: 1.2px; font-weight:700; padding: 0 11px; margin-bottom:9px; }
+    .navitem { display:flex; gap:11px; align-items:center; border-radius:11px; padding:12px 13px; color:#7C807D; margin:3px 0; font-size:13px; }
+    .navitem svg{width:17px;height:17px;opacity:.8}
+    .navitem.active { background:#E9EEE8; color:#426F5C; font-weight:650; }
+    .sessions { margin-top: -10px; }
+    .session { font-size:12px; color:#92938C; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; padding:10px 14px; }
+    .session.active { color:#575F58; font-weight:600; background:#EFECE6; border-radius:9px; }
+    .session .dot { display:inline-block; margin-right:8px; width:6px; height:6px; background:#79BBA0; border-radius:50%; vertical-align:2px; }
+    .navbottom { margin-top:auto; padding:0 10px 4px; color:#8B8D86; font-size:12px; }
+    .workspace { min-width:0; }
+    .topbar { height: 65px; border-bottom:1px solid #EFEBE6; display:flex; align-items:center; justify-content:space-between; padding: 0 42px; }
+    .crumb { color:#666C69; display:flex; gap:10px; align-items:center; }
+    .crumb strong { color:#3B474A; font-weight:600; }
+    .topright { display:flex; gap:10px; align-items:center; color:#7A817D; font-size:12px; }
+    .smallpill { border:1px solid #E8E4DD; padding:7px 11px; border-radius:99px; background:#FFFEFB; }
+    .conversation { max-width: 970px; margin: 0 auto; padding: 28px 38px 60px; }
+    .userline { display:flex; justify-content:flex-end; }
+    .userbubble { background:var(--clay); color:#fff; border-radius:15px 15px 4px 15px; padding:16px 19px; max-width:570px; line-height:1.7; box-shadow:0 2px 5px rgba(100,53,37,.06); font-size:13px; }
+    .assistant-head { display:flex; align-items:center; gap:9px; margin:29px 0 16px; color:#77817D; font-size:12px; }
+    .agentmark { width:23px; height:23px; border-radius:8px; display:grid; place-items:center; font-size:14px; color:#537C70; background:#E7EEE9; }
+    .response { background:var(--paper); border:1px solid #ECE8E1; border-radius:19px; padding:28px 30px 28px; box-shadow:0 9px 28px rgba(81,68,50,.025); }
+    .eyebrow { text-transform:uppercase; color:#A7816E; font-size:11px; letter-spacing:1.9px; font-weight:750; margin-bottom:10px; }
+    h1 { font-size:24px; line-height:1.38; letter-spacing:-.75px; margin:0 0 10px; font-weight:680; }
+    .lead { color:#5F6B6C; font-size:13px; line-height:1.85; margin:0 0 22px; }
+    .contrast { display:grid; grid-template-columns:1fr 1fr; gap:11px; margin:0 0 22px; }
+    .compare { border:1px solid #E9E9E3; border-radius:12px; padding:13px 15px; background:#FCFBF9; display:flex; flex-direction:column; gap:6px; }
+    .compare strong { font-size:13px; font-weight:670; }
+    .compare span { font-size:12px; color:#78817D; }
+    .compare em { font-style:normal; color:#437C99; font-weight:720; font-size:17px; margin-left:6px; }
+    .equation { margin:0 0 24px; background:#F8F9F8; border:1px solid #E9EBE9; padding:13px 17px; border-radius:12px; font-family:Georgia, "Times New Roman", serif; color:#45545A; font-size:18px; text-align:center; letter-spacing:.1px; }
+    .equation .fraction { display:inline-flex;flex-direction:column;vertical-align:middle;font-size:.9em;line-height:1.1; transform:translateY(-1px); }
+    .fraction .top { border-bottom:1px solid currentColor; padding:0 7px 3px; }
+    .fraction .bottom {padding:3px 7px 0; }
+    .viz { border:1px solid #DFE6E7; border-radius:16px; overflow:hidden; background:#fff; }
+    .viz-top { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:19px 20px 16px; border-bottom:1px solid #EBEFEE; }
+    .viz-title { display:flex; align-items:center; gap:12px; }
+    .v-icon { width:36px; height:36px; background:var(--blue-pale); border-radius:10px; color:#4F86A5; display:grid;place-items:center; }
+    .v-icon svg { width:20px; height:20px; }
+    .viz-title strong { display:block;font-size:14px; }
+    .viz-title small { display:block;margin-top:4px;color:#84918F;font-size:11px; }
+    .demobadge { background:#F0F6F9; color:#668CA3; border:1px solid #DCEAF0; border-radius:100px; font-size:11px; padding:6px 9px; white-space:nowrap; }
+    .controls { display:flex; align-items:center; gap:20px; padding:17px 20px 7px; flex-wrap:wrap; }
+    .control-label { font-size:11px; color:#86918F; font-weight:600; margin-right:8px; white-space:nowrap; }
+    .segmented { display:flex; padding:4px; gap:2px; background:#F2F3F0; border-radius:10px; border:1px solid #ECEEEB; }
+    .segmented button { border:0; color:#808985; border-radius:7px; padding:8px 12px; background:transparent; font-size:11px; }
+    .segmented button.selected { background:#fff; box-shadow:0 1px 4px rgba(65,75,69,.1); color:#3D667A; font-weight:700; }
+    .range-wrap {display:flex; align-items:center; gap:8px; margin-left:auto; }
+    .range-wrap output{min-width:16px;text-align:center;font-size:12px;font-weight:700;color:#54819B;}
+    input[type=range] { accent-color:#6B9EB9; width:100px; cursor:pointer; }
+    .viz-body { padding:22px 20px 17px; display:grid; grid-template-columns:minmax(0,1fr) 194px; gap:26px; align-items:center; }
+    .matrix-wrap { min-width:0; }
+    .matrix {display:grid; grid-template-columns:34px repeat(var(--count), minmax(0,1fr)); gap:7px; margin:1px 0 13px;}
+    .axis {display:flex; justify-content:center; align-items:center; color:#818B88; font-size:12px; min-height:34px; font-weight:600;}
+    .axis.selected {color:#477F9F; font-weight:750; }
+    .axis.blank {font-size:10px;color:#ABB4B2;}
+    .cell {border:1px solid transparent; padding:0; width:100%; aspect-ratio:1/1; min-width:0; background:var(--blue-cell); border-radius:8px; transition:transform .16s,box-shadow .16s,background .16s,border-color .16s; position:relative; }
+    .cell.allowed:hover { transform:translateY(-2px); box-shadow:0 6px 14px rgba(77,120,151,.16); border-color:#B1CCD9; }
+    .cell.blocked {background:var(--blocked); cursor:not-allowed; opacity:.85; }
+    .cell.focusrow {background:#85B3CF;}
+    .cell.focusrow:nth-of-type(odd) {background:#8EBBD6;}
+    .cell.picked {background:#447F9F!important; border-color:#376F90; box-shadow:0 0 0 3px #E0EEF6;}
+    .cell:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid #84B9D8; outline-offset:2px;}
+    .cell.picked:after {content:""; position:absolute; top:50%; left:50%; width:6px;height:6px;border-radius:50%;background:#fff;transform:translate(-50%,-50%); }
+    .legend{display:flex; align-items:center;flex-wrap:wrap;gap:13px;color:#89928F;font-size:10.5px;padding-left:38px;}
+    .legend span{display:inline-flex;gap:6px;align-items:center;white-space:nowrap;}
+    .swatch {display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--blue-cell);}
+    .swatch.block {background:var(--blocked);border:1px solid #DFE2DE;}
+    .swatch.focus {background:var(--blue-deep);}
+    .detail {align-self:stretch;background:#F5F9FB;border:1px solid #E1EEF4;border-radius:13px;padding:15px 16px;display:flex;flex-direction:column;justify-content:center;}
+    .detail .mini {font-size:10px;letter-spacing:.6px;color:#7A9AAC;font-weight:700;}
+    .detail .focuslabel {font-size:22px; font-weight:750; color:#467D9C; margin:13px 0 7px; letter-spacing:.3px;}
+    .detail p {color:#677C88;font-size:12px;line-height:1.9;margin:0; min-height:69px;}
+    .detail b {color:#3A6F8C;}
+    .detail .divider {height:1px;background:#E0EBEF;margin:15px 0 12px;}
+    .detail .count {color:#7B919A;font-size:11px;}
+    .detail .count strong {color:#3B728F;font-size:16px;margin-right:3px;}
+    .viz-bottom { background:#FAFCFC; border-top:1px solid #EDF0EE; padding:12px 20px; color:#84908D; font-size:11px;line-height:1.75; }
+    .note {display:flex;align-items:flex-start;gap:7px;}
+    .note:before{content:"ⓘ";color:#729BB0;font-size:14px;margin-top:-2px;}
+    .outro {display:flex;gap:12px;margin-top:21px;padding:15px 0 0;border-top:1px solid #F0EEE9;color:#64716F;font-size:12.5px;line-height:1.8;}
+    .outro .accentline {background:#E8F2F6;width:4px;flex-shrink:0;border-radius:99px;}
+    .footer {text-align:center;color:#9EA5A1;font-size:11px;margin-top:19px;letter-spacing:.2px;}
+    @media (max-width: 1070px) { .app{grid-template-columns:76px minmax(0,1fr);} aside{padding:27px 11px;} .brand{justify-content:center;padding:0} .brand .brand-text,.newchat,.navlabel,.sessions,.navitem span,.navbottom{display:none;} .navitem{justify-content:center;padding:13px;} .navitem svg{height:21px;width:21px;} .conversation{padding:24px 26px 55px;} }
+    @media (max-width: 740px) { .app{grid-template-columns:1fr} aside{display:none;} .topbar{height:54px;padding:0 18px;} .conversation{padding:18px 13px 35px;} .userbubble{font-size:12px;padding:13px 14px;max-width:94%;} .response{padding:20px 15px;} h1{font-size:21px;} .contrast{grid-template-columns:1fr;} .viz-top{padding:16px 13px;} .controls{padding:14px 13px 0; gap:12px;} .range-wrap{margin-left:0;} .viz-body{grid-template-columns:1fr;gap:18px;padding:18px 12px;} .matrix{gap:5px;grid-template-columns:23px repeat(var(--count),minmax(0,1fr));} .axis{font-size:10px;min-height:25px;} .cell{border-radius:5px;} .legend{padding-left:27px;gap:9px;font-size:10px} .detail{padding:13px;} .detail p{min-height:0;} .equation{font-size:15px;} }
+  </style>
+</head>
+<body>
+<div class="app">
+  <aside aria-label="学习平台侧边栏示意">
+    <div class="brand"><span class="brand-mark">◫</span><span class="brand-text">智学 tutor</span></div>
+    <button class="newchat" id="resetButton">＋　新建演示</button>
+    <div>
+      <div class="navlabel">学习空间</div>
+      <div class="navitem active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 5h16v11H9l-5 4z"/></svg><span>对话辅导</span></div>
+      <div class="navitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="5" cy="12" r="2"/><circle cx="18" cy="5" r="2"/><circle cx="18" cy="19" r="2"/><path d="M7 11l9-5M7 13l9 5"/></svg><span>知识图谱</span></div>
+      <div class="navitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v5m8-5v5M4 11h16"/></svg><span>学习计划</span></div>
+      <div class="navitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 7h7l2 3h9v10H3z"/></svg><span>资源工坊</span></div>
+      <div class="navitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 19V5h14v14H5zm4-4 3-3 3 2 2-5"/></svg><span>练习中心</span></div>
+    </div>
+    <div class="sessions"><div class="navlabel">最近对话</div><div class="session active"><span class="dot"></span>Attention 与 KV Cache</div><div class="session"><span class="dot"></span>计算机网络：CIDR</div><div class="session"><span class="dot"></span>六级阅读训练</div></div>
+    <div class="navbottom">⚙　设置　 ·　 预览版本</div>
+  </aside>
+  <main class="workspace">
+    <div class="topbar"><div class="crumb"><span>对话辅导</span><span style="color:#BCC2BC">/</span><strong>Attention 与 KV Cache</strong></div><div class="topright"><span class="smallpill">标准答疑</span><span>◯</span></div></div>
+    <div class="conversation">
+      <div class="userline"><div class="userbubble">缓存机制不是线性的对吧，QKV 这种，是平方级别的是吗？简单说一下原理</div></div>
+      <div class="assistant-head"><div class="agentmark">✳</div><span>智学 Tutor</span><span>·</span><span>知识讲解</span></div>
+      <article class="response">
+        <div class="eyebrow">CONCEPT EXPLAINED / 概念辨析</div>
+        <h1>平方的是注意力计算，不是 KV Cache</h1>
+        <p class="lead">这里有两个容易混淆的复杂度：<b>Attention 的计算量</b>与 <b>KV Cache 的存储量</b>。用下面的矩阵，直观看一次 Token 是如何访问历史信息的。</p>
+        <div class="contrast"><div class="compare"><strong>注意力计算 <em>O(n²)</em></strong><span>完整序列计算：涉及 Token 两两关联</span></div><div class="compare"><strong>KV Cache 显存 <em>O(n)</em></strong><span>在模型配置固定时，随缓存长度线性增加</span></div></div>
+        <div class="equation"><i>Attention</i> (Q, K, V) = softmax ( <span class="fraction"><span class="top"><i>QK</i><sup>T</sup></span><span class="bottom">√<i>d</i><sub>k</sub></span></span> ) V</div>
+        <section class="viz" aria-label="可交互的注意力矩阵演示">
+          <div class="viz-top"><div class="viz-title"><span class="v-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="10" y="3" width="6" height="6" rx="1"/><rect x="17" y="3" width="4" height="6" rx="1"/><rect x="3" y="10" width="6" height="6" rx="1"/><rect x="10" y="10" width="6" height="6" rx="1"/><rect x="17" y="10" width="4" height="6" rx="1"/><rect x="3" y="17" width="6" height="4" rx="1"/><rect x="10" y="17" width="6" height="4" rx="1"/><rect x="17" y="17" width="4" height="4" rx="1"/></svg></span><span><strong>Attention 注意力矩阵</strong><small>点击格子，查看 Token 间的可访问关系</small></span></div><span class="demobadge">交互演示</span></div>
+          <div class="controls"><div style="display:flex;align-items:center"><span class="control-label">演示模式</span><div class="segmented" role="group" aria-label="注意力模式"><button class="selected" data-mode="causal" aria-pressed="true">因果注意力</button><button data-mode="full" aria-pressed="false">双向注意力</button></div></div><div class="range-wrap"><label class="control-label" for="tokenRange">Token 数量</label><input id="tokenRange" type="range" min="3" max="8" step="1" value="5"/><output id="tokenCount">5</output></div></div>
+          <div class="viz-body"><div class="matrix-wrap"><div id="matrix" class="matrix" role="group" aria-label="行对应 Query，列对应 Key"></div><div class="legend"><span><i class="swatch"></i>允许访问</span><span><i class="swatch focus"></i>当前选中</span><span><i class="swatch block"></i>Mask 遮挡</span></div></div><div class="detail" aria-live="polite"><div class="mini">当前访问关系</div><div class="focuslabel" id="relation">T5 → T3</div><p id="detailMessage">第 5 个 Token 可以访问第 3 个 Token 的 K / V 信息。</p><div class="divider"></div><div class="count"><strong id="accessibleCount">15</strong><span id="totalCount">/ 25</span> 个位置允许访问</div></div></div>
+          <div class="viz-bottom"><div class="note">图中颜色表示 <b style="margin:0 2px;color:#6B8D9F;">可访问关系（Mask）</b>，不代表模型真实的 Attention 权重。行 = Query，列 = Key；灰色格子是被屏蔽的位置。</div></div>
+        </section>
+        <div class="outro"><span class="accentline"></span><span><strong>记住这句就够了：</strong>完整序列的自注意力计算通常随长度呈平方增长；KV Cache 通过保存历史 K/V 避免生成时重复投影，但存储开销仍会随序列长度增加。</span></div>
+      </article>
+      <div class="footer">智学 Tutor · 设计原型　 /　 Warm Ivory × Mist Blue × Clay</div>
+    </div>
+  </main>
+</div>
+<script>
+  const state = { n:5, mode:'causal', row:4, col:2 };
+  const matrix = document.getElementById('matrix');
+  function accessible(i,j) { return state.mode === 'full' || j<=i; }
+  function selectCell(i,j) { if(!accessible(i,j)) return; state.row=i;state.col=j; render(); }
+  function render() {
+    const n=state.n; matrix.style.setProperty('--count',n);
+    const frag=document.createDocumentFragment();
+    function axis(text, selected=false, extra='') { const div=document.createElement('div'); div.className='axis'+(selected?' selected':'')+(extra?' '+extra:''); div.textContent=text; return div; }
+    frag.appendChild(axis('Q ↓',false,'blank'));
+    for(let j=0;j<n;j++) frag.appendChild(axis(`K${j+1}`,j===state.col));
+    for(let i=0;i<n;i++) {
+      frag.appendChild(axis(`Q${i+1}`,i===state.row));
+      for(let j=0;j<n;j++) {
+        const ok=accessible(i,j); const el=document.createElement('button'); el.type='button';
+        el.className='cell '+(ok?'allowed':'blocked')+(i===state.row&&ok?' focusrow':'')+(i===state.row&&j===state.col?' picked':'');
+        el.disabled=!ok;
+        el.setAttribute('aria-label',`查询 Token ${i+1} ${ok?'可以':'不能'}访问 Key Token ${j+1}`);
+        el.setAttribute('aria-pressed',String(i===state.row&&j===state.col));
+        el.title=`Q${i+1} → K${j+1}: ${ok?'允许关注':'被因果 Mask 阻止'}`;
+        if(ok) el.addEventListener('click',()=>selectCell(i,j));
+        frag.appendChild(el);
+      }
+    }
+    matrix.replaceChildren(frag);
+    const r=state.row+1,c=state.col+1;
+    document.getElementById('relation').textContent=`T${r} → T${c}`;
+    document.getElementById('detailMessage').innerHTML=`第 <b>${r}</b> 个 Token 可以访问第 <b>${c}</b> 个 Token 的 K / V 信息。${state.mode==='causal'?'因果 Mask 不允许查看未来 Token。':'双向模式允许同时查看前后 Token。'}`;
+    const allow=state.mode==='full'?n*n:n*(n+1)/2;
+    document.getElementById('accessibleCount').textContent=allow;
+    document.getElementById('totalCount').textContent=`/ ${n*n}`;
+    document.getElementById('tokenCount').textContent=n;
+    document.querySelectorAll('[data-mode]').forEach(b=>{const on=b.dataset.mode===state.mode;b.classList.toggle('selected',on);b.setAttribute('aria-pressed',String(on));});
+  }
+  document.getElementById('tokenRange').addEventListener('input',event=>{
+    state.n=Number(event.target.value); state.row=state.n-1; state.col=Math.min(state.col,state.row); render();
+  });
+  document.querySelectorAll('[data-mode]').forEach(b=>b.addEventListener('click',()=>{
+    state.mode=b.dataset.mode; if(!accessible(state.row,state.col))state.col=state.row;render();
+  }));
+  document.getElementById('resetButton').addEventListener('click',()=>{
+    state.n=5;state.mode='causal';state.row=4;state.col=2;document.getElementById('tokenRange').value=5;render();
+  });
+  render();
+</script>
+</body>
+</html>

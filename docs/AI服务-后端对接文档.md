@@ -200,7 +200,7 @@ cd backend
 ./mvnw spring-boot:run   # 监听 http://localhost:8080
 
 # 4. 前端
-cd frontend
+cd showcase-web
 pnpm dev                  # 监听 http://localhost:5173
 ```
 
@@ -411,4 +411,4 @@ data: {"type": "<事件类型>", ...}\n\n
 
 > **维护者**: AI 服务（Python 内核）  
 > **最后更新**: 2026-06-05  
-> **参考**: `temp_file/API_CONTRACT.md` / `temp_file/PROJECT_SKELETON.md` / `docs/归档/后端战神任务说明书.docx`
+> **参考**: `archive/temp_file/归档/API_CONTRACT.md` / `archive/temp_file/归档/PROJECT_SKELETON.md` / `archive/docs/归档/后端战神任务说明书.docx`

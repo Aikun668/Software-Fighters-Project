@@ -13,7 +13,7 @@
   - 输入：topic / resource_type / student_profile；输出：`RouteDecision`（agent_name）
   - 作用域：**仅限资源工作流内部**
   - 禁止：被 Center 层或 API 层 import（不得升格为全局请求路由器）
-  - 约定：`temp_file/9.15工程改造计划/0、产品方向与约束/三类决策与命名约定.md`
+  - 约定：`archive/temp_file/9.15工程改造计划/0、产品方向与约束/三类决策与命名约定.md`
 
 【命名澄清】本类原名 `Director`（**P3-B2 已改名** `ResourceAgentSelector`；模块同步由
   `app/orchestration/director.py` 改为 `resource_selector.py`）。

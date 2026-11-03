@@ -5,7 +5,7 @@
   - ⚠️ `IntentExtractor.extract / extract_multi` 当前**未接入线上管线**
     （仅测试与 `internal_api._get_intent_extractor` 装配工厂引用）
   - 禁止：在此选择 Center；禁止决定一级路径（属 `CapabilityGate`）
-  - 约定：`temp_file/9.15工程改造计划/0、产品方向与约束/三类决策与命名约定.md`
+  - 约定：`archive/temp_file/9.15工程改造计划/0、产品方向与约束/三类决策与命名约定.md`
 """
 
 import logging

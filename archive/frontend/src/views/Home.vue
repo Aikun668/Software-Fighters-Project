@@ -508,12 +508,17 @@ onBeforeUnmount(() => {
 .new-chat { display: flex; align-items: center; justify-content: center; gap: 9px; width: 100%; min-height: 42px; margin: 35px 0 27px; border: 1px solid #d9d1c3; border-radius: var(--radius-control); background: rgba(255,254,250,.34); font-size: 14px; }
 .new-chat:hover, .conversation-item:hover, .bottom-links button:hover, .profile-chip:hover { background: rgba(255,255,255,.5); }
 .sidebar-main { display: flex; flex: 1; min-height: 0; flex-direction: column; width: 100%; }
-.history-section { display: flex; flex: 1 1 auto; min-height: 0; flex-direction: column; padding-bottom: 18px; border-bottom: 1px solid var(--line); overflow: hidden; transition: opacity .16s ease, flex-basis .22s ease; }
+/* 历史区高度跟随内容（flex-grow=0）：只有两条会话时不留半屏空白；
+   会话多到溢出时由内部列表自行收缩滚动，主导航和底部栏不被挤走 */
+.history-section { display: flex; flex: 0 1 auto; min-height: 0; flex-direction: column; padding-bottom: 18px; border-bottom: 1px solid var(--line); overflow: hidden; transition: opacity .16s ease; }
+.section-toggle, .batch-bar { flex-shrink: 0; }
 .is-collapsed .history-section { flex: 0 0 0; padding: 0; border-bottom: 0; opacity: 0; pointer-events: none; visibility: hidden; }
 .history-section.is-history-collapsed { flex: 0 0 auto; padding-bottom: 0; border-bottom: 0; }
 .section-toggle { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 0 4px 10px; color: var(--ink); font-size: 13px; }
 .section-toggle svg { transition: transform .2s ease; }.section-toggle svg.rotated { transform: rotate(-90deg); }
-.conversation-list { display: grid; flex: 1; min-height: 0; align-content: start; gap: 2px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #cfc7ba transparent; }
+/* 列表按内容自然伸展，撑到剩余空间的 60% 为上限后内部滚动：
+   会话少时无滚动条，会话多时导航区仍占得到位置 */
+.conversation-list { display: grid; flex: 0 1 auto; min-height: 0; max-height: 60vh; align-content: start; gap: 2px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #cfc7ba transparent; }
 /* minmax(0,1fr) 而非默认 auto：标题是 nowrap，默认列宽按 max-content 计算会把整列撑出侧栏 */
 .conversation-list { grid-template-columns: minmax(0, 1fr); }
 .conversation-state { padding: 8px 4px; color: var(--soft-muted); font-size: 12px; }
