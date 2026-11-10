@@ -1,0 +1,17 @@
+{
+  "pass": true,
+  "checks": [
+    "browser-create-real-save",
+    "multi-plan-selection-survives-reload",
+    "browser-pause-refresh-checkpoint",
+    "browser-preview-cancel-no-change",
+    "browser-confirm-refresh-split",
+    "browser-resume-real-save",
+    "chat-same-plan-no-auto-mutation",
+    "chat-local-adjustment-confirmed-persistence",
+    "browser-undo-confirmed-adjustment",
+    "refresh-current-plan-draft-retains-unsent-text-no-send",
+    "browser-refine-future-module-refresh",
+    "mobile-no-horizontal-overflow"
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "pass": true,
+  "checks": [
+    "creation-roundtrip",
+    "pause-checkpoint-persists",
+    "proposal-and-cancel-do-not-mutate",
+    "confirm-split-preserves-effort-completed-and-bounded-next",
+    "repeat-stale-and-ownership-rejected",
+    "undo-restores-plan",
+    "resume-prevents-old-undo-overwrite",
+    "deadline-explicit-resolution",
+    "empty-module-refinement-persists",
+    "deferred-reactivation-preserves-work"
+  ]
+}

@@ -974,3 +974,28 @@ it('consumes a private learning context once without URL excerpts or auto-send',
   expect((second.find('textarea').element as HTMLTextAreaElement).value).toBe('')
   expect(sendMessageStreamMock).not.toHaveBeenCalled()
 })
+
+it('preserves an unsent prompt when a new one-use plan draft arrives', async () => {
+  const wrapper = mountPage(); await flushPromises()
+  await wrapper.get('textarea').setValue('我还想问一个问题')
+  routeState.query.learningContext = setLearningDraft('目标：继续事务学习')
+  await flushPromises()
+  const value = (wrapper.get('textarea').element as HTMLTextAreaElement).value
+  expect(value).toContain('我还想问一个问题')
+  expect(value).toContain('目标：继续事务学习')
+  expect(sendMessageStreamMock).not.toHaveBeenCalled()
+})
+
+it('queues a plan draft during streaming and consumes it once after the response', async () => {
+  let finish!: () => void
+  sendMessageStreamMock.mockResolvedValue(new Response())
+  parseSSEStreamMock.mockImplementation((_stream, _data, done) => new Promise<void>(resolve => { finish = () => { done(null); resolve() } }))
+  const wrapper = mountPage(); await flushPromises()
+  await wrapper.get('textarea').setValue('请解释事务')
+  await wrapper.get('textarea').trigger('keydown.enter.exact'); await flushPromises()
+  routeState.query.learningContext = setLearningDraft('目标：继续事务学习')
+  await flushPromises()
+  finish(); await flushPromises()
+  expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toContain('目标：继续事务学习')
+  expect(sendMessageStreamMock).toHaveBeenCalledTimes(1)
+})

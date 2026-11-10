@@ -8,12 +8,14 @@ import { uploadFile } from '@/api/files'
 import { consumeLearningDraft } from '@/utils/learningDraft'
 import { resolveErrorMessage } from '@/utils/request'
 import ChatComposer from '@/components/chat/ChatComposer.vue'
+import AdaptivePlanWorkspace from '@/components/plans/AdaptivePlanWorkspace.vue'
 import ChatThread from '@/components/chat/ChatThread.vue'
 import type { ChatAttachment, ChatMessage, ChatMode, ChatStyle } from '@/components/chat/chat-types'
 import type { DispatchResult } from '@/components/chat/ui-blocks/registry'
 
 const router = useRouter()
 const route = useRoute()
+const planPanelOpen = ref(typeof route.query.planId === 'string')
 const prompt = ref(typeof route.query.learningContext === 'string' ? consumeLearningDraft(route.query.learningContext) : typeof route.query.draft === 'string' ? route.query.draft.slice(0, 16000) : '')
 const messages = ref<ChatMessage[]>([])
 /** T007：消息 id → visualization block 列表（onVisualization 回调按当前助手消息归位） */
@@ -275,7 +277,7 @@ const send = async () => {
           // 用 replace 避免产生一条多余的历史记录。
           void router.replace({
             path: '/question-nav-chat',
-            query: { conversationId: String(conversationId) },
+            query: { conversationId: String(conversationId), ...(typeof route.query.planId === 'string' ? {planId:route.query.planId} : {}), ...(typeof route.query.learningContext === 'string' ? {learningContext:route.query.learningContext} : {}) },
           })
         }
         const msg = findMessage(assistantId)
@@ -332,8 +334,12 @@ const routeConversationId = (value: unknown) => {
  */
 const suppressAutoReload = ref(false)
 
-watch(() => route.query.learningContext, (value) => {
-  if (!sending.value && typeof value === 'string') prompt.value = consumeLearningDraft(value)
+watch([() => route.query.learningContext, sending], ([value, isSending]) => {
+  if (isSending || typeof value !== 'string') return
+  const draft = consumeLearningDraft(value)
+  // A used token is a no-op; do not erase unsent text on later sending transitions.
+  if (!draft) return
+  prompt.value = prompt.value.trim() ? `${prompt.value}\n\n【新增的续学上下文，请确认后发送】\n${draft}` : draft
 })
 
 watch(() => route.query.draft, (value) => {
@@ -362,6 +368,7 @@ watch(
 <template>
   <section class="chat-page">
     <div class="chat-content" :class="{ 'in-conversation': conversationStarted }">
+      <div class="plan-chat-panel"><button class="plan-panel-toggle" @click="planPanelOpen=!planPanelOpen">{{planPanelOpen ? '收起动态计划' : '打开动态计划：创建 / 续学 / 调整'}}</button><AdaptivePlanWorkspace v-if="planPanelOpen" :plan-id="typeof route.query.planId === 'string' ? route.query.planId : undefined" compact /></div>
       <ChatThread
         ref="threadRef"
         class="chat-thread"
@@ -406,6 +413,7 @@ watch(
 </template>
 
 <style scoped>
+.plan-chat-panel{flex-shrink:0;margin:8px 0}.plan-panel-toggle{background:transparent;border:1px solid #d6e1db;border-radius:8px;cursor:pointer;padding:8px;color:#285e4c;font-size:13px}
 .chat-page { height: 100%; min-height: 0; display: flex; justify-content: center; overflow: hidden; padding: 0 24px; }
 .chat-content { width: 100%; max-width: 960px; height: 100%; min-height: 0; display: flex; flex-direction: column; }
 /* 空态整组居中（标题→输入框→快捷提问），Composer 落在屏幕中央。
