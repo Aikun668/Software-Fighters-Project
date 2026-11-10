@@ -27,6 +27,15 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message> impl
     }
 
     @Override
+    public List<Message> listRecentByConversationId(Long conversationId, int limit) {
+        int bounded = Math.max(1, Math.min(limit, 501));
+        return this.list(new LambdaQueryWrapper<Message>()
+                .eq(Message::getConversationId, conversationId)
+                .orderByDesc(Message::getCreatedAt).orderByDesc(Message::getId)
+                .last("LIMIT " + bounded));
+    }
+
+    @Override
     public List<Message> listByConversationIdAndMode(Long conversationId, String mode, int limit) {
         return this.list(
                 new LambdaQueryWrapper<Message>()

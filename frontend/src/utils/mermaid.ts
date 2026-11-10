@@ -73,11 +73,11 @@ export const renderMermaidBlocks = async (container: HTMLElement | null | undefi
       const holder = document.createElement('div')
       holder.className = 'mermaid-figure'
       renderSeq += 1
-      const { svg, bindFunction } = await mermaid.render(`mermaid-svg-${renderSeq}`, code)
+      const { svg, bindFunctions } = await mermaid.render(`mermaid-svg-${renderSeq}`, code)
       holder.innerHTML = svg
       pre.replaceWith(holder)
       try {
-        await bindFunction?.(holder)
+        await bindFunctions?.(holder)
       } catch {
         // 绑定交互失败不影响展示
       }

@@ -102,7 +102,7 @@ const canShowActions = (msg: ChatMessage) =>
     </div>
 
     <div v-if="conversationStarted" class="message-list">
-      <div v-for="msg in messages" :key="msg.id" :class="['msg-row', `msg-${msg.role}`]">
+      <div v-for="msg in messages" :key="msg.id" :id="`chat-message-${msg.id}`" :class="['msg-row', `msg-${msg.role}`]">
         <div class="msg-bubble">
           <template v-if="msg.role === 'assistant'">
             <!-- 正文走 Markdown；流式光标放在 v-html 之外，否则会被渲染结果覆盖掉 -->

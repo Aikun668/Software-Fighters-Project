@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { sendMessageStream, parseSSEStream } from '@/api/chat'
 import { getConversationMessages } from '@/api/conversations'
 import { uploadFile } from '@/api/files'
+import { consumeLearningDraft } from '@/utils/learningDraft'
 import { resolveErrorMessage } from '@/utils/request'
 import ChatComposer from '@/components/chat/ChatComposer.vue'
 import ChatThread from '@/components/chat/ChatThread.vue'
@@ -13,7 +14,7 @@ import type { DispatchResult } from '@/components/chat/ui-blocks/registry'
 
 const router = useRouter()
 const route = useRoute()
-const prompt = ref('')
+const prompt = ref(typeof route.query.learningContext === 'string' ? consumeLearningDraft(route.query.learningContext) : typeof route.query.draft === 'string' ? route.query.draft.slice(0, 16000) : '')
 const messages = ref<ChatMessage[]>([])
 /** T007：消息 id → visualization block 列表（onVisualization 回调按当前助手消息归位） */
 const visualizationBlocks = ref<Record<string, DispatchResult[]>>({})
@@ -136,6 +137,11 @@ const openConversation = async (id: number) => {
     // 打开历史会话总是跳到最新消息
     followOutput.value = true
     await scrollToEnd(true)
+    await nextTick()
+    const sourceId = route.query.sourceMessageId
+    if (typeof sourceId === 'string' && /^\d+$/.test(sourceId)) {
+      document.getElementById(`chat-message-m-${sourceId}`)?.scrollIntoView?.({ block: 'center' })
+    }
   } catch (error) {
     console.error('加载会话消息失败', error)
   }
@@ -325,6 +331,14 @@ const routeConversationId = (value: unknown) => {
  * 用户之后主动切换会话不受影响（标志已被消费）。
  */
 const suppressAutoReload = ref(false)
+
+watch(() => route.query.learningContext, (value) => {
+  if (!sending.value && typeof value === 'string') prompt.value = consumeLearningDraft(value)
+})
+
+watch(() => route.query.draft, (value) => {
+  if (!sending.value && typeof value === 'string') prompt.value = value.slice(0, 16000)
+})
 
 watch(
   () => route.query.conversationId,

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
+import { setLearningDraft, clearLearningDraft } from '@/utils/learningDraft'
 import QuestionNavChat from '../QuestionNavChat.vue'
 import ConvWindow from '@/components/chat/ConvWindow.vue'
 
@@ -13,7 +14,7 @@ const { sendMessageStreamMock, parseSSEStreamMock, getConversationMessagesMock, 
   parseSSEStreamMock: vi.fn(),
   getConversationMessagesMock: vi.fn(),
   uploadFileMock: vi.fn(),
-  routeState: { query: { conversationId: undefined as string | undefined } },
+  routeState: { query: { conversationId: undefined as string | undefined, draft: undefined as string | undefined, sourceMessageId: undefined as string | undefined, learningContext: undefined as string | undefined } },
 }))
 
 vi.mock('@/api/chat', () => ({
@@ -66,6 +67,10 @@ beforeEach(() => {
   uploadFileMock.mockReset()
   getConversationMessagesMock.mockResolvedValue([])
   routeState.query.conversationId = undefined
+  routeState.query.draft = undefined
+  routeState.query.sourceMessageId = undefined
+  routeState.query.learningContext = undefined
+  clearLearningDraft()
   localStorage.clear()
 })
 
@@ -937,4 +942,35 @@ describe('D-016：done 后 URL 同步不得清掉交互图（suppressAutoReload�
     await flushPromises()
     expect(getConversationMessagesMock).toHaveBeenCalledWith(33)
   })
+})
+
+
+describe('learning map handoff', () => {
+  it('prefills a draft without sending a request', async () => {
+    routeState.query.draft = '继续学习链式法则'
+    const wrapper = mountPage()
+    await flushPromises()
+    expect((wrapper.find('textarea').element as HTMLTextAreaElement).value).toBe('继续学习链式法则')
+    expect(sendMessageStreamMock).not.toHaveBeenCalled()
+  })
+  it('opens the original saved conversation and anchors the source message', async () => {
+    routeState.query.conversationId = '12'
+    routeState.query.sourceMessageId = '9'
+    getConversationMessagesMock.mockResolvedValue([{id:9, role:'user', content:'来源学习记录'}])
+    const wrapper = mountPage()
+    await flushPromises()
+    expect(wrapper.find('#chat-message-m-9').text()).toContain('来源学习记录')
+    expect(sendMessageStreamMock).not.toHaveBeenCalled()
+  })
+})
+
+it('consumes a private learning context once without URL excerpts or auto-send', async () => {
+  routeState.query.learningContext=setLearningDraft('私有来源：我在学习概率论')
+  const first=mountPage(); await flushPromises()
+  expect((first.find('textarea').element as HTMLTextAreaElement).value).toContain('私有来源')
+  expect(JSON.stringify(routeState.query)).not.toContain('私有来源')
+  first.unmount()
+  const second=mountPage(); await flushPromises()
+  expect((second.find('textarea').element as HTMLTextAreaElement).value).toBe('')
+  expect(sendMessageStreamMock).not.toHaveBeenCalled()
 })

@@ -13,6 +13,9 @@ public interface IMessageService extends IService<Message> {
     /** 按会话ID查询全部消息 */
     List<Message> listByConversationId(Long conversationId);
 
+    /** 最近消息，时间与ID降序；调用方可反转为时间线。 */
+    List<Message> listRecentByConversationId(Long conversationId, int limit);
+
     /** 按会话ID和模式查询消息（用于加载历史） */
     List<Message> listByConversationIdAndMode(Long conversationId, String mode, int limit);
 

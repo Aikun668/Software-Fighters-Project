@@ -230,7 +230,7 @@ Software-Fighters-Project/
 │   ├── sql/                            # 4 个 SQL 迁移脚本
 │   └── pom.xml
 │
-├── frontend/                           # Vue 3 前端（已搁置，仅作参照）
+├── frontend/                           # Vue 3 正式前端（对话与个人学习地图）
 │   └── src/
 │       ├── views/                      # 11 个页面（Dashboard/Chat/图谱/练习/资源/...）
 │       ├── api/                        # 16 个 API 模块（含 SSE 流式解析）
@@ -284,7 +284,7 @@ cd backend
 
 ### 4. 启动前端
 ```bash
-cd showcase-web
+cd frontend
 pnpm install
 pnpm dev                       # 启动 → localhost:5173
 ```

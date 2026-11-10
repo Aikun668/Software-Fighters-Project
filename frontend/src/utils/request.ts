@@ -114,23 +114,23 @@ const resolveErrorMessage = (error: unknown): string => {
  */
 const api = {
   get<T = any>(url: string, params?: Record<string, any>, config?: AxiosRequestConfig): Promise<T> {
-    return request.get(url, { params, ...config })
+    return request.get<T, T>(url, { params, ...config }) as unknown as Promise<T>
   },
 
   post<T = any>(url: string, data?: Record<string, any>, config?: AxiosRequestConfig): Promise<T> {
-    return request.post(url, data, config)
+    return request.post<T, T>(url, data, config) as unknown as Promise<T>
   },
 
   put<T = any>(url: string, data?: Record<string, any>, config?: AxiosRequestConfig): Promise<T> {
-    return request.put(url, data, config)
+    return request.put<T, T>(url, data, config) as unknown as Promise<T>
   },
 
   delete<T = any>(url: string, params?: Record<string, any>, config?: AxiosRequestConfig): Promise<T> {
-    return request.delete(url, { params, ...config })
+    return request.delete<T, T>(url, { params, ...config }) as unknown as Promise<T>
   },
 
   patch<T = any>(url: string, data?: Record<string, any>, config?: AxiosRequestConfig): Promise<T> {
-    return request.patch(url, data, config)
+    return request.patch<T, T>(url, data, config) as unknown as Promise<T>
   }
 }
 

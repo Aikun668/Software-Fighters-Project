@@ -91,7 +91,8 @@ class AgentMemoryIndependentAcceptanceTest {
     @Test void syntheticCredentialVariantsNeverBecomeInspectableFacts() {
         for(String input:List.of(
             "记住：备注=Bearer synthetic-token-not-real-0123456789",
-            "记住：备注=REDACTED_CLOUD_TRANSFER",
+            // Cloud-transfer redaction removed the original credential-shaped fixture. Use a synthetic shape, never a real key.
+            "记住：备注=" + "sk-" + "synthetic-not-a-real-key-0123456789",
             "我的学习目标是保存 password=not-a-real-password",
             "请记住：备注=api_key: synthetic-abcdef0123456789")) {
             Map<String,Object> state=memory.observe(1L,10L,100L,input);
