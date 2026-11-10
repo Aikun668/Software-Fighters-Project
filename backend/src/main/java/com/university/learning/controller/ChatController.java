@@ -9,6 +9,7 @@ import com.university.learning.entity.PlanStep;
 import com.university.learning.entity.Resource;
 import com.university.learning.entity.StudentProfile;
 import com.university.learning.service.IConversationService;
+import com.university.learning.service.AgentMemoryService;
 import com.university.learning.service.ILearningPlanService;
 import com.university.learning.service.IMessageService;
 import com.university.learning.service.IPlanStepService;
@@ -19,6 +20,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.*;
@@ -50,6 +53,7 @@ public class ChatController {
     private final IStudentProfileService profileService;
     private final ILearningPlanService planService;
     private final IPlanStepService stepService;
+    private final AgentMemoryService memoryService;
 
     /**
      * 统一对话入口，AI自动识别意图（tutor/resource/exercise/solve/research）。
@@ -59,26 +63,42 @@ public class ChatController {
     public SseEmitter chat(@RequestBody UnifiedChatRequest request) {
         Long userId = getUserId();
         String message = request.getMessage();
+        if (message == null || message.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "消息不能为空");
+        }
         Long conversationId = request.getConversation_id();
 
         // 1. 获取或创建会话
         Conversation conversation = getOrCreateConversation(userId, conversationId, message);
         final Long finalConvId = conversation.getId();
 
+        // Snapshot only previous turns; Python appends the current message once.
+        // Do not deduplicate by text: repeated questions in earlier turns are valid.
+        List<Map<String, Object>> history = loadHistory(finalConvId, 50);
+
         // 2. 保存用户消息（同时把本轮图片的 file_info.id 落库，
         //    否则历史回读时用户上传的图片永久丢失）
-        messageService.save(new Message()
+        Message persistedMessage = new Message()
                 .setConversationId(finalConvId)
                 .setRole("user")
                 .setContent(message)
                 .setMode("chat")
-                .setImageFileIds(request.getImage_file_ids()));
+                .setImageFileIds(request.getImage_file_ids());
+        if (!messageService.save(persistedMessage)) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "消息保存失败，请重试");
+        }
 
-        // 3. 加载历史消息作为上下文
-        List<Map<String, Object>> history = loadHistory(finalConvId, 50);
 
         // 4. 加载学生画像
-        Map<String, Object> profileMap = buildProfileMap(userId);
+        Map<String, Object> profileMap;
+        if (memoryService.isEnabled()) {
+            Map<String, Object> memory = memoryService.observe(userId, finalConvId, persistedMessage.getId(), message);
+            profileMap = new HashMap<>();
+            profileMap.put("_agent_memory", memory);
+            history = memoryService.filterHistory(history, memory);
+        } else {
+            profileMap = buildProfileMap(userId);
+        }
 
         // 5. 调用AI（mode=auto，AI自动识别意图）
         return pythonClient.unifiedChatStream(userId, message, finalConvId, profileMap, history,
@@ -97,7 +117,7 @@ public class ChatController {
                 saveGeneratedContent(userId, message, doneData);
             }
             saveResearchPlan(userId, doneData, detectedMode);
-            saveProfileDelta(userId, doneData);
+            if (!memoryService.isEnabled()) saveProfileDelta(userId, doneData);
             updateConversationTitle(finalConvId, message);
         });
     }
@@ -107,15 +127,17 @@ public class ChatController {
     private Conversation getOrCreateConversation(Long userId, Long conversationId, String firstMessage) {
         if (conversationId != null) {
             Conversation existing = conversationService.getById(conversationId);
-            if (existing != null && existing.getUserId().equals(userId)) {
-                return existing;
-            }
+            if (existing == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "会话不存在");
+            if (!Objects.equals(existing.getUserId(), userId)) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权访问该会话");
+            return existing;
         }
         Conversation conv = new Conversation()
                 .setUserId(userId)
                 .setTitle(firstMessage.length() > 20 ? firstMessage.substring(0, 20) : firstMessage)
                 .setStatus("active");
-        conversationService.save(conv);
+        if (!conversationService.save(conv) || conv.getId() == null) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "创建会话失败");
+        }
         log.info("创建新会话: id={}", conv.getId());
         return conv;
     }
@@ -127,6 +149,7 @@ public class ChatController {
         }
         return messages.stream().map(m -> {
             Map<String, Object> item = new LinkedHashMap<>();
+            item.put("id", m.getId());
             item.put("role", m.getRole());
             item.put("content", m.getContent());
             return item;
@@ -543,6 +566,9 @@ public class ChatController {
     }
 
     private Long getUserId() {
+        if (UserHolder.getUser() == null || UserHolder.getUser().getId() == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "请先登录");
+        }
         return UserHolder.getUser().getId();
     }
 }

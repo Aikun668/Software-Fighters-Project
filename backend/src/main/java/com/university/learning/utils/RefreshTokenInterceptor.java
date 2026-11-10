@@ -34,7 +34,6 @@ public class RefreshTokenInterceptor  implements HandlerInterceptor {
         if (token.startsWith("Bearer ")) {
             token = token.substring(7);  // 去掉 "Bearer "
         }
-        System.out.println("===== token: " + token);
         String tokenKey=LOGIN_USER_KEY+token;
         String uri = request.getRequestURI();
 

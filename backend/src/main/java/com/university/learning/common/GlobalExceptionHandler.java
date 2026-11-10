@@ -4,6 +4,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.ResponseEntity;
 
 /**
  * 全局异常处理器：兜底未在 Controller try-catch 中处理的异常，
@@ -12,6 +14,12 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    /** Preserve explicit authorization/not-found HTTP statuses and the existing Result envelope. */
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<Result> handleResponseStatus(ResponseStatusException e) {
+        return ResponseEntity.status(e.getStatusCode()).body(Result.fail(e.getStatusCode().value(), e.getReason()));
+    }
 
     /** Python AI 服务调用异常 */
     @ExceptionHandler(AIServiceException.class)

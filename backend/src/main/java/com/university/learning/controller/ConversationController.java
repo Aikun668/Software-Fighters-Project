@@ -7,15 +7,19 @@ import com.university.learning.entity.Message;
 import com.university.learning.service.IConversationService;
 import com.university.learning.service.IFileInfoService;
 import com.university.learning.service.IMessageService;
+import com.university.learning.service.AgentMemoryService;
 import com.university.learning.utils.UserHolder;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 @Slf4j
 @RestController
@@ -27,11 +31,12 @@ public class ConversationController {
     private final IMessageService messageService;
     private final IFileInfoService fileInfoService;
     private final PythonClient pythonClient;
+    private final AgentMemoryService memoryService;
 
     @Operation(summary = "创建新会话")
     @PostMapping
     public Result create(@RequestBody Map<String, Object> body) {
-        Long userId = getUserId(body);
+        Long userId = getUserId();
         Conversation conversation = new Conversation()
                 .setUserId(userId)
                 .setTitle("新对话")
@@ -42,21 +47,15 @@ public class ConversationController {
 
     @Operation(summary = "获取会话详情")
     @GetMapping("/{id}")
-    public Result getDetail(@PathVariable Long id, @RequestParam Long userId) {
-        Conversation conversation = conversationService.getById(id);
-        if (conversation == null) {
-            return Result.fail(404, "会话不存在");
-        }
+    public Result getDetail(@PathVariable Long id, @RequestParam(required = false) Long userId) {
+        Conversation conversation = ownedConversation(id);
         return Result.ok(conversation);
     }
 
     @Operation(summary = "更新会话", description = "可更新标题、状态(active/archived)、摘要")
     @PutMapping("/{id}")
     public Result update(@PathVariable Long id, @RequestBody Map<String, Object> body) {
-        Conversation conversation = conversationService.getById(id);
-        if (conversation == null) {
-            return Result.fail(404, "会话不存在");
-        }
+        Conversation conversation = ownedConversation(id);
         if (body.containsKey("title")) conversation.setTitle((String) body.get("title"));
         if (body.containsKey("status")) conversation.setStatus((String) body.get("status"));
         if (body.containsKey("summary")) conversation.setSummary((String) body.get("summary"));
@@ -69,6 +68,7 @@ public class ConversationController {
     public Result getMessages(@PathVariable Long id,
                               @RequestParam(required = false) String mode,
                               @RequestParam(defaultValue = "50") int limit) {
+        ownedConversation(id);
         List<Message> messages;
         if (mode != null) {
             messages = messageService.listByConversationIdAndMode(id, mode, limit);
@@ -84,6 +84,7 @@ public class ConversationController {
     public Result getMessagesRaw(@PathVariable Long id,
                                  @RequestParam(defaultValue = "0") int offset,
                                  @RequestParam(defaultValue = "200") int limit) {
+        ownedConversation(id);
         List<Message> messages = messageService.listByConversationIdRaw(id, offset, limit);
         attachImageUrls(messages);
         return Result.ok(messages);
@@ -120,6 +121,7 @@ public class ConversationController {
     @Operation(summary = "批量保存消息", description = "手动保存用户消息和 AI 回复")
     @PostMapping("/{id}/messages")
     public Result saveMessages(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+        Conversation conversation = ownedConversation(id);
         String userMessage = (String) body.get("user_message");
         String assistantMessage = (String) body.get("assistant_message");
         String userMode = (String) body.getOrDefault("user_mode", "tutor");
@@ -127,10 +129,7 @@ public class ConversationController {
 
         int saved = messageService.saveMessages(id, userMessage, assistantMessage, userMode, assistantMode);
 
-        Conversation conversation = conversationService.getById(id);
-        if (conversation != null) {
-            conversationService.updateById(conversation);
-        }
+        conversationService.updateById(conversation);
 
         return Result.ok(Map.of("saved", saved));
     }
@@ -138,7 +137,7 @@ public class ConversationController {
     @Operation(summary = "获取当前用户会话列表")
     @GetMapping("/mine")
     public Result listMyConversations() {
-        Long userId = UserHolder.getUser().getId();
+        Long userId = getUserId();
         List<Conversation> list = conversationService.listByUserId(userId);
         return Result.ok(list);
     }
@@ -146,11 +145,7 @@ public class ConversationController {
     @Operation(summary = "删除会话", description = "同时删除该会话下所有消息")
     @DeleteMapping("/{id}")
     public Result deleteConversation(@PathVariable Long id) {
-        Long userId = UserHolder.getUser().getId();
-        Conversation conversation = conversationService.getById(id);
-        if (conversation == null || !conversation.getUserId().equals(userId)) {
-            return Result.fail(404, "会话不存在");
-        }
+        Conversation conversation = ownedConversation(id);
         List<Message> messages = messageService.listByConversationId(id);
         for (Message msg : messages) {
             messageService.removeById(msg.getId());
@@ -162,21 +157,21 @@ public class ConversationController {
     @Operation(summary = "结束会话", description = "归档会话，标记为archived状态")
     @PostMapping("/{id}/end")
     public Result endConversation(@PathVariable Long id) {
-        Long userId = UserHolder.getUser().getId();
-        Conversation conversation = conversationService.getById(id);
-        if (conversation == null || !conversation.getUserId().equals(userId)) {
-            return Result.fail(404, "会话不存在");
-        }
+        Conversation conversation = ownedConversation(id);
 
         // 生成会话摘要（LLM总结）
         try {
             List<Message> messages = messageService.listByConversationId(id);
             List<Map<String, Object>> msgList = messages.stream().map(m -> {
                 Map<String, Object> item = new java.util.LinkedHashMap<>();
+                item.put("id", m.getId());
                 item.put("role", m.getRole());
                 item.put("content", m.getContent());
                 return item;
             }).collect(java.util.stream.Collectors.toList());
+            if (memoryService.isEnabled()) {
+                msgList = memoryService.filterHistory(msgList, memoryService.readContext(conversation.getUserId(), id));
+            }
             Map<String, Object> result = pythonClient.getConversationSummary(id, msgList, null);
             if (result != null) {
                 Object summaryObj = result.get("summary");
@@ -193,9 +188,17 @@ public class ConversationController {
         return Result.ok(conversation);
     }
 
-    private Long getUserId(Map<String, Object> body) {
-        if (body.containsKey("user_id")) {
-            return Long.valueOf(body.get("user_id").toString());
+    private Conversation ownedConversation(Long id) {
+        Long userId = getUserId();
+        Conversation conversation = conversationService.getById(id);
+        if (conversation == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "会话不存在");
+        if (!Objects.equals(userId, conversation.getUserId())) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权访问该会话");
+        return conversation;
+    }
+
+    private Long getUserId() {
+        if (UserHolder.getUser() == null || UserHolder.getUser().getId() == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "请先登录");
         }
         return UserHolder.getUser().getId();
     }

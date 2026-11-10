@@ -12,6 +12,9 @@ from app.agents.profile_agent import ProfileAgent
 from app.agents.schedule_agent import ScheduleAgent
 from app.agents.content_agent import ContentAgent
 from app.centers.auto_center import AutoCenter
+from app.services.agent_memory import (
+    validate_memory, filter_history, is_management_request, is_observed_learning_statement,
+)
 from app.centers.exercise_center import ExerciseCenter
 from app.centers.plan_center import PlanCenter
 from app.centers.resource_center import ResourceCenter
@@ -24,6 +27,7 @@ from app.events.types import (
     StreamEvent,
     StreamEventType,
     done_event,
+    token_event,
     error_event,
     knowledge_candidates_event,
     recommendation_event,
@@ -504,6 +508,18 @@ class ChatCenter:
             context=context,
         )
         audit_meta = self._audit_context(message, context)
+        # Real UI regression: "I finished indexes, next transactions" was already
+        # persisted as progress, but an UNCERTAIN semantic guess created a plan.
+        # Keep the gate's NORMAL_CHAT decision for a sourced statement alone.
+        # Explicit modes/requests and unrelated inputs retain their old routing.
+        if (decision.kind is CapabilityKind.NORMAL_CHAT
+                and is_observed_learning_statement(message, (student_profile or {}).get("_agent_memory"))):
+            return self._plan_builder.build_normal_chat(
+                message, student_profile=student_profile, context=context,
+                route="NORMAL_CHAT", reason="observed_learning_statement", confidence=1.0,
+                audit_meta={**audit_meta, "semantic_state": "certain_normal", "route_source": "rule",
+                            "semantic_called": False, "semantic_latency_ms": None, "semantic_error": None},
+            )
 
         # T4-A 三态旁路：只记审计，不改返回的 plan（启用接管仅 t4a_enabled=True 时触发）
         semantic_meta, semantic_state, semantic_result = await self._semantic_audit_meta(
@@ -724,6 +740,19 @@ class ChatCenter:
         images: 用户上传的图片（data URI / http URL），随 context 下发；
         仅 tutor 答疑链路消费（见 auto_center / tutor_agent）。
         """
+        # Only the authenticated Java gateway constructs this data in production.
+        # Envelope validation is defense in depth, not a substitute for service auth.
+        raw_memory = (student_profile or {}).get("_agent_memory")
+        memory = validate_memory(raw_memory, user_id=user_id, conversation_id=conversation_id)
+        if raw_memory is not None:
+            student_profile = {"_agent_memory": memory} if memory else {}
+        if memory:
+            history = filter_history(history, memory)
+            reply = memory.get("command_reply")
+            if reply and is_management_request(message):
+                yield token_event(reply)
+                yield done_event({"response": reply, "memory_command": True})
+                return
         messages = list(history or []) + [{"role": "user", "content": message}]
         context = {
             "messages": messages,

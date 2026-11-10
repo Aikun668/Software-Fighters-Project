@@ -19,6 +19,8 @@
 
 import logging
 import re
+
+from app.services.agent_memory import memory_prompt
 from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
@@ -99,6 +101,7 @@ class BuiltContext:
     recent_turns: list[dict] = field(default_factory=list)   # [{role, content}, ...] 完整轮次
     profile_facts: list[str] = field(default_factory=list)   # ["学习风格: ...", ...]
     kb_evidence: list[str] = field(default_factory=list)     # 相关知识库片段原文
+    agent_memory: dict = field(default_factory=dict)
     current_message: str = ""                     # 当前用户消息
 
     def messages(self) -> list[dict]:
@@ -111,6 +114,8 @@ class BuiltContext:
     def system_prompt(self) -> str:
         """组装系统提示：system → 摘要 → 相关画像 → 相关知识库，空段整体省略。"""
         sections = [self.system.strip()]
+        if self.agent_memory:
+            sections.append(memory_prompt(self.agent_memory))
         if self.summary:
             sections.append(
                 "## 对话历史摘要（经过压缩的早期对话记录）\n" + self.summary.strip() + "\n---"
@@ -149,11 +154,12 @@ class ContextBuilder:
         summary: str | None = None,
         student_profile: dict | None = None,
         kb_candidates: list[dict] | None = None,
+        agent_memory: dict | None = None,
     ) -> BuiltContext:
         """history 为过往消息（不含当前消息）。
 
         兼容把当前消息附在 history 末尾的调用方：末尾与 current_message
-        完全相同的 user 消息会被识别并去重，避免当前问题在 Prompt 里出现两次。
+        完全相同且无持久 id 的 user 消息会去重；带 id 的真实历史即使同文也保留。
         """
         history = list(history or [])
         if history and current_message:
@@ -161,6 +167,7 @@ class ContextBuilder:
             if (
                 isinstance(last, dict)
                 and last.get("role") == "user"
+                and last.get("id") is None  # A persisted prior retry is not the current message.
                 and str(last.get("content", "")) == str(current_message)
             ):
                 history = history[:-1]
@@ -168,11 +175,12 @@ class ContextBuilder:
         query = self._build_relevance_query(current_message, recent_turns)
         return BuiltContext(
             system=system or "",
-            summary=self._clean_summary(summary),
+            summary="" if agent_memory else self._clean_summary(summary),
+            agent_memory=agent_memory or {},
             recent_turns=recent_turns,
             # 画像只随当前问题注入：上轮话题（如刚问过摄影）不得借跨轮回看
             # 混入本轮无关问答（问 TCP 不带入摄影兴趣）。KB 证据仍用回看 query。
-            profile_facts=self._select_profile_facts(student_profile, current_message or ""),
+            profile_facts=[] if agent_memory else self._select_profile_facts(student_profile, current_message or ""),
             kb_evidence=self._select_kb_evidence(kb_candidates, query),
             current_message=current_message or "",
         )
@@ -228,6 +236,8 @@ class ContextBuilder:
         query_terms = self._extract_terms(query)
         facts: list[str] = []
         for key, value in profile.items():
+            if str(key).startswith("_"):
+                continue
             if value is None or value == [] or value == "":
                 continue
             text = "、".join(str(v) for v in value) if isinstance(value, list) else str(value)

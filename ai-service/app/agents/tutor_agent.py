@@ -369,9 +369,11 @@ class TutorAgent(BaseAgent):
         ):
             history_wo_current = history_wo_current[:-1]
 
-        # 摘要每轮从完整历史确定性重建（等价持久化）：
-        # 旧实现只在该轮触发信号时算一次、下一轮即丢，纠正后的主题无法跨轮保留
-        conversation_summary = self.summary_maintainer.rebuild_from_history(
+        # Legacy callers only have a bounded history, so replay is NOT persistence.
+        # The Java memory envelope is persisted and current; don't regenerate stale
+        # profile/summary facts from chat text when that envelope is present.
+        agent_memory = student_profile.get("_agent_memory") or {}
+        conversation_summary = "" if agent_memory else self.summary_maintainer.rebuild_from_history(
             history_wo_current, current_message,
         ).to_text()
 
@@ -380,6 +382,7 @@ class TutorAgent(BaseAgent):
             current_message=current_message,
             history=history_wo_current,
             summary=conversation_summary,
+            agent_memory=agent_memory,
             student_profile=student_profile,
             kb_candidates=(state.get("kb_candidates") or []) if knowledge_context else [],
         )

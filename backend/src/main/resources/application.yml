@@ -23,7 +23,7 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/learning_platform?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&createDatabaseIfNotExist=true
     username: root
-    password: 123666
+    password: ${DB_PASSWORD:}
 
   data:
     redis:
@@ -72,8 +72,8 @@ mybatis-plus:
 
 minio:
   endpoint: http://localhost:9000
-  access-key: minioadmin
-  secret-key: minioadmin123
+  access-key: ${MINIO_ACCESS_KEY:}
+  secret-key: ${MINIO_SECRET_KEY:}
   bucket-name: learning-resources
 
 logging:
