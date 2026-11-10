@@ -321,10 +321,10 @@ export const parseSSEStream = async (
       }
     }
 
-    // 流结束：未收到任何终态事件时补一次 done，保证调用方状态收敛
+    // EOF is not a success acknowledgement: preserve partial text but report interruption.
     if (!terminated) {
-      console.log('[SSE] 流式传输完成（未收到显式 done，本地收敛）')
-      onDone(null)
+      terminated = true
+      onError?.(new Error('连接已中断，回答可能不完整，请重试。'))
     }
   } catch (error) {
     console.error('[SSE] 流式传输发生错误:', error)

@@ -4,8 +4,16 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
-*.env.local
+# 密钥与本地环境文件（任意层级，防止再次泄露到公开仓库）
 .env
+.env.*
+*.env.local
+!.env.example
+
+# 证书 / 私钥 / 凭据
+*.pem
+*.key
+credentials.json
 
 # Tool caches
 .pytest_cache/
