@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import type { ChatMessage } from './chat-types'
 import MessageActions from './MessageActions.vue'
 import { renderMermaidBlocks } from '@/utils/mermaid'
@@ -22,7 +22,19 @@ const emit = defineEmits<{
   scrollState: [atBottom: boolean]
   /** 消息内图片加载完成（会改变滚动高度，需要重新贴底） */
   imageLoaded: []
+  /** 把推荐练习填成下一条提问 */
+  usePrompt: [prompt: string]
 }>()
+
+const greeting = computed(() => {
+  if (props.resourceMode) return '想生成什么学习资料？'
+  const hour = new Date().getHours()
+  if (hour < 5) return '夜深了——还想研究什么？'
+  if (hour < 11) return '早上好——今天想研究什么？'
+  if (hour < 14) return '中午好——今天想研究什么？'
+  if (hour < 18) return '下午好——今天想研究什么？'
+  return '晚上好——今天想研究什么？'
+})
 
 const threadRef = ref<HTMLElement | { $el?: HTMLElement } | null>(null)
 
@@ -96,7 +108,7 @@ const canShowActions = (msg: ChatMessage) =>
   <div ref="threadRef" class="chat-scroll-region" @scroll.passive="onScroll">
     <div v-if="!conversationStarted" class="chat-empty-state">
       <div class="chat-heading">
-        <h1>{{ resourceMode ? '想生成什么学习资料？' : '下午好——今天想研究什么？' }}</h1>
+        <h1>{{ greeting }}</h1>
         <p>{{ resourceMode ? '告诉我主题、难度和格式，我会整理成适合你的学习资源。' : '我是你的 AI 学习伙伴，随时为你答疑解惑、规划路径、陪伴进步。' }}</p>
       </div>
     </div>
@@ -111,6 +123,12 @@ const canShowActions = (msg: ChatMessage) =>
             <span v-if="msg.streaming && msg.content" class="stream-cursor">▍</span>
             <p v-if="msg.streaming && msg.content && progressText" class="msg-pending">{{ progressText }}</p>
             <p v-if="msg.error" class="msg-error">{{ msg.error }}</p>
+            <button
+              v-if="msg.recommendation && !msg.streaming"
+              type="button"
+              class="msg-recommendation"
+              @click="emit('usePrompt', msg.recommendation.prompt)"
+            >{{ msg.recommendation.label }}</button>
             <!-- T004：结构化 UI block（visualization 事件）渲染在正文下方；
                  合法走动态组件 + props，非法显示灰字降级提示，均不影响正文 -->
             <div
@@ -218,6 +236,8 @@ const canShowActions = (msg: ChatMessage) =>
 .msg-images { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .msg-images img { width: 120px; max-width: 100%; height: 120px; border-radius: 8px; object-fit: cover; background: rgba(255,255,255,.25); }
 .msg-error { margin: 0; color: #b4483c; font-size: 14px; }
+.msg-recommendation { display: inline-flex; margin-top: 8px; padding: 0; border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 13px; }
+.msg-recommendation:hover { color: var(--ink); }
 .msg-pending { margin: 0; color: var(--muted); }
 /* 流式光标：v-html 之后它独立于正文，需自带换行避免黏在段落末尾 */
 .stream-cursor { display: inline-block; margin-left: 1px; color: var(--clay); animation: blink 1s steps(2) infinite; }

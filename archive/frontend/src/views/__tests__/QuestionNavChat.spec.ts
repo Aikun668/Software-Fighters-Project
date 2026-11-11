@@ -8,17 +8,33 @@ import ConvWindow from '@/components/chat/ConvWindow.vue'
 enableAutoUnmount(beforeEach)
 
 // ── 模块级 mock：真实 SSE 客户端与路由 ──────────────────────────
-const { sendMessageStreamMock, parseSSEStreamMock, getConversationMessagesMock, uploadFileMock, routeState } = vi.hoisted(() => ({
-  sendMessageStreamMock: vi.fn(),
-  parseSSEStreamMock: vi.fn(),
-  getConversationMessagesMock: vi.fn(),
-  uploadFileMock: vi.fn(),
-  routeState: { query: { conversationId: undefined as string | undefined } },
-}))
+const { sendMessageStreamMock, parseSSEStreamMock, getConversationMessagesMock, uploadFileMock, routeState, ChatStreamError, USER_RETRY } = vi.hoisted(() => {
+  class ChatStreamError extends Error {
+    conversationId: number | null
+    code: string | null
+    constructor(message: string, conversationId: number | null = null, code: string | null = null) {
+      super(message)
+      this.name = 'ChatStreamError'
+      this.conversationId = conversationId
+      this.code = code
+    }
+  }
+  return {
+    sendMessageStreamMock: vi.fn(),
+    parseSSEStreamMock: vi.fn(),
+    getConversationMessagesMock: vi.fn(),
+    uploadFileMock: vi.fn(),
+    routeState: { query: { conversationId: undefined as string | undefined } },
+    ChatStreamError,
+    USER_RETRY: '刚才没写完，你的问题还在，再发一次即可',
+  }
+})
 
 vi.mock('@/api/chat', () => ({
   sendMessageStream: (...args: unknown[]) => sendMessageStreamMock(...args),
   parseSSEStream: (...args: unknown[]) => parseSSEStreamMock(...args),
+  ChatStreamError,
+  USER_RETRY,
 }))
 
 vi.mock('@/api/conversations', () => ({
@@ -114,7 +130,7 @@ describe('QuestionNavChat 真实聊天链路（Task 2 合同）', () => {
     expect(wrapper.text()).toContain('notes.png')
 
     await sendViaEnter(wrapper, '请看这张图片')
-    expect(sendMessageStreamMock).toHaveBeenCalledWith(expect.objectContaining({
+    expect(sendMessageStreamMock.mock.calls[0][0]).toEqual(expect.objectContaining({
       images: ['https://files.example.test/notes.png'],
     }))
   })
@@ -220,14 +236,7 @@ describe('QuestionNavChat 真实聊天链路（Task 2 合同）', () => {
     expect(sent.type).toBe('image/png')
   })
 
-  it('非图片附件同样可以上传，只是不按图片预览', async () => {
-    uploadFileMock.mockResolvedValue({
-      fileId: 15,
-      url: 'https://files.example.test/doc.pdf',
-      fileName: 'files/doc.pdf',
-      originalName: 'doc.pdf',
-    })
-
+  it('非图片附件不会上传，并说明当前读不了', async () => {
     const wrapper = mountPage()
     const file = new File(['%PDF'], 'doc.pdf', { type: 'application/pdf' })
     const fileInput = wrapper.get('input[type="file"]')
@@ -235,12 +244,9 @@ describe('QuestionNavChat 真实聊天链路（Task 2 合同）', () => {
     await fileInput.trigger('change')
     await flushPromises()
 
-    expect(uploadFileMock).toHaveBeenCalledWith(file)
-    const chip = wrapper.get('.attachment-chip')
-    expect(chip.text()).toContain('doc.pdf')
-    // 非图片用文件图标，不渲染缩略图
-    expect(chip.find('.attachment-thumb').exists()).toBe(false)
-    expect(chip.find('.attachment-icon').exists()).toBe(true)
+    expect(uploadFileMock).not.toHaveBeenCalled()
+    expect(wrapper.find('.attachment-chip').exists()).toBe(false)
+    expect(wrapper.text()).toContain('当前只能看图片，这个文件不会被阅读')
   })
 
   it('上传失败时展示后端返回的真实原因，而不是通用兜底文案', async () => {
@@ -309,7 +315,7 @@ describe('QuestionNavChat 真实聊天链路（Task 2 合同）', () => {
 
     // 真实客户端被调用且仅一次
     expect(sendMessageStreamMock).toHaveBeenCalledTimes(1)
-    expect(sendMessageStreamMock).toHaveBeenCalledWith({
+    expect(sendMessageStreamMock.mock.calls[0][0]).toEqual({
       message: '什么是进程？',
       conversation_id: null,
       messages: [],
@@ -331,7 +337,8 @@ describe('QuestionNavChat 真实聊天链路（Task 2 合同）', () => {
 
     expect(sendMessageStreamMock).toHaveBeenCalledTimes(1)
     // 显示真实错误信息
-    expect(wrapper.text()).toContain('HTTP error! status: 502')
+    expect(wrapper.text()).toContain('刚才没写完，你的问题还在，再发一次即可')
+    expect(wrapper.text()).not.toContain('HTTP error!')
     // 不出现任何伪造回答
     expect(wrapper.text()).not.toContain('好的，我来帮你解答')
     // 输入恢复可用：可以再次发送
@@ -357,8 +364,31 @@ describe('QuestionNavChat 真实聊天链路（Task 2 合同）', () => {
     const wrapper = mountPage()
     await sendViaEnter(wrapper, '什么是进程？')
 
-    expect(wrapper.text()).toContain('前面一半内容')
+    expect(wrapper.text()).not.toContain('前面一半内容')
     expect(wrapper.text()).toContain('处理失败，请稍后重试')
+  })
+
+  it('失败帧里的会话 id 会钉住当前对话', async () => {
+    const refresh = vi.fn()
+    sendMessageStreamMock.mockResolvedValue(new ReadableStream())
+    parseSSEStreamMock.mockImplementation(async (...args: unknown[]) => {
+      const hooks = args[6] as { onConversationId?: (id: number) => void }
+      const onError = args[3] as (error: Error) => void
+      hooks.onConversationId?.(41)
+      onError(new Error('刚才没写完，你的问题还在，再发一次即可'))
+    })
+
+    const wrapper = mount(QuestionNavChat, {
+      global: {
+        provide: { refreshConversations: refresh },
+        config: { warnHandler: () => {} },
+      },
+    })
+    await sendViaEnter(wrapper, '什么是进程？')
+
+    expect(routeState.query.conversationId).toBe('41')
+    expect(refresh).toHaveBeenCalled()
+    expect(wrapper.text()).toContain('刚才没写完，你的问题还在，再发一次即可')
   })
 
   it('空输入与发送中不允许重复提交', async () => {
@@ -449,14 +479,11 @@ describe('QuestionNavChat 附件发送（本轮合同）', () => {
     await flushPromises()
   }
 
-  it('工具栏按钮名为“附件”，且不限文件类型', () => {
+  it('工具栏按钮名为“附件”，文件选择只接受图片', () => {
     const wrapper = mountPage()
     const button = wrapper.findAll('.composer-toolbar button')[1]
     expect(button.text()).toContain('附件')
-
-    // 不得把可上传类型限死为图片
-    const accept = wrapper.get('input[type="file"]').attributes('accept')
-    expect(accept).toBeUndefined()
+    expect(wrapper.get('input[type="file"]').attributes('accept')).toBe('image/*')
   })
 
   it('只粘图片不打字也能发送：用占位文案满足后端 min_length', async () => {
@@ -510,7 +537,7 @@ describe('QuestionNavChat 附件发送（本轮合同）', () => {
     expect(sent.images).toEqual(['https://files.example.test/a.png'])
   })
 
-  it('非图片附件可以随消息发送，但不得混进 images（AI 只消费图片）', async () => {
+  it('混进非图片时只发送图片，并说明文件不会被阅读', async () => {
     uploadFileMock
       .mockResolvedValueOnce({ fileId: 31, url: 'https://files.example.test/a.png', fileName: 'images/a.png', originalName: 'a.png' })
       .mockResolvedValueOnce({ fileId: 32, url: 'https://files.example.test/doc.pdf', fileName: 'files/doc.pdf', originalName: 'doc.pdf' })
@@ -532,16 +559,16 @@ describe('QuestionNavChat 附件发送（本轮合同）', () => {
     await fileInput.trigger('change')
     await flushPromises()
 
-    expect(wrapper.findAll('.attachment-chip')).toHaveLength(2)
+    expect(wrapper.findAll('.attachment-chip')).toHaveLength(1)
+    expect(wrapper.text()).toContain('当前只能看图片，这个文件不会被阅读')
 
     await sendViaEnter(wrapper, '两个附件都看看')
 
     const sent = sendMessageStreamMock.mock.calls[0][0] as { images?: string[] }
-    // 只有 png 进入 images；pdf 不上送多模态
     expect(sent.images).toEqual(['https://files.example.test/a.png'])
   })
 
-  it('只发非图片附件也能发送，不会被当成空消息拦住', async () => {
+  it('只放非图片附件时不会假装发出去', async () => {
     uploadFileMock.mockResolvedValue({
       fileId: 33,
       url: 'https://files.example.test/only.pdf',
@@ -564,10 +591,8 @@ describe('QuestionNavChat 附件发送（本轮合同）', () => {
 
     await sendViaEnter(wrapper, '')
 
-    expect(sendMessageStreamMock).toHaveBeenCalledTimes(1)
-    const sent = sendMessageStreamMock.mock.calls[0][0] as { message: string; images?: string[] }
-    expect(sent.message.trim().length).toBeGreaterThan(0)
-    expect(sent.images).toBeUndefined()
+    expect(sendMessageStreamMock).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('当前只能看图片，这个文件不会被阅读')
   })
 
   it('发送失败时附件保留，不因一次失败被清空', async () => {
@@ -583,7 +608,8 @@ describe('QuestionNavChat 附件发送（本轮合同）', () => {
     await attachOne(wrapper, 'keep.png')
     await sendViaEnter(wrapper, '图片问题')
 
-    expect(wrapper.text()).toContain('HTTP error! status: 502')
+    expect(wrapper.text()).toContain('刚才没写完，你的问题还在，再发一次即可')
+    expect(wrapper.text()).not.toContain('HTTP error!')
     // 附件条仍在，用户可以重试
     expect(wrapper.findAll('.attachment-chip')).toHaveLength(1)
   })
@@ -845,7 +871,7 @@ describe('QuestionNavChat 会话列表与回读（方案 A）', () => {
     await flushPromises()
     await sendViaEnter(wrapper, '继续提问')
 
-    expect(sendMessageStreamMock).toHaveBeenCalledWith(expect.objectContaining({ conversation_id: 22 }))
+    expect(sendMessageStreamMock.mock.calls[0][0]).toEqual(expect.objectContaining({ conversation_id: 22 }))
   })
 
   it('记住 done 返回的 conversation_id，下一次发送继续复用', async () => {

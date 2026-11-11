@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowRight, BarChart3, Check, ChevronDown, CircleHelp, Clock3, RefreshCw, Target, TrendingUp, X } from '@lucide/vue'
+import { ArrowRight, RefreshCw } from '@lucide/vue'
 import { getLearningSnapshot, type LearningNextAction, type LearningSnapshot } from '@/api/learningSnapshot'
 import { resolveErrorMessage } from '@/utils/request'
 
@@ -12,12 +12,6 @@ const snapshotLoading = ref(true)
 const snapshotError = ref('')
 const refreshing = ref(false)
 const recommendationDismissed = ref(false)
-const evidenceOpen = ref(false)
-const diagnosesOpen = ref(false)
-const correctionOpen = ref(false)
-const correctionSent = ref(false)
-const selectedDimension = ref('知识基础')
-const range = ref('近7天')
 const courseId = computed(() => {
   const value = route.query.courseId
   return typeof value === 'string' && value.trim() ? value : 'ai_intro'
@@ -26,24 +20,6 @@ const progressStatus = computed(() => {
   const value = route.query.progressStatus
   return typeof value === 'string' ? value : ''
 })
-const dimensions = [
-  { label: '知识基础', score: 72, text: '掌握了机器学习基础，深度学习正在形成体系。', status: '已确认' },
-  { label: '学习方式', score: 78, text: '你更容易通过结构图、示例和亲手实践理解知识。', status: '已确认' },
-  { label: '学习目标', score: 86, text: '目标明确，正在向 AI 工程方向持续收敛。', status: '已确认' },
-  { label: '薄弱环节', score: 54, text: '矩阵运算与反向传播仍是当前主要阻塞点。', status: '分析中' },
-  { label: '学习节奏', score: 68, text: '晚间学习完成率更高，当前节奏基本稳定。', status: '已确认' },
-  { label: '兴趣方向', score: 82, text: '对深度学习、NLP 与可视化方向保持持续兴趣。', status: '已确认' },
-]
-const selected = computed(() => dimensions.find(item => item.label === selectedDimension.value) || dimensions[0]!)
-const statItems = [
-  { label: '学习时长', value: '8.5h', change: '↑ 1.2h', icon: Clock3, path: '#trend' },
-  { label: '完成任务', value: '12/15', change: '↑ 3项', icon: Check, path: '/learning-path' },
-  { label: '练习正确率', value: '76%', change: '↑ 6%', icon: Target, path: '/exercise' },
-  { label: '掌握知识点', value: '23个', change: '↑ 2个', icon: TrendingUp, path: '/learning-resource-network' },
-  { label: '连续学习', value: '6天', change: '最长 9天', icon: BarChart3, path: '#trend' },
-  { label: '画像完整度', value: '83%', change: '已覆盖 5/6 维', icon: CircleHelp, path: '#profile' },
-]
-
 const loadSnapshot = async () => {
   snapshotLoading.value = true
   refreshing.value = true
@@ -62,8 +38,6 @@ const loadSnapshot = async () => {
 }
 
 const refresh = () => { void loadSnapshot() }
-const go = (path: string) => path.startsWith('#') ? document.querySelector(path)?.scrollIntoView({ behavior: 'smooth' }) : router.push(path)
-const heatmap = [1,2,2,3,4,3,1,0,2,3,4,4,2,1,0,1,3,4,3,2,1,0,1,2,4,4,3,2,1,0,1,2,3,4,3,2,1,0,1,3,4,3,2,1]
 
 const freshnessIncomplete = computed(() => {
   const freshness = snapshot.value?.freshness
@@ -139,12 +113,12 @@ onMounted(() => { void loadSnapshot() })
 
       <div v-if="!snapshotLoading && !snapshotUnavailable" class="summary-grid">
         <article class="summary-panel conclusion-panel">
-          <div class="panel-title"><span>AI 学情总结</span><small>更新于 14:32</small></div>
-          <p class="conclusion">你是一名目标明确、偏视觉实践型的学习者。近期深度学习基础提升明显，但线性代数仍是当前主要阻碍。</p>
-          <button class="text-button" @click="evidenceOpen = !evidenceOpen">{{ evidenceOpen ? '收起分析依据' : '查看分析依据' }} <ChevronDown :size="15" :class="{ rotated: evidenceOpen }" /></button>
-          <div v-if="evidenceOpen" class="evidence-box"><div v-for="item in ['最近 7 天完成 12 个任务','Transformer 掌握度从 61% 升至 73%','矩阵运算相关练习正确率仅 48%','4 次主动请求使用图示或代码案例']" :key="item">· {{ item }}</div><small>数据来源：计划 · 练习 · 图谱 · 对话</small></div>
+          <div class="panel-title"><span>当前学习</span><small>来自这次快照</small></div>
+          <p v-if="snapshot?.current_node" class="conclusion">当前在学「{{ snapshot.current_node.name }}」。</p>
+          <p v-else class="conclusion">这份快照里还没有可以写成结论的个人记录。</p>
+          <p v-if="snapshot?.active_plan?.title" class="evidence-box">进行中的计划：{{ snapshot.active_plan.title }}</p>
         </article>
-        <article class="summary-panel overview-panel"><div class="panel-title"><span>本周学习概览</span><small>较上周</small></div><div class="stat-grid"><button v-for="item in statItems" :key="item.label" class="stat-item" @click="go(item.path)"><component :is="item.icon" :size="16" :stroke-width="1.35" /><span>{{ item.label }}</span><strong>{{ item.value }}</strong><small>{{ item.change }}</small></button></div></article>
+        <article class="summary-panel overview-panel"><div class="panel-title"><span>学习统计</span></div><p class="conclusion">时长、正确率和连续学习天数还没有接到你自己的记录上，所以这里不放示例数字。</p></article>
       </div>
 
       <section class="next-section snapshot-entry" aria-live="polite">
@@ -190,18 +164,11 @@ onMounted(() => { void loadSnapshot() })
         </div>
       </section>
 
-      <div id="profile" class="profile-grid">
-        <article class="analysis-panel profile-panel"><div class="panel-title"><span>我的学习画像</span><small>基于 26 次有效学习行为</small></div><div class="profile-body"><div class="radar-wrap"><div class="radar"><span class="radar-ring ring-one" /><span class="radar-ring ring-two" /><span class="radar-ring ring-three" /><div class="radar-shape" /></div><span class="radar-label top">知识基础 72</span><span class="radar-label right">学习目标 86</span><span class="radar-label bottom-right">学习节奏 68</span><span class="radar-label bottom-left">兴趣方向 82</span><span class="radar-label left">认知风格 78</span><span class="radar-label weak">薄弱点 54</span></div><div class="profile-meta"><div class="profile-score"><strong>83%</strong><span>画像完整度</span><small>已确认 5/6 维</small></div><div class="dimension-list"><button v-for="item in dimensions" :key="item.label" :class="{ selected: selectedDimension === item.label }" @click="selectedDimension = item.label"><span>{{ item.label }}</span><b>{{ item.score }}</b></button></div></div></div></article>
-        <article class="analysis-panel focus-panel"><div class="panel-title"><span>当前最值得关注</span><button class="text-button" @click="diagnosesOpen = true">查看全部诊断 <ArrowRight :size="14" /></button></div><div class="focus-list"><div class="focus-item"><span class="priority-dot clay" /><div><strong>线性代数基础薄弱</strong><p>已连续影响矩阵运算、反向传播等 3 个知识点</p><div><button @click="router.push('/learning-resource-network')">查看知识图谱</button><button @click="router.push('/exercise')">专项练习</button></div></div></div><div class="focus-item"><span class="priority-dot sage" /><div><strong>Transformer 正在进步</strong><p>最近掌握度提升 12%，建议继续巩固</p><button @click="router.push('/question-nav-chat')">继续学习 <ArrowRight :size="13" /></button></div></div><div class="focus-item"><span class="priority-dot warm" /><div><strong>本周计划有 3 项延期</strong><p>任务节奏出现轻微波动</p><button @click="router.push('/learning-path')">调整学习计划 <ArrowRight :size="13" /></button></div></div></div></article>
-      </div>
-
-      <section class="analysis-panel detail-panel"><div class="panel-title"><span>画像详情</span><small>{{ selected.status }} <Check v-if="selected.status === '已确认'" :size="14" /></small></div><div class="dimension-tabs"><button v-for="item in dimensions" :key="item.label" :class="{ active: selectedDimension === item.label }" @click="selectedDimension = item.label">{{ item.label }}</button></div><div class="detail-content"><h3>{{ selected.label }}：{{ selected.score >= 75 ? '视觉实践型' : '正在形成' }}</h3><p>{{ selected.text }}</p><h4>判断依据</h4><ul><li>你多次主动请求生成结构图和可视化解释 <small>来源：对话</small></li><li>带代码示例的内容完成率比纯理论内容高 18% <small>来源：资源</small></li><li>最近 4 次练习中，实践题正确率高于概念题 <small>来源：练习</small></li></ul><div class="impact-line"><span>对系统的影响</span>资源优先推荐图解与案例 · 对话优先提供示例 · 计划增加实践任务</div><div class="confidence-row"><span>可信度：{{ selected.status === '已确认' ? '高' : '中' }}</span><button v-if="selected.status !== '已确认'" class="text-button" @click="correctionOpen = true">这不太准确？提交修正</button><span v-else class="confirmed-mark">✓ 已由你的学习行为确认</span></div></div></section>
-
-      <div id="trend" class="trend-grid"><article class="analysis-panel trend-panel"><div class="panel-title"><span>学习趋势</span><div class="segmented"><button v-for="item in ['近7天','近30天','本学期']" :key="item" :class="{ active: range === item }" @click="range = item">{{ item }}</button></div></div><div class="chart"><div class="chart-grid"><i /><i /><i /><i /><i /></div><div class="line line-a" /><div class="line line-b" /><div class="chart-axis"><span>7/08</span><span>7/10</span><span>7/12</span><span>7/14</span></div></div><div class="legend"><span><i class="sage-dot" />平均掌握度</span><span><i class="clay-dot" />练习正确率</span><span><i class="ink-dot" />学习时长</span></div><div class="heatmap-title">学习热力图 <small>近 6 周</small></div><div class="heatmap"><i v-for="(level,index) in heatmap" :key="index" :class="`level-${level}`" :title="`${level} 次学习`" /></div></article><article class="analysis-panel mastery-panel"><div class="panel-title"><span>知识掌握分布</span><button class="text-button" @click="router.push('/learning-resource-network')">前往知识图谱 <ArrowRight :size="14" /></button></div><div class="mastery-row"><span>已掌握</span><div><i style="width: 64%" /></div><b>8</b></div><div class="mastery-row"><span>学习中</span><div><i class="mid" style="width: 80%" /></div><b>10</b></div><div class="mastery-row"><span>薄弱</span><div><i class="weak" style="width: 42%" /></div><b>5</b></div><div class="weak-topics"><span>最薄弱知识点</span><button @click="router.push('/learning-resource-network')">矩阵运算 <b>42%</b></button><button @click="router.push('/learning-resource-network')">反向传播 <b>48%</b></button></div></article></div>
-
+      <section class="analysis-panel detail-panel">
+        <div class="panel-title"><span>画像和统计</span></div>
+        <p class="conclusion">掌握度分布、诊断标签和学习趋势要来自你自己的记录。现在还没有这些数据，所以这里不放另一名学生的例子。</p>
+      </section>
     </div>
-    <div v-if="diagnosesOpen" class="drawer-backdrop" @click.self="diagnosesOpen = false"><aside class="diagnosis-drawer"><div class="drawer-header"><h2>全部学情诊断</h2><button @click="diagnosesOpen = false"><X :size="19" /></button></div><div class="drawer-tabs"><button class="active">全部</button><button>需关注</button><button>正在进步</button><button>计划风险</button></div><div class="drawer-item"><b>线性代数基础薄弱</b><p>近 3 次练习正确率 48%，影响 3 个后续知识点。</p></div><div class="drawer-item"><b>Transformer 掌握度提升</b><p>知识图谱 mastery 从 61% 上升到 73%。</p></div><div class="drawer-item"><b>晚间学习完成率更高</b><p>最近一周 4 次晚间学习均完成了主要任务。</p></div></aside></div>
-    <div v-if="correctionOpen" class="correction-backdrop" @click.self="correctionOpen = false"><section class="correction-modal"><button class="close-correction" @click="correctionOpen = false"><X :size="18" /></button><h2>修正学习画像</h2><p>告诉我们哪里不准确，后续分析会优先参考你的反馈。</p><textarea placeholder="例如：我其实更喜欢先阅读理论，再做练习" /><footer><button class="text-button" @click="correctionOpen = false">取消</button><button class="primary-correction" @click="correctionSent = true; correctionOpen = false">{{ correctionSent ? '已提交' : '提交反馈' }}</button></footer></section></div>
   </section>
 </template>
 

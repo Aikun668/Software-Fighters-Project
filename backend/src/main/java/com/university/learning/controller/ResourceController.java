@@ -51,6 +51,9 @@ public class ResourceController {
         Map<String, Object> profileMap = buildProfileMap(userId);
 
         return pythonClient.generateResourcesStream(userId, topic, resourceType, profileMap, (doneData) -> {
+            if (Boolean.TRUE.equals(doneData.get("_stream_error"))) {
+                return;
+            }
             saveResourcesToDb(userId, topic, doneData);
         });
     }

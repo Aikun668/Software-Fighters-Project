@@ -6,7 +6,7 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 
-import { parseSSEStream } from '../chat'
+import { ChatStreamError, parseSSEStream } from '../chat'
 import AttentionMatrix from '../../components/chat/AttentionMatrix.vue'
 
 const streamOf = (...frames: string[]) => {
@@ -341,5 +341,87 @@ describe('parseSSEStream T004 合同：visualization 帧', () => {
     )
 
     expect(onData.mock.calls.map((call) => call[0])).toEqual(['答'])
+  })
+})
+
+describe('parseSSEStream 失败与撤回', () => {
+  it('error 带上会话 id，并且不再调用 onDone', async () => {
+    const onDone = vi.fn()
+    const onError = vi.fn()
+    const onConversationId = vi.fn()
+
+    await parseSSEStream(
+      streamOf(
+        frame({ type: 'meta', conversation_id: 22 }),
+        frame({ type: 'token', content: '半截' }),
+        frame({ type: 'error', content: '刚才没写完，你的问题还在，再发一次即可', code: 'EMPTY_RESPONSE', conversation_id: 22 }),
+        frame({ type: 'done', conversation_id: 22 }),
+      ),
+      vi.fn(),
+      onDone,
+      onError,
+      undefined,
+      undefined,
+      { onConversationId },
+    )
+
+    expect(onDone).not.toHaveBeenCalled()
+    expect(onConversationId).toHaveBeenCalledWith(22)
+    const error = onError.mock.calls[0][0] as ChatStreamError
+    expect(error).toBeInstanceOf(ChatStreamError)
+    expect(error.conversationId).toBe(22)
+    expect(error.code).toBe('EMPTY_RESPONSE')
+  })
+
+  it('retract 清掉已流出正文后，后续正文仍会渲染', async () => {
+    const onData = vi.fn()
+    const onRetract = vi.fn()
+
+    await parseSSEStream(
+      streamOf(
+        frame({ type: 'token', content: '坏' }),
+        frame({ type: 'retract' }),
+        frame({ type: 'content', data: { response: '重试后的回答' } }),
+        frame({ type: 'done' }),
+      ),
+      onData,
+      vi.fn(),
+      undefined,
+      undefined,
+      undefined,
+      { onRetract },
+    )
+
+    expect(onRetract).toHaveBeenCalledTimes(1)
+    expect(onData.mock.calls.map((call) => call[0])).toEqual(['坏', '重试后的回答'])
+  })
+
+  it('recommendation 不进正文', async () => {
+    const onData = vi.fn()
+    const onRecommendation = vi.fn()
+
+    await parseSSEStream(
+      streamOf(
+        frame({ type: 'token', content: '正文' }),
+        frame({
+          type: 'recommendation',
+          message: '要不要练一下「进程」？',
+          data: { node_name: '进程', knowledge_node_id: 'os-process' },
+        }),
+        frame({ type: 'done' }),
+      ),
+      onData,
+      vi.fn(),
+      undefined,
+      undefined,
+      undefined,
+      { onRecommendation },
+    )
+
+    expect(onData.mock.calls.map((call) => call[0])).toEqual(['正文'])
+    expect(onRecommendation).toHaveBeenCalledWith({
+      label: '要不要练一下「进程」？',
+      prompt: '请出一组关于「进程」的练习',
+    })
   })
 })

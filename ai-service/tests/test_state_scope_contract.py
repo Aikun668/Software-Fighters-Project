@@ -278,7 +278,7 @@ class TestCenterDispatch:
 
     @pytest.mark.asyncio
     async def test_st_c02_unknown_mode_and_exception_semantics_unchanged(self):
-        """未知 mode → `未知 center: <mode>`；Center 抛错 → `处理失败`。"""
+        """未知 mode 与 Center 异常都给人话，技术原因留在 error_code，不把异常原文给用户。"""
         from app.centers.chat_task_dispatcher import ChatTaskDispatcher
         from app.centers.schemas import CenterTask
 
@@ -294,10 +294,12 @@ class TestCenterDispatch:
         boom_task = CenterTask(mode="plan", intent="learning_path", input="x", sequence=1)
 
         unknown = await dispatcher._execute_task(task)
-        assert unknown.error == "未知 center: __nope__"
+        assert unknown.error_code == "UNKNOWN_CENTER"
+        assert "center" not in (unknown.error or "")
 
         failed = await dispatcher._execute_task(boom_task)
-        assert failed.error == "处理失败"
+        assert failed.error_code == "TASK_FAILED"
+        assert "boom" not in (failed.error or "")
 
 
 # ═══════════════════════════════════════════════════════════════════

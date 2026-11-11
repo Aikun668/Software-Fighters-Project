@@ -17,11 +17,13 @@ public class LoginInterceptor  implements HandlerInterceptor {
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         if (!authRequired) {
-            UserDTO dev = new UserDTO();
-            dev.setId(1L);
-            dev.setUsername("dev_user");
-            dev.setAvatarUrl(null);
-            UserHolder.saveUser(dev);
+            if (UserHolder.getUser() == null) {
+                UserDTO dev = new UserDTO();
+                dev.setId(1L);
+                dev.setUsername("dev_user");
+                dev.setAvatarUrl(null);
+                UserHolder.saveUser(dev);
+            }
             return true;
         }
 

@@ -187,7 +187,8 @@ class TestExceptionContract:
         events = await _collect_sse(sse_client, CHAT_OK)
 
         assert [event["type"] for event in events] == ["error", "done"]
-        assert events[0]["content"] == "模型未返回有效内容，请重试"
+        assert events[0]["content"] == "刚才没写完，你的问题还在，再发一次即可"
+        assert events[0]["code"] == "EMPTY_RESPONSE"
 
     async def test_pipeline_exception_yields_error_then_done(self, sse_client, monkeypatch):
         center = FakeChatCenter(
@@ -199,8 +200,12 @@ class TestExceptionContract:
         events = await _collect_sse(sse_client, CHAT_OK)
 
         types = [e.get("type") for e in events]
+        error = next(event for event in events if event.get("type") == "error")
         assert "error" in types, f"异常必须产生 error 事件: {types}"
         assert types[-1] == "done", f"异常后仍必须以 done 收尾: {types}"
+        assert error["content"] == "刚才没写完，你的问题还在，再发一次即可"
+        assert "Agent 内部爆炸" not in error["content"]
+        assert error["code"] == "PIPELINE_FAILED"
 
     async def test_route_exception_returns_identifiable_error(self, monkeypatch):
         """route 阶段异常：HTTP 层可识别错误，不悬挂。"""
@@ -300,6 +305,17 @@ class TestInvalidRequestContract:
         resp = await sse_client.post("/internal/api/chat", json={"user_id": 1, "message": ""})
 
         assert resp.status_code == 400
+        assert center.route_calls == []
+
+    async def test_missing_user_id_rejected_in_production(self, sse_client, monkeypatch):
+        center = FakeChatCenter(events=[done_event()])
+        _install(center, monkeypatch)
+        monkeypatch.setenv("APP_ENV", "production")
+
+        resp = await sse_client.post("/internal/api/chat", json={"message": "什么是进程？"})
+
+        assert resp.status_code == 400
+        assert "user_id" in resp.json().get("error", "")
         assert center.route_calls == []
 
 

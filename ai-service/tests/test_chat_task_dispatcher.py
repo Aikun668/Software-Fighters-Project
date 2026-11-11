@@ -303,3 +303,60 @@ class TestCapabilityProductResponse:
         agent = ChatTaskDispatcher(resource_center=FakeResourceCenter())
         payloads = await self._content_payloads(agent, "resource", {})
         assert payloads[0]["response"] == "已为您生成学习文档，共 7 个内容块。"
+
+    @pytest.mark.asyncio
+    async def test_streamed_error_retracts_before_error(self):
+        from app.centers.chat_task_dispatcher import ChatTaskDispatcher
+        from app.centers.schemas import CenterResult, CenterTask, ExecutionPlan
+
+        class FakeAuto:
+            async def execute(self, task, on_token=None):
+                if on_token is not None:
+                    await on_token("坏")
+                    await on_token("文本")
+                return CenterResult(
+                    mode="auto",
+                    intent="tutor",
+                    event_type="error",
+                    error="刚才没写完，你的问题还在，再发一次即可",
+                    error_code="EMPTY_RESPONSE",
+                    sequence=task.sequence,
+                )
+
+        plan = ExecutionPlan(tasks=[CenterTask(mode="auto", intent="tutor", input="x")])
+        events = []
+        async for event in ChatTaskDispatcher(auto_center=FakeAuto()).execute(plan):
+            events.append(event)
+        types = [event.type.value for event in events]
+        assert types.index("retract") < types.index("error")
+        assert types[-1] == "done"
+        error = next(event for event in events if event.type.value == "error")
+        assert error.to_sse().count("EMPTY_RESPONSE") == 1
+
+    @pytest.mark.asyncio
+    async def test_retry_accept_retracts_and_keeps_final_text(self):
+        from app.centers.chat_task_dispatcher import ChatTaskDispatcher
+        from app.centers.schemas import CenterResult, CenterTask, ExecutionPlan
+
+        class FakeAuto:
+            async def execute(self, task, on_token=None):
+                if on_token is not None:
+                    await on_token("坏文本")
+                return CenterResult(
+                    mode="auto",
+                    intent="tutor",
+                    event_type="content",
+                    payload={"response": "这是重试后的回答"},
+                    discard_streamed_text=True,
+                    sequence=task.sequence,
+                )
+
+        plan = ExecutionPlan(tasks=[CenterTask(mode="auto", intent="tutor", input="x")])
+        events = []
+        async for event in ChatTaskDispatcher(auto_center=FakeAuto()).execute(plan):
+            events.append(event)
+        types = [event.type.value for event in events]
+        assert types.index("retract") < types.index("content")
+        content = next(event for event in events if event.type.value == "content")
+        assert content.data["response"] == "这是重试后的回答"
+        assert content.data.get("partial") is not True

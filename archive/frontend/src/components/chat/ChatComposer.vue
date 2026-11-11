@@ -19,6 +19,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:prompt': [value: string]
   send: []
+  stop: []
   chooseMode: [mode: ChatMode]
   chooseStyle: [style: ChatStyle]
   removeAttachment: [fileId: number]
@@ -74,10 +75,7 @@ const withInferredMime = (file: File): File => {
   return new File([file], file.name, { type: mime, lastModified: file.lastModified })
 }
 
-/**
- * 附件不限类型：任何文件都能上传，只有图片会被识别出来走缩略图预览。
- * 非图片附件仍可上传，只是不作为多模态图片送给 AI。
- */
+/** 补全图片 MIME。非图片会在上传前被拒绝，避免看起来发出去了却没被阅读。 */
 const pickFiles = (files: Iterable<File> | null | undefined): File[] =>
   Array.from(files ?? []).map(withInferredMime)
 
@@ -169,7 +167,7 @@ watch(() => props.prompt, () => {
       </span>
     </div>
     <p v-if="uploadError" class="upload-error">{{ uploadError }}</p>
-    <input ref="fileInput" class="file-input" type="file" multiple @change="handleFileChange" />
+    <input ref="fileInput" class="file-input" type="file" accept="image/*" multiple @change="handleFileChange" />
     <textarea
       ref="promptInput"
       :value="prompt"
@@ -193,7 +191,8 @@ watch(() => props.prompt, () => {
           <button v-for="option in styleOptions" :key="option.value" type="button" :data-style="option.value" @click="chooseStyle(option.value)">{{ option.label }}</button>
         </div>
       </div>
-      <button type="button" class="send-button" aria-label="发送" :disabled="sending || uploadingFile" @click="emit('send')"><ArrowUp :size="20" :stroke-width="1.6" /></button>
+      <button v-if="sending" type="button" class="send-button stop-button" aria-label="停止" @click="emit('stop')">停</button>
+      <button v-else type="button" class="send-button" aria-label="发送" :disabled="uploadingFile" @click="emit('send')"><ArrowUp :size="20" :stroke-width="1.6" /></button>
     </div>
   </div>
 </template>

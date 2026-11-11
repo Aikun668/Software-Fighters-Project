@@ -21,6 +21,7 @@ from app.centers.router_agent import RouterAgent
 from app.centers.schemas import CenterTask, ExecutionPlan
 from app.centers.visualization_center import VisualizationCenter
 from app.events.types import (
+    USER_FACING_RETRY,
     StreamEvent,
     StreamEventType,
     done_event,
@@ -810,7 +811,8 @@ class ChatCenter:
                             await queue.put(
                                 error_event(
                                     stage="chat",
-                                    message="模型未返回有效内容，请重试",
+                                    message=USER_FACING_RETRY,
+                                    code="EMPTY_RESPONSE",
                                 )
                             )
 
@@ -875,7 +877,8 @@ class ChatCenter:
                 await queue.put(
                     error_event(
                         stage="chat",
-                        message=str(exc) or "处理失败，请稍后重试",
+                        message=USER_FACING_RETRY,
+                        code="PIPELINE_FAILED",
                     )
                 )
             finally:
@@ -894,7 +897,8 @@ class ChatCenter:
                         await queue.put(
                             error_event(
                                 stage="chat",
-                                message="模型未返回有效内容，请重试",
+                                message=USER_FACING_RETRY,
+                                code="EMPTY_RESPONSE",
                             )
                         )
                     await queue.put(done_event(fd))

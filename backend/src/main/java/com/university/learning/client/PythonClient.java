@@ -19,6 +19,8 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 @Slf4j
@@ -682,21 +684,47 @@ public class PythonClient {
                                         Map<String, Object> request,
                                         Consumer<Map<String, Object>> onDone) {
         SseEmitter emitter = new SseEmitter(300000L);
+        Object conversationId = request.get("conversation_id");
+        SseEventAccumulator accumulator = new SseEventAccumulator();
+        AtomicBoolean delivered = new AtomicBoolean(false);
+        AtomicReference<HttpURLConnection> connection = new AtomicReference<>();
+
+        emitter.onTimeout(() -> {
+            log.warn("SSE超时");
+            accumulator.markStopped("这次回答超时了，请再试一次", "TIMEOUT");
+            sendQuietly(emitter, errorFrame("这次回答超时了，请再试一次", "TIMEOUT", conversationId));
+            HttpURLConnection current = connection.get();
+            if (current != null) {
+                current.disconnect();
+            }
+        });
+        emitter.onError(error -> {
+            accumulator.markStopped("已停下来。想继续的话，再说一句就行", "STOPPED");
+            HttpURLConnection current = connection.get();
+            if (current != null) {
+                current.disconnect();
+            }
+        });
 
         CompletableFuture.runAsync(() -> {
             HttpURLConnection conn = null;
             try {
+                if (conversationId != null && !sendQuietly(emitter, metaFrame(conversationId))) {
+                    accumulator.markStopped("已停下来。想继续的话，再说一句就行", "STOPPED");
+                    return;
+                }
+
                 URL url = new URL(pythonUrl);
                 conn = (HttpURLConnection) url.openConnection();
+                connection.set(conn);
                 conn.setRequestMethod("POST");
                 conn.setRequestProperty("Content-Type", "application/json");
                 conn.setDoOutput(true);
-
                 conn.setConnectTimeout(10000);
                 conn.setReadTimeout(600000);
 
                 String requestBody = objectMapper.writeValueAsString(request);
-                log.info("调用Python: {} body={}", pythonUrl, requestBody);
+                log.info("调用Python: {} {}", pythonUrl, SseEventAccumulator.describeRequest(request));
                 conn.getOutputStream().write(requestBody.getBytes(StandardCharsets.UTF_8));
                 conn.getOutputStream().flush();
 
@@ -710,9 +738,11 @@ public class PythonClient {
                         while ((line = errorReader.readLine()) != null) {
                             errorBody.append(line);
                         }
-                        log.error("Python返回错误: code={}, body={}", responseCode, errorBody.toString());
+                        log.error("Python返回错误: code={}, bodyChars={}", responseCode, errorBody.length());
                     }
-                    emitter.completeWithError(new RuntimeException("Python返回" + responseCode));
+                    String human = "刚才没连上回答服务，你的问题还在，再发一次即可";
+                    accumulator.markStopped(human, "UPSTREAM_HTTP");
+                    sendQuietly(emitter, errorFrame(human, "UPSTREAM_HTTP", conversationId));
                     return;
                 }
 
@@ -721,154 +751,149 @@ public class PythonClient {
 
                     String line;
                     StringBuilder dataBuffer = new StringBuilder();
-                    Map<String, Object> collectedData = new HashMap<>();
-                    StringBuilder responseText = new StringBuilder();
-                    boolean streamEnded = false;
                     boolean isSse = false;
                     StringBuilder jsonBody = new StringBuilder();
+                    boolean clientClosed = false;
 
-                    while (!streamEnded && (line = reader.readLine()) != null) {
+                    while ((line = reader.readLine()) != null) {
+                        if (line.startsWith(":")) {
+                            if (!clientClosed) {
+                                try {
+                                    emitter.send(SseEmitter.event().comment(line.substring(1).trim()));
+                                } catch (Exception sendError) {
+                                    clientClosed = true;
+                                    accumulator.markStopped("已停下来。想继续的话，再说一句就行", "STOPPED");
+                                }
+                            }
+                            continue;
+                        }
                         if (line.startsWith("data: ")) {
                             isSse = true;
-                            String data = line.substring(6);
-                            dataBuffer.append(data);
-                        } else if (!line.startsWith("data: ") && !line.isEmpty()) {
-                            // 非SSE行，累积为JSON
+                            dataBuffer.append(line.substring(6));
+                        } else if (!line.isEmpty()) {
                             jsonBody.append(line);
-                        } else if (line.isEmpty() && dataBuffer.length() > 0) {
+                        } else if (dataBuffer.length() > 0) {
                             String eventData = dataBuffer.toString();
                             dataBuffer = new StringBuilder();
-
-                            // 修复「同一上下文被拆成多个会话」：done 帧此前不带
-                            // conversation_id，前端 onDone(null) 后下一轮又新建会话。
-                            // Java 侧是会话 id 的权威来源，在此注入（不改 Python 的 SSE 契约）。
-                            Object convIdForEcho = request.get("conversation_id");
+                            String outbound = eventData;
+                            boolean keepReading = true;
                             try {
-                                Map<String, Object> peek = objectMapper.readValue(eventData, Map.class);
-                                if ("done".equals(peek.get("type"))
-                                        && convIdForEcho != null
-                                        && !peek.containsKey("conversation_id")) {
-                                    peek.put("conversation_id", convIdForEcho);
-                                    eventData = objectMapper.writeValueAsString(peek);
+                                @SuppressWarnings("unchecked")
+                                Map<String, Object> event = objectMapper.readValue(eventData, Map.class);
+                                keepReading = accumulator.accept(event, conversationId);
+                                outbound = objectMapper.writeValueAsString(event);
+                                if ("error".equals(event.get("type"))) {
+                                    log.error("Python返回错误: code={}", event.get("code"));
                                 }
                             } catch (Exception ignore) {
-                                // 非 JSON 帧（心跳/残包）原样转发
+                                // 非 JSON 帧原样转发
                             }
-
-                            emitter.send(SseEmitter.event().data(eventData));
-
-                            try {
-                                Map<String, Object> event = objectMapper.readValue(eventData, Map.class);
-                                String type = (String) event.get("type");
-
-                                if ("meta".equals(type)) {
-                                    collectedData.put("conversation_id", event.get("conversation_id"));
-                                } else if ("profile_update".equals(type) || "profile_complete".equals(type)) {
-                                    Object content = event.get("content");
-                                    if (content instanceof Map) {
-                                        collectedData.putAll((Map<String, Object>) content);
+                            if (!clientClosed) {
+                                try {
+                                    emitter.send(SseEmitter.event().data(outbound));
+                                } catch (Exception sendError) {
+                                    clientClosed = true;
+                                    accumulator.markStopped("已停下来。想继续的话，再说一句就行", "STOPPED");
+                                    HttpURLConnection current = connection.get();
+                                    if (current != null) {
+                                        current.disconnect();
                                     }
-                                } else if ("token".equals(type)) {
-                                    // 累积流式文字
-                                    Object tokenContent = event.get("content");
-                                    if (tokenContent != null) {
-                                        responseText.append(tokenContent.toString());
-                                    }
-                                } else if ("content".equals(type)) {
-                                    // 修复「对话内容显示不出来」：plan/resource 等中心不发 token，
-                                    // 其正文只在 content 帧的 data.response/content。
-                                    // 此前未累积 → 落库退化成占位符 [AI已回复]，刷新后正文丢失。
-                                    Object payload = event.get("data");
-                                    if (payload instanceof Map) {
-                                        Object text = ((Map<?, ?>) payload).get("response");
-                                        if (text == null) {
-                                            text = ((Map<?, ?>) payload).get("content");
-                                        }
-                                        if (text instanceof String && !((String) text).isBlank()
-                                                && responseText.length() == 0) {
-                                            responseText.append((String) text);
-                                        }
-                                    }
-                                } else if ("inquiry".equals(type)) {
-                                    // 捕获inquiry追问数据
-                                    collectedData.putAll(event);
-                                } else if ("path".equals(type)) {
-                                    // 捕获学习路径/研究模式的数据（兜底）
-                                    collectedData.put("_path_steps", event.get("steps"));
-                                    collectedData.put("_concept_graph", event.get("concept_graph"));
-                                    collectedData.put("_path_response", event.get("response"));
-                                } else if ("done".equals(type)) {
-                                    streamEnded = true;
-                                    // 注入累积的完整回复文字
-                                    if (responseText.length() > 0) {
-                                        event.put("_response_text", responseText.toString());
-                                    }
-                                    if (!collectedData.isEmpty()) {
-                                        collectedData.forEach((k, v) -> {
-                                            if (!event.containsKey(k)) {
-                                                event.put(k, v);
-                                            }
-                                        });
-                                    }
-                                    collectedData = event;
-                                } else if ("error".equals(type)) {
-                                    streamEnded = true;
-                                    log.error("Python返回错误: {}", event.get("content"));
+                                    break;
                                 }
-                            } catch (Exception e) {
-                                // token数据，忽略
+                            }
+                            if (!keepReading) {
+                                break;
                             }
                         }
                     }
 
-                    // 非SSE响应：Python返回了普通JSON（如inquiry追问、错误等）
                     if (!isSse && jsonBody.length() > 0) {
                         try {
                             @SuppressWarnings("unchecked")
-                            Map<String, Object> jsonResp = objectMapper.readValue(
-                                    jsonBody.toString(), Map.class);
+                            Map<String, Object> jsonResp = objectMapper.readValue(jsonBody.toString(), Map.class);
                             log.info("Python返回JSON(非SSE): keys={}", jsonResp.keySet());
-                            // 提取data字段作为doneData传给回调
                             Object respData = jsonResp.get("data");
-                            if (respData instanceof Map) {
+                            if (respData instanceof Map<?, ?> dataMap && delivered.compareAndSet(false, true) && onDone != null) {
                                 @SuppressWarnings("unchecked")
-                                Map<String, Object> dataMap = (Map<String, Object>) respData;
-                                if (onDone != null) {
-                                    onDone.accept(dataMap);
-                                }
+                                Map<String, Object> payload = (Map<String, Object>) dataMap;
+                                onDone.accept(payload);
                             }
                         } catch (Exception e) {
                             log.error("解析Python JSON响应失败", e);
                         }
                     }
-
-                    if (isSse && onDone != null && !collectedData.isEmpty()) {
-                        try {
-                            onDone.accept(collectedData);
-                            log.info("回调执行成功");
-                        } catch (Exception e) {
-                            log.error("回调执行失败", e);
-                        }
-                    }
                 }
-
-                emitter.complete();
             } catch (Exception e) {
                 log.error("SSE转发失败", e);
-                emitter.completeWithError(e);
+                if (accumulator.markStopped(SseEventAccumulator.USER_RETRY, "RELAY_FAILED")) {
+                    sendQuietly(emitter, errorFrame(SseEventAccumulator.USER_RETRY, "RELAY_FAILED", conversationId));
+                }
             } finally {
+                deliverOnce(onDone, accumulator.callbackPayload(conversationId), delivered);
+                try {
+                    emitter.complete();
+                } catch (Exception ignore) {
+                    // 客户端已经断开时 complete 会失败，落库已在上面完成
+                }
                 if (conn != null) {
                     conn.disconnect();
                 }
             }
         });
 
-        emitter.onTimeout(() -> {
-            log.warn("SSE超时");
-            emitter.complete();
-        });
-
         return emitter;
+    }
+
+    private boolean sendQuietly(SseEmitter emitter, String data) {
+        try {
+            emitter.send(SseEmitter.event().data(data));
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private String metaFrame(Object conversationId) {
+        try {
+            Map<String, Object> frame = new LinkedHashMap<>();
+            frame.put("type", "meta");
+            frame.put("conversation_id", conversationId);
+            return objectMapper.writeValueAsString(frame);
+        } catch (Exception e) {
+            return "{\"type\":\"meta\"}";
+        }
+    }
+
+    private String errorFrame(String content, String code, Object conversationId) {
+        try {
+            Map<String, Object> frame = new LinkedHashMap<>();
+            frame.put("type", "error");
+            frame.put("content", content);
+            frame.put("code", code);
+            if (conversationId != null) {
+                frame.put("conversation_id", conversationId);
+            }
+            return objectMapper.writeValueAsString(frame);
+        } catch (Exception e) {
+            return "{\"type\":\"error\",\"content\":\"" + SseEventAccumulator.USER_RETRY + "\"}";
+        }
+    }
+
+    private void deliverOnce(Consumer<Map<String, Object>> onDone,
+                             Map<String, Object> payload,
+                             AtomicBoolean delivered) {
+        if (onDone == null || payload == null || payload.isEmpty()) {
+            return;
+        }
+        if (!delivered.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            onDone.accept(payload);
+            log.info("回调执行成功");
+        } catch (Exception e) {
+            log.error("回调执行失败", e);
+        }
     }
 
     private Map<String, Object> doPost(String url, Map<String, Object> request) {

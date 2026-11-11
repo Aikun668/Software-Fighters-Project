@@ -1,12 +1,38 @@
 import api from '@/utils/request'
 import { dispatchUiBlock, type DispatchResult } from '@/components/chat/ui-blocks/registry'
 
+export const USER_RETRY = '刚才没写完，你的问题还在，再发一次即可'
+
+/** 流式失败。conversationId 有值时，这次失败仍然属于那条会话。 */
+export class ChatStreamError extends Error {
+  conversationId: number | null
+  code: string | null
+
+  constructor(message: string, conversationId: number | null = null, code: string | null = null) {
+    super(message)
+    this.name = 'ChatStreamError'
+    this.conversationId = conversationId
+    this.code = code
+  }
+}
+
+export interface SseStreamHooks {
+  onRetract?: () => void
+  onConversationId?: (conversationId: number) => void
+  onRecommendation?: (recommendation: { label: string; prompt: string }) => void
+}
+
+const messageForStatus = (status: number) => {
+  if (status === 401) return '请先登录，再继续提问'
+  if (status === 404) return '这条对话找不到了，可以新开一条再问'
+  return USER_RETRY
+}
+
 /**
  * 发送消息（SSE流式）
  * @param data - 消息数据
- *   - messages: 已完成的对话历史（role/content 对），**不含当前 message**——
- *     后端 /api/chat 会把 message 追加为最后一条用户消息，前端重复传会出现两次。
- *     空 content 的 assistant 气泡（流式中/出错无正文）不得进入。
+ *   - messages: 前端仍会带上已完成轮次，但 Java 的 UnifiedChatRequest 没有这个字段，
+ *     历史以数据库为准。不要把它当成模型看到的上下文。
  */
 export const sendMessageStream = async (data: {
   message: string
@@ -17,7 +43,7 @@ export const sendMessageStream = async (data: {
   /** 本轮图片对应的 file_info.id，后端据此把图片持久化到消息表（预签名 URL 会过期） */
   image_file_ids?: number[]
   style?: 'standard' | 'socratic'
-}): Promise<ReadableStream> => {
+}, signal?: AbortSignal): Promise<ReadableStream> => {
   console.log('[SSE] 准备发送请求:', {
     url: `${import.meta.env.VITE_API_BASE_URL || '/api'}/api/chat`,
     message: data.message.length > 50 ? data.message.substring(0, 50) + '...' : data.message,
@@ -31,7 +57,8 @@ export const sendMessageStream = async (data: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
     },
-    body: JSON.stringify(data)
+    body: JSON.stringify(data),
+    signal,
   })
   
   console.log('[SSE] 请求完成，状态码:', response.status)
@@ -40,7 +67,7 @@ export const sendMessageStream = async (data: {
   if (!response.ok) {
     const errorText = await response.text()
     console.error('[SSE] HTTP 错误:', { status: response.status, errorText })
-    throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`)
+    throw new ChatStreamError(messageForStatus(response.status), null, `HTTP_${response.status}`)
   }
   
   // 检查响应类型是否为 SSE
@@ -120,8 +147,9 @@ const formatStructuredContent = (payload: Record<string, unknown>): string => {
  * 新格式示例：
  * data:{"type": "token", "content": "哈哈"}
  * data:{"type": "done", "domain": "general", "conversation_id": 22}
- * 终态合同：error 与 done 均为唯一终态——任一触发后立即停止，
- * 不再触发后续回调（onError 之后不得再 onDone，反之亦然）；
+ * 终态合同：error 与 done 都结束这一轮的正文回调（onError 之后不再 onDone）。
+ * error 帧上的 conversation_id 通过 ChatStreamError 和 onConversationId 交出去，
+ * 这样失败也不会丢掉当前会话。retract 只清空已流出的正文，不是终态。
  * 流在无终态事件下关闭时补一次 onDone，保证调用方状态一定收敛。
  * @param stream - 数据流
  * @param onData - 数据回调
@@ -146,12 +174,20 @@ export const parseSSEStream = async (
     message: string
     phase: string
   }) => void,
-  onVisualization?: (block: DispatchResult) => void
+  onVisualization?: (block: DispatchResult) => void,
+  hooks?: SseStreamHooks,
 ) => {
   const reader = stream.getReader()
   const decoder = new TextDecoder('utf-8') // 处理中文必须指定utf-8
   let buffer = '' // 用来粘包/拆包的缓冲区
   let terminated = false // 已触发 error/done 终态回调
+  let knownConversationId: number | null = null
+  const noteConversation = (value: unknown) => {
+    if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) return
+    if (knownConversationId === value) return
+    knownConversationId = value
+    hooks?.onConversationId?.(value)
+  }
   /**
    * 当前 center 是否已经送出过正文（token 或 content）。
    *
@@ -287,17 +323,49 @@ export const parseSSEStream = async (
                 onVisualization(dispatchUiBlock(data.data))
               }
               break
+            case 'meta':
+              noteConversation(data.conversation_id)
+              break
+            case 'retract':
+              hasStreamedText = false
+              hooks?.onRetract?.()
+              break
+            case 'recommendation': {
+              const record = data.data && typeof data.data === 'object'
+                ? data.data as Record<string, unknown>
+                : {}
+              const nodeName = typeof record.node_name === 'string' ? record.node_name : ''
+              const label = typeof data.message === 'string' && data.message
+                ? data.message
+                : nodeName ? `要不要练一下「${nodeName}」？` : ''
+              if (label) {
+                hooks?.onRecommendation?.({
+                  label,
+                  prompt: nodeName ? `请出一组关于「${nodeName}」的练习` : label,
+                })
+              }
+              break
+            }
             case 'done':
               console.log('[SSE] 流结束:', data)
               terminated = true
-              onDone(typeof data.conversation_id === 'number' ? data.conversation_id : null)
+              noteConversation(data.conversation_id)
+              onDone(knownConversationId)
               return
             case 'error': {
-              // 错误也是终态：触发 onError 后立即停止，后续 done 不再触发 onDone
-              console.error('[SSE] 流异常:', data.content || data.message)
+              // 错误结束这一轮正文，不再把后面的 done 当成成功回调。
+              // 会话 id 已经在错误对象里，调用方可以钉住当前会话。
+              console.error('[SSE] 流异常:', data.code || data.content || data.message)
               terminated = true
+              noteConversation(data.conversation_id)
               if (onError) {
-                onError(new Error(data.content || data.message || 'Unknown error'))
+                const content = typeof data.content === 'string' ? data.content : ''
+                const message = typeof data.message === 'string' ? data.message : ''
+                onError(new ChatStreamError(
+                  content || message || USER_RETRY,
+                  knownConversationId,
+                  typeof data.code === 'string' ? data.code : null,
+                ))
               }
               return
             }

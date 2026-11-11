@@ -21,6 +21,7 @@ class StreamEventType(str, Enum):
     STEPS = "steps"           # 练习域解题步骤
     CONFIDENCE = "confidence"  # 练习域解题置信度
     VISUALIZATION = "visualization"  # 结构化 UI block（图表）独立事件，正文仍是 Markdown（D-004，方案 A）
+    RETRACT = "retract"  # 撤回本轮已经推到屏幕上、但健全性检查没通过的正文
 
 
 @dataclass
@@ -44,7 +45,10 @@ class StreamEvent:
         if self.type is StreamEventType.ERROR and not self._metadata.get("sse_flat"):
             # 错误合同：前端 parseSSEStream 与 Java 网关都从 content 键读取
             # 错误信息，只带 message 会让用户看到 "Unknown error"
-            payload["content"] = self.message or "处理失败，请稍后重试"
+            payload["content"] = self.message or USER_FACING_RETRY
+            code = self._metadata.get("error_code")
+            if code:
+                payload["code"] = code
         if self.progress:
             payload["progress"] = round(self.progress, 2)
         if self.data is not None:
@@ -80,8 +84,22 @@ def progress_event(stage: str, message: str, progress: float) -> StreamEvent:
     return StreamEvent(type=StreamEventType.PROGRESS, stage=stage,
                        message=message, progress=progress)
 
-def error_event(stage: str, message: str) -> StreamEvent:
-    return StreamEvent(type=StreamEventType.ERROR, stage=stage, message=message)
+USER_FACING_RETRY = "刚才没写完，你的问题还在，再发一次即可"
+
+
+def error_event(stage: str, message: str, code: str | None = None) -> StreamEvent:
+    metadata = {"error_code": code} if code else {}
+    return StreamEvent(
+        type=StreamEventType.ERROR,
+        stage=stage,
+        message=message,
+        _metadata=metadata,
+    )
+
+
+def retract_event() -> StreamEvent:
+    """让前端丢掉本轮已经打出来、但最终不作数的正文。"""
+    return StreamEvent(type=StreamEventType.RETRACT, message="上面这段不作数")
 
 def content_event(data: Any) -> StreamEvent:
     return StreamEvent(type=StreamEventType.CONTENT, data=data)

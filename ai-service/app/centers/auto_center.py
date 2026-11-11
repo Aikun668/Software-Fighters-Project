@@ -16,6 +16,7 @@ from app.agents.solve_agent import SolveAgent
 from app.agents.tutor_agent import TutorAgent
 from app.agents.visualize.visualize_pipeline import VisualizePipeline
 from app.centers.schemas import CenterResult, CenterTask
+from app.events.types import USER_FACING_RETRY
 from app.services.llm_service import PROFILE_CODE
 
 logger = logging.getLogger(__name__)
@@ -107,7 +108,8 @@ class AutoCenter:
                     mode="auto",
                     intent=task.intent,
                     event_type="error",
-                    error="回答生成失败，请稍后重试",
+                    error=USER_FACING_RETRY,
+                    error_code=str(state.get("sanity_error_code")),
                     agent="TutorAgent",
                     sequence=task.sequence,
                 )
@@ -128,6 +130,7 @@ class AutoCenter:
                 },
                 agent="TutorAgent",
                 sequence=task.sequence,
+                discard_streamed_text=bool(state.get("discard_streamed_text")),
             )
         except Exception as e:
             logger.error(f"AutoCenter tutor failed: {e}")
@@ -135,7 +138,8 @@ class AutoCenter:
                 mode="auto",
                 intent=task.intent,
                 event_type="error",
-                error="答疑失败",
+                error=USER_FACING_RETRY,
+                error_code="TUTOR_FAILED",
                 agent="TutorAgent",
                 sequence=task.sequence,
             )

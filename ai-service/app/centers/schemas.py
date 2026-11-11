@@ -39,6 +39,9 @@ class CenterResult:
     agent: str = ""
     sequence: int = 0
     error: Optional[str] = None
+    error_code: Optional[str] = None
+    # 第一遍已经把 token 推给用户，但最终采用的是重试文本
+    discard_streamed_text: bool = False
     profile_delta: dict = field(default_factory=dict)
     # T4-C：统一三态结果语义——「执行成功且产物可用」= success；
     # 执行成功但产物为空/不可用 = degraded；失败 = error（此时 error 字段非空）。

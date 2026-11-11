@@ -40,21 +40,18 @@ public class ProfileController {
         Conversation conversation = getOrCreateProfileConversation(userId);
         final Long convId = conversation.getId();
 
-        if (messages != null) {
-            for (Map<String, String> msg : messages) {
-                if ("user".equals(msg.get("role"))) {
-                    messageService.save(new Message()
-                            .setConversationId(convId)
-                            .setRole("user")
-                            .setContent(msg.get("content"))
-                            .setMode("profile"));
-                }
+        saveNewestUserTurn(convId, messages);
+        List<Map<String, String>> history = loadHistory(convId, 50).stream().map(item -> {
+            Map<String, String> message = new LinkedHashMap<>();
+            message.put("role", String.valueOf(item.get("role")));
+            message.put("content", item.get("content") == null ? "" : String.valueOf(item.get("content")));
+            return message;
+        }).collect(Collectors.toList());
+
+        return pythonClient.buildProfileStream(userId, history, (profileData) -> {
+            if (Boolean.TRUE.equals(profileData.get("_stream_error"))) {
+                return;
             }
-        }
-
-        List<Map<String, Object>> history = loadHistory(convId, 50);
-
-        return pythonClient.buildProfileStream(userId, messages, (profileData) -> {
             saveProfileToDb(userId, profileData);
             saveAiResponse(convId, profileData);
             updateConversationTitle(convId);
@@ -82,11 +79,46 @@ public class ProfileController {
     @Operation(summary = "获取学生画像")
     @GetMapping("/{userId}")
     public Result getProfile(@PathVariable Long userId) {
+        if (!getUserId().equals(userId)) {
+            return Result.fail(404, "画像不存在");
+        }
         StudentProfile profile = profileService.getByUserId(userId);
         if (profile == null) {
             return Result.fail(404, "画像不存在");
         }
         return Result.ok(profile);
+    }
+
+    private void saveNewestUserTurn(Long conversationId, List<Map<String, String>> messages) {
+        if (messages == null || messages.isEmpty()) {
+            return;
+        }
+        String newest = null;
+        for (int i = messages.size() - 1; i >= 0; i--) {
+            Map<String, String> message = messages.get(i);
+            if ("user".equals(message.get("role"))) {
+                newest = message.get("content");
+                break;
+            }
+        }
+        if (newest == null || newest.isBlank()) {
+            return;
+        }
+        List<Message> existing = messageService.listByConversationId(conversationId);
+        for (int i = existing.size() - 1; i >= 0; i--) {
+            Message message = existing.get(i);
+            if ("user".equals(message.getRole())) {
+                if (newest.equals(message.getContent())) {
+                    return;
+                }
+                break;
+            }
+        }
+        messageService.save(new Message()
+                .setConversationId(conversationId)
+                .setRole("user")
+                .setContent(newest)
+                .setMode("profile"));
     }
 
     private Conversation getOrCreateProfileConversation(Long userId) {

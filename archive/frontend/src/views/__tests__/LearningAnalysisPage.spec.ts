@@ -67,6 +67,8 @@ describe('LearningAnalysisPage 学习入口建议卡', () => {
     expect(wrapper.text()).toContain('evidence-123')
     expect(wrapper.text()).toContain('预计 15 分钟')
     expect(wrapper.text()).not.toContain('矩阵运算专项练习')
+    expect(wrapper.text()).not.toContain('线性代数基础薄弱')
+    expect(wrapper.text()).not.toContain('你是一名目标明确')
   })
 
   it('没有 next_action 时显示诚实空状态和手动入口，不显示旧静态推荐', async () => {
