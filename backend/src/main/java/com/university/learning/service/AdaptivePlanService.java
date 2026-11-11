@@ -10,6 +10,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /** Durable, rule-based rolling plans. No generated mastery and no unconfirmed edits. */
@@ -65,22 +66,46 @@ public class AdaptivePlanService {
         if(body.has("status")){String s=body.path("status").asText();require(Set.of("pending","in_progress","paused","blocked","completed").contains(s),"无效任务状态");task.put("status",s);}
         if(body.has("checkpoint"))task.put("checkpoint",text(body,"checkpoint",2000,false));if(body.has("nextAction"))task.put("nextAction",text(body,"nextAction",1000,false));return save(user,p,p.path("version").asLong(),"progress",null);
     }
+    /** 关键词前面 3 个字以内出现否定词，就把这次提及当作"否认"，不算一次调整意图。 */
+    private static final Pattern NEGATED = Pattern.compile("(?:不|没|没有|别|无需|不要|不用|非|勿)[^，。；！？,.!?;、\\s]{0,3}$");
+    /** 每日时间预算：只在"每天/每日/daily/一天 + 数字 + 分钟"时才算，且不能是"某一天我用了 20 分钟"这类已发生用量。 */
+    private static final Pattern DAILY_BUDGET = Pattern.compile("(?:每天|每日|daily|(?<!某)一天)[^0-9]{0,8}(\\d{1,3})\\s*(?:分钟|min)");
+    private static final Pattern PAST_USAGE = Pattern.compile("用了|花了|学了|做了|已经|昨天|前天|上次|总共");
+    /** 判断一句话是否真的提出了某个意图（"不延期""没有卡住"不算）。 */
+    private boolean asserts(String message,String... keywords) {
+        for(String keyword:keywords) { int from=0; while(true) { int at=message.indexOf(keyword,from); if(at<0) break; if(!NEGATED.matcher(message.substring(0,at)).find()) return true; from=at+keyword.length(); } }
+        return false;
+    }
+    private boolean mentions(String message,String... keywords) { for(String keyword:keywords) if(message.contains(keyword)) return true; return false; }
+    /** 从正文里读出每日分钟数；读不到或只是复述历史用量时返回 null。 */
+    private Integer budgetFromMessage(String message) {
+        Matcher m=DAILY_BUDGET.matcher(message);
+        while(m.find()) { if(!PAST_USAGE.matcher(m.group()).find()) { int value=Integer.parseInt(m.group(1)); require(value>0&&value<=480,"每天时间必须为 1–480 分钟"); return value; } }
+        return null;
+    }
     public ObjectNode propose(long user,String planId,JsonNode body) {
-        ObjectNode p=get(user,planId);version(p,body);String message=text(body,"message",2000,true);require(!Pattern.compile("(不要|不需要|不用|别|无需).{0,8}(延期|推迟|拆分|调整)").matcher(message).find(),"检测到否定指令，未生成更改。请明确要修改的部分。");ObjectNode candidate=p.deepCopy();ObjectNode proposal=mapper.createObjectNode();proposal.put("id",id());proposal.put("baseVersion",p.path("version").asLong());proposal.put("evaluatedDate",LocalDate.now().toString());proposal.put("message",message);ArrayNode changes=proposal.putArray("changes");
-        int budget=minutes(body,"dailyMinutes",p.path("dailyMinutes").asInt());var match=Pattern.compile("(?:每天|每日|一天|daily)[^0-9]{0,8}(\\d{1,3})\\s*(?:分钟|min)").matcher(message);boolean recognizedBudget=match.find();if(!body.has("dailyMinutes")&&recognizedBudget){budget=Integer.parseInt(match.group(1));require(budget>0&&budget<=480,"每天时间必须为 1–480 分钟");}candidate.put("dailyMinutes",budget);
+        ObjectNode p=get(user,planId);version(p,body);String message=text(body,"message",2000,true);ObjectNode candidate=p.deepCopy();ObjectNode proposal=mapper.createObjectNode();proposal.put("id",id());proposal.put("baseVersion",p.path("version").asLong());proposal.put("evaluatedDate",LocalDate.now().toString());proposal.put("message",message);ArrayNode changes=proposal.putArray("changes");
+        int budget=minutes(body,"dailyMinutes",p.path("dailyMinutes").asInt());Integer saidBudget=budgetFromMessage(message);boolean recognizedBudget=saidBudget!=null;if(!body.has("dailyMinutes")&&recognizedBudget)budget=saidBudget;candidate.put("dailyMinutes",budget);
         if(body.has("deadline"))candidate.put("deadline",deadline(body));
-        boolean defer=message.contains("延期")||message.contains("推迟"); boolean blocked=message.contains("卡住")||message.contains("不懂")||message.contains("没懂");boolean changed=false;
+        boolean defer=asserts(message,"延期","推迟"),blocked=asserts(message,"卡住","不懂","没懂"),split=asserts(message,"拆分","拆开");
+        require(!(defer&&blocked),"同一句里同时提到延期和卡点，请分开提出。先明确要延期，还是先记录卡点。");
+        // 只有当用户真的调整了每日时间、或明确要求拆分时才重排任务；
+        // 报卡点 / 只改截止日期不再顺手把超长任务拆开，也不会覆盖断点。
+        boolean budgetChanged=body.has("dailyMinutes")||recognizedBudget||budget!=p.path("dailyMinutes").asInt();boolean allowSplit=split||budgetChanged;boolean changed=false;
         String target=body.path("taskId").asText("");
         require(target.isBlank()||tasks(p).stream().anyMatch(t->target.equals(t.path("id").asText())),"目标任务不存在");
-        require(body.has("dailyMinutes")||body.has("deadline")||recognizedBudget||budget!=p.path("dailyMinutes").asInt()||defer||blocked||message.contains("拆分"),"暂支持每天分钟数、卡点、拆分或延期。请明确调整内容。");
-        int refined=0;
+        require(body.has("dailyMinutes")||body.has("deadline")||recognizedBudget||budget!=p.path("dailyMinutes").asInt()||defer||blocked||split,mentions(message,"延期","推迟","拆分","拆开","卡住","不懂","没懂")?"检测到否定指令，未生成更改。请明确要修改的部分。":"暂支持每天分钟数、卡点、拆分或延期。请明确调整内容。");
         for(JsonNode module:candidate.path("modules")){ArrayNode out=mapper.createArrayNode();for(JsonNode raw:module.path("tasks")){ObjectNode task=(ObjectNode)raw;ObjectNode before=task.deepCopy();String kind="keep";
-            if(!"completed".equals(task.path("status").asText())&&!"deferred".equals(task.path("status").asText())&&(target.isBlank()?refined<3:target.equals(task.path("id").asText()))){
-                refined++;
+            boolean unfinished=!"completed".equals(task.path("status").asText())&&!"deferred".equals(task.path("status").asText());
+            if(unfinished&&(target.isBlank()||target.equals(task.path("id").asText()))){
                 if(defer&&!changed){task.put("status","deferred");kind="defer";changed=true;}
                 else if(blocked&&!changed){task.put("status","blocked");task.put("checkpoint",message);task.put("nextAction","先针对卡点做一个具体例子，再继续原任务");kind="checkpoint";changed=true;}
-                if(task.path("minutes").asInt()>budget&&!"deferred".equals(task.path("status").asText())){int total=task.path("minutes").asInt();int parts=(total+budget-1)/budget;require(parts<=30,"拆分过细，请提高每天时间");ArrayNode splitParts=mapper.createArrayNode();for(int i=0;i<parts;i++){ObjectNode part=task.deepCopy();if(i>0){part.put("id",id());part.put("status","pending");part.put("checkpoint","");}part.put("title",before.path("title").asText()+" · "+(i+1)+"/"+parts);part.put("minutes",Math.min(budget,total-i*budget));out.add(part);splitParts.add(part.deepCopy());}kind="split";ObjectNode diff=changes.addObject();diff.put("kind",kind);diff.put("taskId",task.path("id").asText());diff.set("before",before);diff.set("after",splitParts);continue;}
-            }out.add(task);ObjectNode diff=changes.addObject();diff.put("kind",kind);diff.put("taskId",task.path("id").asText());diff.set("before",before);diff.set("after",task.deepCopy());}((ObjectNode)module).set("tasks",out);}
+                if(allowSplit&&task.path("minutes").asInt()>budget){int total=task.path("minutes").asInt();int parts=(total+budget-1)/budget;require(parts<=30,"拆分过细，请提高每天时间");ArrayNode splitParts=mapper.createArrayNode();for(int i=0;i<parts;i++){ObjectNode part=task.deepCopy();if(i>0){part.put("id",id());part.put("status","pending");part.put("checkpoint","");}part.put("title",before.path("title").asText()+" · "+(i+1)+"/"+parts);part.put("minutes",Math.min(budget,total-i*budget));out.add(part);splitParts.add(part.deepCopy());}kind="split";ObjectNode diff=changes.addObject();diff.put("kind",kind);diff.put("taskId",task.path("id").asText());diff.set("before",before);diff.set("after",splitParts);continue;}
+            }out.add(task);if(!"keep".equals(kind)){ObjectNode diff=changes.addObject();diff.put("kind",kind);diff.put("taskId",task.path("id").asText());diff.set("before",before);diff.set("after",task.deepCopy());}}((ObjectNode)module).set("tasks",out);}
+        if((defer||blocked)&&!changed)throw error(HttpStatus.BAD_REQUEST,(defer?"延期":"记录卡点")+"需要至少一个未完成的任务；当前没有可调整的任务。");
+        // 确认稿里也要明确列出每日时间与期限的变化，避免"只看到一堆保留行"。
+        if(budget!=p.path("dailyMinutes").asInt()){ObjectNode diff=changes.addObject();diff.put("kind","budget");diff.put("before",p.path("dailyMinutes").asInt());diff.put("after",budget);}
+        if(body.has("deadline")&&!candidate.path("deadline").asText("").equals(p.path("deadline").asText(""))){ObjectNode diff=changes.addObject();diff.put("kind","deadline");diff.put("before",p.path("deadline").asText(""));diff.put("after",candidate.path("deadline").asText(""));}
         require(tasks(candidate).size()<=100,"拆分后超过 100 个任务，请提高每天时间");String d=candidate.path("deadline").asText("");String conflict=null;if(!d.isBlank()){long available=Math.max(0,ChronoUnit.DAYS.between(LocalDate.now(),LocalDate.parse(d))+1)*budget;int remaining=tasks(candidate).stream().filter(t->!Set.of("completed","deferred").contains(t.path("status").asText())).mapToInt(t->t.path("minutes").asInt()).sum();if(remaining>available)conflict="剩余 "+remaining+" 分钟，期限内只有 "+available+" 分钟。请明确延长期限，或取消并重新提出延期任务方案。";}
         proposal.put("conflict",conflict);
         if(conflict!=null){int remaining=tasks(candidate).stream().filter(t->!Set.of("completed","deferred").contains(t.path("status").asText())).mapToInt(t->t.path("minutes").asInt()).sum();proposal.put("extendedDeadline",LocalDate.now().plusDays(Math.max(0,(remaining+budget-1)/budget-1)).toString());ArrayNode deferred=proposal.putArray("deferredTasks");long capacity=Math.max(0,ChronoUnit.DAYS.between(LocalDate.now(),LocalDate.parse(d))+1)*budget;for(ObjectNode task:tasks(candidate)){if(Set.of("completed","deferred").contains(task.path("status").asText()))continue;if(task.path("minutes").asInt()<=capacity)capacity-=task.path("minutes").asInt();else deferred.add(task.deepCopy());}}
