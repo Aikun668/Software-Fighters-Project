@@ -111,6 +111,12 @@ public class ChatController {
 
             String detectedMode = detectMode(doneData);
             log.info("Chat 检测到模式: {}", detectedMode);
+            // 失败轮只留一条提示：不落生成物、不更新画像，避免把失败当成产出。
+            if (Boolean.TRUE.equals(doneData.get("_stream_error"))) {
+                saveAiResponse(finalConvId, doneData, "notice");
+                updateConversationTitle(finalConvId, message);
+                return;
+            }
             saveAiResponse(finalConvId, doneData, detectedMode);
             // 追问模式跳过内容落库，避免把追问问题当成习题/资源入库
             if (!"inquiry".equals(detectedMode)) {
@@ -147,7 +153,7 @@ public class ChatController {
         if (messages.size() > limit) {
             messages = messages.subList(messages.size() - limit, messages.size());
         }
-        return messages.stream().map(m -> {
+        return messages.stream().filter(ChatController::includeInModelHistory).map(m -> {
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("id", m.getId());
             item.put("role", m.getRole());
@@ -220,19 +226,55 @@ public class ChatController {
         return val != null;
     }
 
+    /** 失败轮回显给用户的提示（与 ai-service 的 USER_FACING_RETRY 同义）。 */
+    static final String RETRY_NOTICE = "刚才没写完，你的问题还在，再发一次即可";
+
+    /** 这一轮要以什么身份落库；content 为空表示不落库。 */
+    record AssistantSave(String mode, String content) { }
+
+    /**
+     * 决定本轮 AI 消息怎么落库。
+     * 失败轮 → 落成 notice 提示（不是半截正文，也不是 [AI已回复] 占位）；
+     * 空回复 → 不落库，宁可不写也不编造一条假回复。
+     */
+    static AssistantSave resolveAssistantSave(Map<String, Object> doneData, String mode, String text) {
+        if (Boolean.TRUE.equals(doneData.get("_stream_error"))) {
+            String notice = String.valueOf(doneData.getOrDefault("_error_content", "")).trim();
+            return new AssistantSave("notice", notice.isEmpty() ? RETRY_NOTICE : notice);
+        }
+        String content = text == null ? "" : text.trim();
+        if (content.isEmpty() || "[AI已回复]".equals(content)) {
+            return null;
+        }
+        return new AssistantSave(mode, content);
+    }
+
+    /** 提示轮与占位文本不得回灌给模型，避免把"刚才没写完"当成上一轮回答。 */
+    static boolean includeInModelHistory(Message message) {
+        if (message == null || !"assistant".equals(message.getRole())) {
+            return true;
+        }
+        if ("notice".equals(message.getMode())) {
+            return false;
+        }
+        String content = message.getContent();
+        return content != null && !content.isBlank() && !"[AI已回复]".equals(content.trim());
+    }
+
     /** 保存AI回复文字到消息表 */
     private void saveAiResponse(Long conversationId, Map<String, Object> doneData, String mode) {
         try {
-            String response = extractResponseText(doneData);
-            if (response.isEmpty()) {
-                response = "[AI已回复]";
+            AssistantSave save = resolveAssistantSave(doneData, mode, extractResponseText(doneData));
+            if (save == null) {
+                log.warn("本轮没有可落库的回复，跳过占位记录: convId={}", conversationId);
+                return;
             }
 
             messageService.save(new Message()
                     .setConversationId(conversationId)
                     .setRole("assistant")
-                    .setContent(response)
-                    .setMode(mode));
+                    .setContent(save.content())
+                    .setMode(save.mode()));
         } catch (Exception e) {
             log.error("保存AI回复失败: convId={}", conversationId, e);
         }

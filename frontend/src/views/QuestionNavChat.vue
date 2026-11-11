@@ -218,6 +218,28 @@ const failMessage = (id: string, error: unknown) => {
   sending.value = false
 }
 
+/**
+ * 把会话 id 落到当前会话与 URL 上。
+ * 失败的一轮没有 done 帧，只能靠错误里的 conversationId 认领这个会话，
+ * 否则刷新后这一轮就不在当前会话里了。
+ */
+const adoptConversationId = (conversationId: number | null) => {
+  if (conversationId === null) return
+  currentConversationId.value = conversationId
+  // D-016：URL 会因这次 replace 变化（新会话首条消息）时才设抑制标志——
+  // 若 URL 已是同一会话 id，replace 不触发 watch，标志会残留并误吞
+  // 用户下一次主动切换会话的重载。
+  if (routeConversationId(route.query.conversationId) !== conversationId) {
+    suppressAutoReload.value = true
+  }
+  // 同步到 URL：侧栏据 route.query.conversationId 高亮"当前会话"；
+  // 用 replace 避免产生一条多余的历史记录。
+  void router.replace({
+    path: '/question-nav-chat',
+    query: { conversationId: String(conversationId), ...(typeof route.query.planId === 'string' ? {planId:route.query.planId} : {}), ...(typeof route.query.learningContext === 'string' ? {learningContext:route.query.learningContext} : {}) },
+  })
+}
+
 /** 只发附件不打字时的占位提问：Python 侧 message 有 min_length=1 约束，空串会被拒 */
 const ATTACHMENT_ONLY_PROMPT = '请看我上传的附件'
 
@@ -265,21 +287,7 @@ const send = async () => {
         void scrollToEnd()
       },
       (conversationId) => {
-        if (conversationId !== null) {
-          currentConversationId.value = conversationId
-          // D-016：URL 会因这次 replace 变化（新会话首条消息）时才设抑制标志——
-          // 若 URL 已是同一会话 id，replace 不触发 watch，标志会残留并误吞
-          // 用户下一次主动切换会话的重载。
-          if (routeConversationId(route.query.conversationId) !== conversationId) {
-            suppressAutoReload.value = true
-          }
-          // 同步到 URL：侧栏据 route.query.conversationId 高亮"当前会话"；
-          // 用 replace 避免产生一条多余的历史记录。
-          void router.replace({
-            path: '/question-nav-chat',
-            query: { conversationId: String(conversationId), ...(typeof route.query.planId === 'string' ? {planId:route.query.planId} : {}), ...(typeof route.query.learningContext === 'string' ? {learningContext:route.query.learningContext} : {}) },
-          })
-        }
+        adoptConversationId(conversationId)
         const msg = findMessage(assistantId)
         if (msg) {
           msg.streaming = false
@@ -294,6 +302,12 @@ const send = async () => {
       },
       (error) => {
         failMessage(assistantId, error)
+        // 失败的聊天也留在当前会话里：认领会话 id（ChatStreamError 才带）并刷新侧栏。
+        // 直接读字段而不是 instanceof，避免调用方传入普通 Error 时出错。
+        const failedConversationId = (error as { conversationId?: unknown } | null)?.conversationId
+        adoptConversationId(typeof failedConversationId === 'number' ? failedConversationId : null)
+        attachments.value = []
+        refreshConversations?.()
       },
       (progress) => {
         // 阶段 D：进度只更新**文案**，正文仍只由 onData 追加（不重复渲染）

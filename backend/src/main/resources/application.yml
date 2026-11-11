@@ -82,7 +82,9 @@ logging:
 
 learning:
   auth:
-    required: false
+    # 默认强制登录：免登录模式下任何人都被当成 user 1，计划/目标/断点/提案会跨会话共享。
+    # 本地联调如确需免登录，显式设置环境变量 LEARNING_AUTH_REQUIRED=false。
+    required: ${LEARNING_AUTH_REQUIRED:true}
 
 python:
   base-url: http://127.0.0.1:8001/internal

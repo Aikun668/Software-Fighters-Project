@@ -116,6 +116,22 @@ const formatStructuredContent = (payload: Record<string, unknown>): string => {
 }
 
 /**
+ * SSE 失败：除了错误文案，还带上本轮会话 id 与后端错误码。
+ * 失败轮没有 done 帧，页面靠 conversationId 把这一轮留在当前会话里。
+ */
+export class ChatStreamError extends Error {
+  readonly conversationId: number | null
+  readonly code: string
+
+  constructor(message: string, options: { conversationId?: number | null; code?: string } = {}) {
+    super(message)
+    this.name = 'ChatStreamError'
+    this.conversationId = options.conversationId ?? null
+    this.code = options.code ?? ''
+  }
+}
+
+/**
  * 解析SSE流（支持新格式）
  * 新格式示例：
  * data:{"type": "token", "content": "哈哈"}
@@ -161,6 +177,11 @@ export const parseSSEStream = async (
    * 若不区分一律跳过，这些中心会整轮空白（表现为"后端没有返回任何内容"）。
    */
   let hasStreamedText = false
+  /**
+   * 本轮会话 id：任何一帧里出现就记住。
+   * 失败轮没有 done 帧，只有它能让页面把这一轮留在当前会话。
+   */
+  let streamConversationId: number | null = null
 
   console.log('[SSE] 开始解析数据流')
 
@@ -217,6 +238,11 @@ export const parseSSEStream = async (
         try {
           const data = JSON.parse(dataStr)
           // console.log('[SSE] 收到业务数据:', data)
+
+          // 会话 id 在任何一帧出现都要记住：失败轮也要能留在当前会话里
+          if (typeof data.conversation_id === 'number') {
+            streamConversationId = data.conversation_id
+          }
 
           // 按业务逻辑处理不同type
           switch (data.type) {
@@ -293,11 +319,16 @@ export const parseSSEStream = async (
               onDone(typeof data.conversation_id === 'number' ? data.conversation_id : null)
               return
             case 'error': {
-              // 错误也是终态：触发 onError 后立即停止，后续 done 不再触发 onDone
-              console.error('[SSE] 流异常:', data.content || data.message)
+              // 错误也是终态：触发 onError 后立即停止，后续 done 不再触发 onDone。
+              // 错误里带上会话 id：没有 done 帧时，页面靠它把失败的一轮留在当前会话。
+              const message = data.content || data.message || 'Unknown error'
+              console.error('[SSE] 流异常:', message)
               terminated = true
               if (onError) {
-                onError(new Error(data.content || data.message || 'Unknown error'))
+                onError(new ChatStreamError(message, {
+                  conversationId: typeof data.conversation_id === 'number' ? data.conversation_id : streamConversationId,
+                  code: typeof data.code === 'string' ? data.code : '',
+                }))
               }
               return
             }
@@ -324,12 +355,25 @@ export const parseSSEStream = async (
     // EOF is not a success acknowledgement: preserve partial text but report interruption.
     if (!terminated) {
       terminated = true
-      onError?.(new Error('连接已中断，回答可能不完整，请重试。'))
+      onError?.(new ChatStreamError('连接已中断，回答可能不完整，请重试。', {
+        conversationId: streamConversationId,
+        code: 'STREAM_INTERRUPTED',
+      }))
     }
   } catch (error) {
     console.error('[SSE] 流式传输发生错误:', error)
     if (!terminated && onError) {
-      onError(error as Error)
+      // 调用方主动取消时保留 AbortError 身份：上层靠它区分"用户取消"和"真失败"，
+      // 不能包成 ChatStreamError。注意 DOMException 不是 Error 的实例，
+      // 只能按 name 判断。
+      if (error !== null && typeof error === 'object' && (error as { name?: string }).name === 'AbortError') {
+        onError(error as Error)
+      } else {
+        onError(new ChatStreamError(error instanceof Error ? error.message : String(error), {
+          conversationId: streamConversationId,
+          code: 'STREAM_FAILED',
+        }))
+      }
     }
   } finally {
     console.log('[SSE] 释放读取器锁')

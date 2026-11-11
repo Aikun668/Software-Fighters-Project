@@ -814,6 +814,19 @@ public class PythonClient {
                                 } else if ("error".equals(type)) {
                                     streamEnded = true;
                                     log.error("Python返回错误: {}", event.get("content"));
+                                    // 失败轮也要能落库：留给 Java 一条「提示」，
+                                    // 而不是半截正文或 [AI已回复] 占位。已经推给用户的
+                                    // 正文一律作废，所以这里不设 _response_text。
+                                    Map<String, Object> failed = new LinkedHashMap<>();
+                                    failed.put("_stream_error", Boolean.TRUE);
+                                    Object content = event.get("content");
+                                    if (content == null || String.valueOf(content).isBlank()) {
+                                        content = event.get("message");
+                                    }
+                                    failed.put("_error_content", content == null ? "" : String.valueOf(content));
+                                    Object code = event.get("code");
+                                    failed.put("_error_code", code == null ? null : String.valueOf(code));
+                                    collectedData = failed;
                                 }
                             } catch (Exception e) {
                                 // token数据，忽略
