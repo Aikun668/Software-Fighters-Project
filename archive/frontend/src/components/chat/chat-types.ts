@@ -9,6 +9,8 @@ export interface ChatMessage {
   /** 后端返回的真实错误信息；有值时不得用任何本地内容顶替 */
   error?: string
   streaming?: boolean
+  /** 这一轮检测到的练习建议，不混进正文 */
+  recommendation?: { label: string; prompt: string }
 }
 
 export type ChatMode = 'auto' | 'plan' | 'resource' | 'exercise'
@@ -20,8 +22,7 @@ export interface ChatAttachment {
   url: string
   /**
    * 是否为图片附件。
-   * 附件可以是任意文件；但只有图片能作为多模态内容送给 AI（后端 images 字段），
-   * 也才用缩略图展示，其余文件用通用文件图标。
+   * 只有图片能作为多模态内容送给 AI。非图片不会进入附件条。
    */
   isImage: boolean
 }

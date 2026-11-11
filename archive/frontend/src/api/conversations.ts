@@ -93,7 +93,7 @@ export const createConversation = (): Promise<Conversation> => {
 /**
  * 获取会话详情
  * @param id - 会话ID
- * @param userId - 用户ID（可选）
+ * 查询参数里的 userId 不会决定归属，后端只认当前登录用户。
  */
 export const getConversationDetail = (id: number, userId?: number): Promise<Conversation> => {
   const params = userId ? { userId } : {}

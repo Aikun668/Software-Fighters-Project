@@ -62,7 +62,6 @@ springdoc:
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
   global-config:
     db-config:
       id-type: assign_id  # 雪花算法
@@ -82,7 +81,9 @@ logging:
 
 learning:
   auth:
-    required: false
+    # 默认要求登录，避免所有未登录请求都写成 userId=1。
+    # 本地跳过登录：LEARNING_AUTH_REQUIRED=false。关掉之后，已经解析出的登录用户不会被覆盖成 1。
+    required: ${LEARNING_AUTH_REQUIRED:true}
 
 python:
   base-url: http://127.0.0.1:8001/internal

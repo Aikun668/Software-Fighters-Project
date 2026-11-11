@@ -56,6 +56,9 @@ public class ExerciseController {
 
         return pythonClient.generateExercisesStream(userId, topic, knowledgeNodeId, strategy,
                 count, difficulty, profileMap, (doneData) -> {
+            if (Boolean.TRUE.equals(doneData.get("_stream_error"))) {
+                return;
+            }
             saveExercisesToDb(userId, topic, difficulty, doneData);
         });
     }

@@ -1,7 +1,8 @@
 """Pydantic request models — Architecture #2: Java 在请求体中传入所有数据"""
 
+import os
 from typing import Optional, Literal
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 # ── Profile ────────────────────────────────────────────────────
@@ -111,6 +112,21 @@ class UnifiedChatRequest(BaseModel):
     messages: list[dict] = Field(default_factory=list, description="历史消息列表（Java 传入）")
     student_profile: dict = Field(default_factory=dict, description="学生画像（Java 传入）")
     images: list[str] = Field(default_factory=list, description="用户上传的图片 URL 列表（Java 传入，可选）")
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_missing_user_id_outside_local(cls, data):
+        """直连 8001 且不带 user_id 时，缺省会记到用户 1。
+
+        本地和测试不设 APP_ENV，仍允许缺省，避免把现有开发请求全部打成 400。
+        生产 / 预发必须显式传入 user_id（Java 网关本来就会带上）。
+        """
+        if not isinstance(data, dict) or "user_id" in data:
+            return data
+        env = os.getenv("APP_ENV", os.getenv("ENV", "")).strip().lower()
+        if env in {"prod", "production", "staging"}:
+            raise ValueError("缺少 user_id")
+        return data
 
 
 # ── Inquiry ──────────────────────────────────────────────────────

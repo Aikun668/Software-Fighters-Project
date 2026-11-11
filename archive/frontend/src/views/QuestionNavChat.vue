@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { computed, inject, nextTick, ref, watch } from 'vue'
-import { BookOpen, Sparkles } from '@lucide/vue'
 import { useRoute, useRouter } from 'vue-router'
-import { sendMessageStream, parseSSEStream } from '@/api/chat'
+import { ChatStreamError, parseSSEStream, sendMessageStream, USER_RETRY } from '@/api/chat'
 import { getConversationMessages } from '@/api/conversations'
 import { uploadFile } from '@/api/files'
 import { resolveErrorMessage } from '@/utils/request'
@@ -19,17 +18,30 @@ const messages = ref<ChatMessage[]>([])
 const visualizationBlocks = ref<Record<string, DispatchResult[]>>({})
 const currentConversationId = ref<number | null>(null)
 const sending = ref(false)
+const abortController = ref<AbortController | null>(null)
+const activeAssistantId = ref<string | null>(null)
+let requestTicket = 0
 /** 阶段 D：当前执行进度文案（来自后端 `progress` 事件；先按占位文案展示） */
 const progressText = ref('')
 const resourceMode = computed(() => route.query.mode === 'resource')
 const conversationStarted = computed(() => messages.value.length > 0)
-const selectedMode = ref<ChatMode>(resourceMode.value ? 'resource' : 'auto')
-const selectedStyle = ref<ChatStyle>('standard')
+const storedMode = localStorage.getItem(MODE_KEY)
+const storedStyle = localStorage.getItem(STYLE_KEY)
+const selectedMode = ref<ChatMode>(
+  resourceMode.value
+    ? 'resource'
+    : storedMode === 'plan' || storedMode === 'resource' || storedMode === 'exercise' || storedMode === 'auto'
+      ? storedMode
+      : 'auto',
+)
+const selectedStyle = ref<ChatStyle>(storedStyle === 'socratic' ? 'socratic' : 'standard')
 const attachments = ref<ChatAttachment[]>([])
 const uploadingFile = ref(false)
 const uploadError = ref('')
+const MODE_KEY = 'chat.selectedMode'
+const STYLE_KEY = 'chat.selectedStyle'
 const modeOptions: Array<{ value: ChatMode; label: string }> = [
-  { value: 'auto', label: '自动' },
+  { value: 'auto', label: '自动 · 答疑/出题/规划' },
   { value: 'plan', label: '学习规划' },
   { value: 'resource', label: '资源生成' },
   { value: 'exercise', label: '练习生成' },
@@ -41,18 +53,20 @@ const styleOptions: Array<{ value: ChatStyle; label: string }> = [
 const selectedModeLabel = computed(() => modeOptions.find((item) => item.value === selectedMode.value)?.label ?? '自动')
 const selectedStyleLabel = computed(() => styleOptions.find((item) => item.value === selectedStyle.value)?.label ?? '标准答疑')
 const suggestions = [
-  { label: '梳理 Transformer 学习路径', icon: Sparkles, path: '/learning-path' },
-  { label: '生成一组专项练习', icon: BookOpen, path: '/exercise' },
-  { label: '解释反向传播', icon: BookOpen, path: '/learning-resource-network' },
+  { label: '梳理 Transformer 学习路径', prompt: '帮我梳理一条 Transformer 的学习路径' },
+  { label: '生成一组专项练习', prompt: '帮我生成一组专项练习' },
+  { label: '解释反向传播', prompt: '请解释反向传播' },
 ]
 const refreshConversations = inject<() => void>('refreshConversations')
 
 const chooseMode = (mode: ChatMode) => {
   selectedMode.value = mode
+  localStorage.setItem(MODE_KEY, mode)
 }
 
 const chooseStyle = (style: ChatStyle) => {
   selectedStyle.value = style
+  localStorage.setItem(STYLE_KEY, style)
 }
 
 /** 单个附件体积上限，与后端 multipart 上限保持一致（20MB） */
@@ -68,9 +82,7 @@ const fallbackAttachmentName = (file: File) => {
 /**
  * 上传一个或多个附件（文件选择、粘贴、拖拽共用）。
  *
- * 附件不限类型：任何文件都能上传进附件条。只有图片会被标记为
- * `isImage`，发送时作为多模态输入放进 `images`；其他附件仍随消息上传，
- * 只是 AI 当前只消费图片。
+ * 目前只有图片会进入模型。其他文件不进附件条，避免看起来发出去了、对方却没看见。
  *
  * 逐个串行上传：任一失败只记录错误并继续处理后面的文件，
  * 已成功的条目保留在附件条里，避免一次失败把整批都丢掉。
@@ -81,6 +93,10 @@ const handleFileUploads = async (files: File[]) => {
 
   const accepted: File[] = []
   for (const file of files) {
+    if (!file.type.startsWith('image/')) {
+      uploadError.value = '当前只能看图片，这个文件不会被阅读'
+      continue
+    }
     if (file.size > MAX_ATTACHMENT_BYTES) {
       uploadError.value = '附件过大，请控制在 20MB 以内'
       continue
@@ -117,8 +133,8 @@ const removeAttachment = (fileId: number) => {
 
 const findMessage = (id: string) => messages.value.find((m) => m.id === id)
 
-const openConversation = async (id: number) => {
-  if (sending.value) return
+const openConversation = async (id: number, force = false) => {
+  if (sending.value && !force) return
 
   try {
     const history = await getConversationMessages(id)
@@ -141,8 +157,8 @@ const openConversation = async (id: number) => {
   }
 }
 
-const startNewConversation = () => {
-  if (sending.value) return
+const startNewConversation = (force = false) => {
+  if (sending.value && !force) return
   messages.value = []
   // T007：新会话从零开始，旧会话的 visualization block 一并清空
   visualizationBlocks.value = {}
@@ -200,14 +216,61 @@ const handleScrollState = (atBottom: boolean) => {
   followOutput.value = atBottom
 }
 
+const displayError = (error: unknown) => {
+  if (error instanceof ChatStreamError) return error.message
+  const raw = error instanceof Error ? error.message : String(error)
+  if (
+    raw.startsWith('HTTP error!')
+    || raw === 'Unknown error'
+    || raw.startsWith('Expected text/event-stream')
+    || raw === 'Response body is null'
+  ) {
+    return USER_RETRY
+  }
+  return raw
+}
+
 const failMessage = (id: string, error: unknown) => {
   const msg = findMessage(id)
   if (msg) {
+    msg.content = ''
     msg.streaming = false
-    msg.error = error instanceof Error ? error.message : String(error)
+    msg.error = displayError(error)
+    delete visualizationBlocks.value[id]
   }
   progressText.value = ''
   sending.value = false
+}
+
+const pinConversation = (conversationId: number) => {
+  currentConversationId.value = conversationId
+  if (routeConversationId(route.query.conversationId) !== conversationId) {
+    suppressAutoReload.value = true
+  }
+  void router.replace({
+    path: '/question-nav-chat',
+    query: { conversationId: String(conversationId) },
+  })
+}
+
+const stop = (silent = false) => {
+  requestTicket += 1
+  abortController.value?.abort()
+  abortController.value = null
+  const assistantId = activeAssistantId.value
+  if (!silent && assistantId) {
+    const msg = findMessage(assistantId)
+    if (msg) {
+      msg.content = ''
+      msg.streaming = false
+      msg.error = '已停下来。想继续的话，再说一句就行'
+      delete visualizationBlocks.value[assistantId]
+    }
+  }
+  progressText.value = ''
+  sending.value = false
+  activeAssistantId.value = null
+  if (!silent) refreshConversations?.()
 }
 
 /** 只发附件不打字时的占位提问：Python 侧 message 有 min_length=1 约束，空串会被拒 */
@@ -230,11 +293,15 @@ const send = async () => {
   messages.value.push({ id: `u-${Date.now()}`, role: 'user', content: outgoing, images })
   const assistantId = `a-${Date.now()}`
   messages.value.push({ id: assistantId, role: 'assistant', content: '', streaming: true })
+  const ticket = ++requestTicket
+  const controller = new AbortController()
+  abortController.value = controller
+  activeAssistantId.value = assistantId
   sending.value = true
   progressText.value = ''
-  // 自己发消息时重新跟随输出
   followOutput.value = true
   await scrollToEnd(true)
+  const stillThisTurn = () => ticket === requestTicket
 
   try {
     const request: Parameters<typeof sendMessageStream>[0] = {
@@ -247,65 +314,83 @@ const send = async () => {
     if (images.length) request.images = images
     if (imageFileIds.length) request.image_file_ids = imageFileIds
 
-    const stream = await sendMessageStream(request)
+    const stream = await sendMessageStream(request, controller.signal)
     await parseSSEStream(
       stream,
       (delta) => {
+        if (!stillThisTurn()) return
         const msg = findMessage(assistantId)
         if (msg) msg.content += delta
-        // 用户往上翻时不得抢滚动
         void scrollToEnd()
       },
       (conversationId) => {
-        if (conversationId !== null) {
-          currentConversationId.value = conversationId
-          // D-016：URL 会因这次 replace 变化（新会话首条消息）时才设抑制标志——
-          // 若 URL 已是同一会话 id，replace 不触发 watch，标志会残留并误吞
-          // 用户下一次主动切换会话的重载。
-          if (routeConversationId(route.query.conversationId) !== conversationId) {
-            suppressAutoReload.value = true
-          }
-          // 同步到 URL：侧栏据 route.query.conversationId 高亮"当前会话"；
-          // 用 replace 避免产生一条多余的历史记录。
-          void router.replace({
-            path: '/question-nav-chat',
-            query: { conversationId: String(conversationId) },
-          })
-        }
+        if (!stillThisTurn()) return
+        if (conversationId !== null) pinConversation(conversationId)
         const msg = findMessage(assistantId)
         if (msg) {
           msg.streaming = false
-          if (!msg.content && !msg.error) {
-            msg.error = '后端没有返回任何内容'
-          }
+          if (!msg.content && !msg.error) msg.error = USER_RETRY
         }
         progressText.value = ''
         sending.value = false
+        activeAssistantId.value = null
         attachments.value = []
         refreshConversations?.()
       },
       (error) => {
+        if (!stillThisTurn()) return
+        if (error instanceof ChatStreamError && error.conversationId !== null) {
+          pinConversation(error.conversationId)
+        }
         failMessage(assistantId, error)
+        activeAssistantId.value = null
+        refreshConversations?.()
       },
       (progress) => {
-        // 阶段 D：进度只更新**文案**，正文仍只由 onData 追加（不重复渲染）
+        if (!stillThisTurn()) return
         progressText.value = progress.message
       },
       (block) => {
-        // T007：visualization 事件经 dispatchUiBlock 校验后按当前助手消息 id 归位，
-        // ChatThread 据 msg.id 渲染（合法走动态组件，非法显示灰字降级提示）
+        if (!stillThisTurn()) return
         const list = visualizationBlocks.value[assistantId]
-        if (list) {
-          list.push(block)
-        } else {
-          visualizationBlocks.value[assistantId] = [block]
-        }
+        if (list) list.push(block)
+        else visualizationBlocks.value[assistantId] = [block]
+      },
+      {
+        onRetract: () => {
+          if (!stillThisTurn()) return
+          const msg = findMessage(assistantId)
+          if (msg) msg.content = ''
+          delete visualizationBlocks.value[assistantId]
+        },
+        onConversationId: (conversationId) => {
+          if (!stillThisTurn()) return
+          pinConversation(conversationId)
+          refreshConversations?.()
+        },
+        onRecommendation: (recommendation) => {
+          if (!stillThisTurn()) return
+          const msg = findMessage(assistantId)
+          if (msg) msg.recommendation = recommendation
+        },
       },
     )
   } catch (error) {
+    if (!stillThisTurn()) return
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      stop()
+      return
+    }
     failMessage(assistantId, error)
+    activeAssistantId.value = null
   }
   await scrollToEnd()
+}
+
+const askSuggestion = (text: string) => {
+  if (sending.value) return
+  prompt.value = text
+  void send()
 }
 
 const routeConversationId = (value: unknown) => {
@@ -336,7 +421,11 @@ watch(
       return
     }
     if (id === null) {
-      startNewConversation()
+      if (sending.value) stop(true)
+      startNewConversation(true)
+    } else if (sending.value && id !== currentConversationId.value) {
+      stop(true)
+      void openConversation(id, true)
     } else {
       void openConversation(id)
     }
@@ -358,6 +447,7 @@ watch(
         :visualization-blocks="visualizationBlocks"
         @scroll-state="handleScrollState"
         @image-loaded="scrollToEnd()"
+        @use-prompt="askSuggestion"
       />
       <div class="composer-dock">
         <ChatComposer
@@ -372,6 +462,7 @@ watch(
           :uploading-file="uploadingFile"
           :sending="sending"
           @send="send"
+          @stop="stop()"
           @choose-mode="chooseMode"
           @choose-style="chooseStyle"
           @remove-attachment="removeAttachment"
@@ -383,7 +474,7 @@ watch(
         <div class="ask-links">
           <template v-for="(item, index) in suggestions" :key="item.label">
             <span v-if="index > 0" class="ask-dot">·</span>
-            <button type="button" class="quick-ask" @click="router.push(item.path)">{{ item.label }}</button>
+            <button type="button" class="quick-ask" @click="askSuggestion(item.prompt)">{{ item.label }}</button>
           </template>
         </div>
       </div>

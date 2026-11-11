@@ -54,8 +54,10 @@ from app.events.types import (
     center_end_event,
     center_start_event,
     done_event,
+    USER_FACING_RETRY,
     error_event,
     inquiry_event,
+    retract_event,
 )
 from app.events.visualization import visualization_event
 from app.services.capability_map import ON_TOKEN_CENTERS
@@ -94,20 +96,54 @@ def _finalize_event(payload: dict, *, streamed: bool = True) -> StreamEvent:
     )
 
 
-def _progress_event(node_event: ProgressEvent, phase: str) -> StreamEvent:
-    """内部**图节点**事件 → 线上 `progress` 帧（阶段 D：把执行过程变成前端可见）。
+_NODE_PROGRESS = {
+    "retrieve": ("正在查找相关内容", "相关内容已经找好"),
+    "respond": ("正在组织回答", "回答已经组织好"),
+    "extract": ("正在理解你的问题", "问题已经理解"),
+    "merge": ("正在整理已知信息", "已知信息整理好了"),
+    "plan": ("正在整理步骤", "步骤已经整理好"),
+    "generate": ("正在生成内容", "内容已经生成"),
+    "review": ("正在检查一遍", "检查完了"),
+    "solve": ("正在分步解答", "解答写好了"),
+    "draft": ("正在起草计划", "草稿写好了"),
+    "revise": ("正在调整计划", "计划调整好了"),
+    "explain": ("正在换一种讲法", "讲法准备好了"),
+    "analyze": ("正在看这道题适不适合配图", "配图判断做好了"),
+    "response": ("正在组织回答", "回答已经组织好"),
+    "semantic_judge": ("正在核对画像", "画像核对完了"),
+    "audit": ("正在整理学习情况", "学习情况整理好了"),
+}
 
-    - `stage` 带**节点名**（内部名，如 `extract`）；`message` 是**占位文案** ——
-      「节点/事件 → 用户可见文案」映射表本轮**不做**，前端先按占位展示。
-    - 载荷只带 `node` / `phase`（`started` | `completed`），**不掺正文**，
-      以免与既有 `token` 帧重复渲染（契约 `PG-A04`）。
-    """
+_CENTER_START = {
+    "auto": "正在准备回答",
+    "plan": "正在整理学习计划",
+    "resource": "正在准备学习资料",
+    "exercise": "正在准备练习",
+    "visualization": "正在准备图解",
+}
+
+_CENTER_DONE = {
+    "auto": "回答准备好了",
+    "plan": "学习计划整理好了",
+    "resource": "学习资料准备好了",
+    "exercise": "练习准备好了",
+    "visualization": "图解准备好了",
+}
+
+
+def progress_text(node: str, phase: str) -> str:
+    """图节点名不直接给用户看。不认识的节点用一句不带内部名的话。"""
+    started, done = _NODE_PROGRESS.get(node, ("正在整理这一步", "这一步做好了"))
+    return started if phase == "started" else done
+
+
+def _progress_event(node_event: ProgressEvent, phase: str) -> StreamEvent:
+    """内部图节点事件 → 线上 progress 帧。stage 仍带节点名供排障，message 是人话。"""
     node = str(node_event.data.get("node", ""))
-    text = f"正在执行 {node}" if phase == "started" else f"{node} 已完成"
     return StreamEvent(
         type=StreamEventType.PROGRESS,
         stage=node,
-        message=text,
+        message=progress_text(node, phase),
         data={"node": node, "phase": phase},
     )
 
@@ -237,7 +273,7 @@ class ChatTaskDispatcher:
             progress = round((idx / total) * 100) / 100 if total else 0.0
             yield center_start_event(
                 center=task.mode,
-                message=f"开始执行 {task.mode} 中心...",
+                message=_CENTER_START.get(task.mode, "正在准备"),
                 sequence=idx,
             )
 
@@ -319,7 +355,7 @@ class ChatTaskDispatcher:
 
             yield center_end_event(
                 center=task.mode,
-                message=f"{task.mode} 中心执行完成",
+                message=_CENTER_DONE.get(task.mode, "这一步做完了"),
                 sequence=idx,
             )
 
@@ -330,10 +366,17 @@ class ChatTaskDispatcher:
                 error=bool(result.error),
             )
 
-            # 出错时不发 finalize（partial 对错误事件无意义，走 error_event）
+            # 出错时不发 finalize（partial 对错误事件无意义，走 error_event）。
+            # 已经逐字推过的正文若最终不作数，先发 retract，让前端清掉气泡。
             if result.error:
                 failed_sequences.add(task.sequence)
-                yield error_event(stage=result.mode, message=result.error)
+                if emitted_tokens:
+                    yield retract_event()
+                yield error_event(
+                    stage=result.mode,
+                    message=result.error,
+                    code=result.error_code,
+                )
             else:
                 # ── B1 终态事件：本中心**确实发过 token** 时带 partial=True，
                 # 前端据此跳过文本追加（防重复）；未发过 token 的中心
@@ -345,7 +388,10 @@ class ChatTaskDispatcher:
                 # JSON 解析失败的围栏保留在正文，校验不过的可解析围栏剥离并
                 # 记日志、不下发（D-014，正文不留裸 JSON）。
                 ui_blocks = extract_ui_blocks_from_payload(payload)
-                yield _finalize_event(payload, streamed=emitted_tokens)
+                discard_stream = bool(result.discard_streamed_text) and emitted_tokens
+                if discard_stream:
+                    yield retract_event()
+                yield _finalize_event(payload, streamed=emitted_tokens and not discard_stream)
                 for block in ui_blocks:
                     yield visualization_event(block)
 
@@ -397,11 +443,13 @@ class ChatTaskDispatcher:
         try:
             center = self._center_for(task.mode)
             if center is None:
+                logger.error("未知 center: %s", task.mode)
                 return CenterResult(
                     mode=task.mode,
                     intent=task.intent,
                     event_type="error",
-                    error=f"未知 center: {task.mode}",
+                    error=USER_FACING_RETRY,
+                    error_code="UNKNOWN_CENTER",
                     sequence=task.sequence,
                 )
             if task.mode in self._ON_TOKEN_MODES:
@@ -414,7 +462,8 @@ class ChatTaskDispatcher:
                 mode=task.mode,
                 intent=task.intent,
                 event_type="error",
-                error="处理失败",
+                error=USER_FACING_RETRY,
+                error_code="TASK_FAILED",
                 sequence=task.sequence,
             )
 
@@ -423,6 +472,7 @@ class ChatTaskDispatcher:
             return error_event(
                 stage=result.mode,
                 message=result.error,
+                code=result.error_code,
             )
         return StreamEvent(
             type=map_event_type(result.event_type),

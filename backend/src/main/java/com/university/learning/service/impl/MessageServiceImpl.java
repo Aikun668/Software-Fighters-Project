@@ -31,9 +31,9 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message> impl
         return this.list(
                 new LambdaQueryWrapper<Message>()
                         .eq(Message::getConversationId, conversationId)
-                        .eq(Message::getMode, mode)
+                        .and(wrapper -> wrapper.eq(Message::getMode, mode).or().eq(Message::getRole, "user"))
                         .orderByAsc(Message::getCreatedAt)
-                        .last("LIMIT " + limit)
+                        .last("LIMIT " + Math.min(Math.max(limit, 1), 200))
         );
     }
 

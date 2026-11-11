@@ -437,6 +437,8 @@ class TutorAgent(BaseAgent):
             if sanity.verdict is SanityVerdict.ACCEPT:
                 response = sanity.text or ""
                 retry_count = max(0, sanity.attempts - 1)
+                # 重试才被接受时，第一遍已经推到屏幕上的字不能留下来
+                discard_streamed_text = on_token is not None and sanity.attempts > 1
             else:
                 return {
                     "response": "",
@@ -444,6 +446,7 @@ class TutorAgent(BaseAgent):
                     "sanity_error_code": sanity.error_code,
                     "retry_count": max(0, sanity.attempts - 1),
                     "conversation_summary": conversation_summary,
+                    "discard_streamed_text": on_token is not None,
                 }
         except (ConnectionError, RuntimeError, ValueError) as e:
             # 失败必须有 error：LLM 不可用不得伪造「抱歉…」当正文放行，
@@ -473,4 +476,5 @@ class TutorAgent(BaseAgent):
             "domain": domain,
             "retry_count": retry_count,
             "conversation_summary": conversation_summary,
+            "discard_streamed_text": discard_streamed_text,
         }

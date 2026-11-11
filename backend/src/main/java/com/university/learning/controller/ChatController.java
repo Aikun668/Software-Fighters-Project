@@ -18,7 +18,9 @@ import com.university.learning.utils.UserHolder;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.*;
@@ -84,20 +86,17 @@ public class ChatController {
         return pythonClient.unifiedChatStream(userId, message, finalConvId, profileMap, history,
                 request.getImages(), request.getStyle(), (doneData) -> {
             log.info("Chat done回调: convId={}, doneKeys={}", finalConvId, doneData.keySet());
-            Object inner = doneData.get("data");
-            if (inner instanceof Map) {
-                log.info("Chat done.data keys: {}", ((Map<?,?>) inner).keySet());
-            }
-
-            String detectedMode = detectMode(doneData);
+            boolean failed = Boolean.TRUE.equals(doneData.get("_stream_error"));
+            String detectedMode = failed ? "notice" : detectMode(doneData);
             log.info("Chat 检测到模式: {}", detectedMode);
             saveAiResponse(finalConvId, doneData, detectedMode);
-            // 追问模式跳过内容落库，避免把追问问题当成习题/资源入库
-            if (!"inquiry".equals(detectedMode)) {
+            if (!failed && !"inquiry".equals(detectedMode)) {
                 saveGeneratedContent(userId, message, doneData);
             }
-            saveResearchPlan(userId, doneData, detectedMode);
-            saveProfileDelta(userId, doneData);
+            if (!failed) {
+                saveResearchPlan(userId, doneData, detectedMode);
+                saveProfileDelta(userId, doneData);
+            }
             updateConversationTitle(finalConvId, message);
         });
     }
@@ -107,9 +106,10 @@ public class ChatController {
     private Conversation getOrCreateConversation(Long userId, Long conversationId, String firstMessage) {
         if (conversationId != null) {
             Conversation existing = conversationService.getById(conversationId);
-            if (existing != null && existing.getUserId().equals(userId)) {
-                return existing;
+            if (existing == null || !userId.equals(existing.getUserId())) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "会话不存在");
             }
+            return existing;
         }
         Conversation conv = new Conversation()
                 .setUserId(userId)
@@ -125,12 +125,26 @@ public class ChatController {
         if (messages.size() > limit) {
             messages = messages.subList(messages.size() - limit, messages.size());
         }
-        return messages.stream().map(m -> {
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("role", m.getRole());
-            item.put("content", m.getContent());
-            return item;
-        }).collect(Collectors.toList());
+        return messages.stream()
+                .filter(ChatController::includeInModelHistory)
+                .map(m -> {
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("role", m.getRole());
+                    item.put("content", m.getContent());
+                    return item;
+                }).collect(Collectors.toList());
+    }
+
+    /** 失败说明和历史占位符不能再被当成模型说过的话。 */
+    static boolean includeInModelHistory(Message message) {
+        if (message == null || "notice".equals(message.getMode())) {
+            return false;
+        }
+        String content = message.getContent();
+        if (content == null || content.isBlank()) {
+            return false;
+        }
+        return !"[AI已回复]".equals(content.trim());
     }
 
     private void updateConversationTitle(Long conversationId, String firstMessage) {
@@ -200,19 +214,37 @@ public class ChatController {
     /** 保存AI回复文字到消息表 */
     private void saveAiResponse(Long conversationId, Map<String, Object> doneData, String mode) {
         try {
-            String response = extractResponseText(doneData);
-            if (response.isEmpty()) {
-                response = "[AI已回复]";
+            AssistantSave save = resolveAssistantSave(doneData, mode, extractResponseText(doneData));
+            if (save == null) {
+                log.info("本轮没有可展示正文，不写入占位助手消息: convId={}", conversationId);
+                return;
             }
-
             messageService.save(new Message()
                     .setConversationId(conversationId)
                     .setRole("assistant")
-                    .setContent(response)
-                    .setMode(mode));
+                    .setContent(save.content())
+                    .setMode(save.mode()));
         } catch (Exception e) {
             log.error("保存AI回复失败: convId={}", conversationId, e);
         }
+    }
+
+    record AssistantSave(String content, String mode) {
+    }
+
+    static AssistantSave resolveAssistantSave(Map<String, Object> doneData, String mode, String extracted) {
+        if (Boolean.TRUE.equals(doneData.get("_stream_error"))) {
+            Object text = doneData.get("_error_content");
+            String notice = text == null ? "" : text.toString().trim();
+            if (notice.isEmpty()) {
+                notice = "刚才没写完，你的问题还在，再发一次即可";
+            }
+            return new AssistantSave(notice, "notice");
+        }
+        if (extracted == null || extracted.isBlank() || "[AI已回复]".equals(extracted.trim())) {
+            return null;
+        }
+        return new AssistantSave(extracted, mode);
     }
 
     /** 从done事件中提取AI回复文字 */
@@ -475,6 +507,9 @@ public class ChatController {
         map.put("weak_points", profile.getWeakPoints());
         map.put("learning_pace", profile.getLearningPace());
         map.put("interest_direction", profile.getInterestDirection());
+        if (profile.getRawProfileJson() instanceof Map<?, ?> raw && raw.get("last_extracted_msg_index") != null) {
+            map.put("last_extracted_msg_index", raw.get("last_extracted_msg_index"));
+        }
         return map;
     }
 
